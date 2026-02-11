@@ -427,7 +427,7 @@ impl TextInput {
             value_container = value_container.child(div().truncate().child(value));
         }
 
-        let show_caret = self.focus_handle.is_none() || is_focused;
+        let show_caret = is_focused;
         if !self.disabled && !self.read_only && show_caret {
             let caret_color = resolve_hsla(&self.theme, &tokens.fg);
             value_container = value_container.child(

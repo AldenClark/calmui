@@ -957,7 +957,7 @@ impl Textarea {
                 line_start_char = line_end_char.saturating_add(1);
             }
 
-            let show_caret = self.focus_handle.is_none() || is_focused;
+            let show_caret = is_focused;
             if !self.disabled
                 && !self.read_only
                 && show_caret
