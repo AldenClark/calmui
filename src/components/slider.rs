@@ -5,11 +5,10 @@ use gpui::{
     RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, VariantSupport, WithId};
+use crate::contracts::{MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
-use crate::theme::Theme;
 
 use super::control;
 use super::primitives::{h_stack, v_stack};
@@ -42,7 +41,7 @@ pub struct Slider {
     variant: Variant,
     size: Size,
     radius: Radius,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_change: Option<ChangeHandler>,
 }
@@ -65,7 +64,7 @@ impl Slider {
             variant: Variant::Filled,
             size: Size::Md,
             radius: Radius::Pill,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -239,15 +238,9 @@ impl MotionAware for Slider {
     }
 }
 
-impl ThemeScoped for Slider {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Slider {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.slider;
         let value = self.resolved_value();
         let ratio = self.ratio(value);
@@ -395,5 +388,11 @@ impl IntoElement for Slider {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Slider {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

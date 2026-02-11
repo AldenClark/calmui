@@ -3,10 +3,9 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Window, anchored, deferred, div, point, px,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, WithId};
+use crate::contracts::{MotionAware, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
-use crate::theme::Theme;
 
 use super::control;
 use super::primitives::v_stack;
@@ -30,7 +29,7 @@ pub struct HoverCard {
     default_opened: bool,
     placement: HoverCardPlacement,
     offset_px: f32,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     trigger: Option<SlotRenderer>,
     content: Option<SlotRenderer>,
@@ -48,7 +47,7 @@ impl HoverCard {
             default_opened: false,
             placement: HoverCardPlacement::Bottom,
             offset_px: 3.0,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             trigger: None,
             content: None,
@@ -184,15 +183,9 @@ impl MotionAware for HoverCard {
     }
 }
 
-impl ThemeScoped for HoverCard {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for HoverCard {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let opened = self.resolved_opened();
         let is_controlled = self.opened.is_some();
         let trigger_content = self
@@ -286,5 +279,11 @@ impl IntoElement for HoverCard {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for HoverCard {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

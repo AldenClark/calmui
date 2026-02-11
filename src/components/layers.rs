@@ -7,11 +7,8 @@ use crate::feedback::{ToastEntry, ToastKind, ToastManager, ToastPosition};
 use crate::icon::{IconRegistry, IconSource};
 use crate::motion::{MotionConfig, MotionTransition, TransitionPreset};
 use crate::overlay::{Layer, ModalEntry, ModalManager};
-use crate::theme::Theme;
-use crate::{
-    contracts::{ThemeScoped, WithId},
-    id::stable_auto_id,
-};
+use crate::provider::CalmProvider;
+use crate::{contracts::WithId, id::stable_auto_id};
 
 use super::icon::Icon;
 use super::overlay::Overlay;
@@ -23,7 +20,7 @@ pub struct ToastLayer {
     id: String,
     manager: ToastManager,
     icons: IconRegistry,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
 }
 
@@ -34,7 +31,7 @@ impl ToastLayer {
             id: stable_auto_id("toast-layer"),
             manager,
             icons: IconRegistry::new(),
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::new().enter(
                 MotionTransition::new()
                     .preset(TransitionPreset::FadeRight)
@@ -42,11 +39,6 @@ impl ToastLayer {
                     .offset_px(18),
             ),
         }
-    }
-
-    pub fn theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
     }
 
     pub fn motion(mut self, motion: MotionConfig) -> Self {
@@ -256,7 +248,9 @@ impl WithId for ToastLayer {
 }
 
 impl RenderOnce for ToastLayer {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
+        self.icons = CalmProvider::icons_or(_cx, self.icons);
         let positions = [
             ToastPosition::TopLeft,
             ToastPosition::TopCenter,
@@ -303,7 +297,7 @@ pub struct ModalLayer {
     id: String,
     manager: ModalManager,
     icons: IconRegistry,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
 }
 
@@ -314,7 +308,7 @@ impl ModalLayer {
             id: stable_auto_id("modal-layer"),
             manager,
             icons: IconRegistry::new(),
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::new().enter(
                 MotionTransition::new()
                     .preset(TransitionPreset::Pop)
@@ -322,11 +316,6 @@ impl ModalLayer {
                     .offset_px(10),
             ),
         }
-    }
-
-    pub fn theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
     }
 
     pub fn motion(mut self, motion: MotionConfig) -> Self {
@@ -354,7 +343,6 @@ impl ModalLayer {
         let close_on_click_outside = entry.close_on_click_outside;
         let overlay = Overlay::new()
             .with_id(format!("{}-overlay", self.id))
-            .with_theme(self.theme.clone())
             .color(self.theme.components.modal.overlay_bg.clone())
             .on_click(
                 move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
@@ -452,7 +440,9 @@ impl WithId for ModalLayer {
 }
 
 impl RenderOnce for ModalLayer {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
+        self.icons = CalmProvider::icons_or(_cx, self.icons);
         let stack = self.manager.list();
         let Some(entry) = stack.last().cloned() else {
             return div().into_any_element();
@@ -472,5 +462,17 @@ impl IntoElement for ModalLayer {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for ToastLayer {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for ModalLayer {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

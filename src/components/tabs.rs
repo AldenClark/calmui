@@ -5,11 +5,11 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, VariantSupport, WithId};
+use crate::contracts::{MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
-use crate::theme::{ColorValue, Theme};
+use crate::theme::ColorValue;
 
 use super::control;
 use super::primitives::{h_stack, v_stack};
@@ -56,7 +56,7 @@ pub struct Tabs {
     variant: Variant,
     size: Size,
     radius: Radius,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_change: Option<ChangeHandler>,
 }
@@ -73,7 +73,7 @@ impl Tabs {
             variant: Variant::Default,
             size: Size::Md,
             radius: Radius::Md,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -187,15 +187,9 @@ impl MotionAware for Tabs {
     }
 }
 
-impl ThemeScoped for Tabs {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Tabs {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let tokens = self.theme.components.tabs.clone();
         let selected = self.resolved_value();
         let theme = self.theme.clone();
@@ -206,6 +200,7 @@ impl RenderOnce for Tabs {
         let size = self.size;
         let motion = self.motion;
         let panel_fallback_fg = resolve_hsla(&self.theme, &self.theme.semantic.text_muted);
+        let transparent = resolve_hsla(&theme, &ColorValue::Custom("#00000000".to_string()));
 
         let mut selected_panel: Option<AnyElement> = None;
         let mut first_panel: Option<AnyElement> = None;
@@ -216,19 +211,24 @@ impl RenderOnce for Tabs {
                 .as_ref()
                 .is_some_and(|value| value.as_ref() == item.value.as_ref());
 
-            if first_panel.is_none() {
-                if let Some(panel) = item.panel.take() {
-                    first_panel = Some(panel());
-                }
-            } else if is_active {
-                if let Some(panel) = item.panel.take() {
+            if let Some(panel) = item.panel.take() {
+                if is_active {
                     selected_panel = Some(panel());
+                } else if first_panel.is_none() {
+                    first_panel = Some(panel());
                 }
             }
 
             let mut trigger = div()
                 .id(format!("{}-tab-{index}", self.id))
+                .min_w_0()
                 .cursor_pointer()
+                .border_1()
+                .border_color(if is_active {
+                    resolve_hsla(&theme, &tokens.list_border)
+                } else {
+                    transparent
+                })
                 .text_color(if item.disabled {
                     resolve_hsla(&theme, &tokens.tab_disabled_fg)
                 } else if is_active {
@@ -245,6 +245,9 @@ impl RenderOnce for Tabs {
 
             trigger = Self::apply_tab_size(size, trigger);
             trigger = apply_radius(trigger, self.radius);
+            if is_active {
+                trigger = trigger.shadow_sm();
+            }
 
             if !item.disabled {
                 let on_change = on_change.clone();
@@ -279,8 +282,8 @@ impl RenderOnce for Tabs {
         let mut list = h_stack()
             .id(format!("{}-list", self.id))
             .w_full()
-            .gap_1()
-            .p_1()
+            .gap_0p5()
+            .p_0p5()
             .border_1()
             .bg(resolve_hsla(&theme, &tokens.list_bg))
             .border_color(resolve_hsla(&theme, &tokens.list_border))
@@ -294,7 +297,7 @@ impl RenderOnce for Tabs {
             .border_color(resolve_hsla(&theme, &tokens.panel_border))
             .bg(resolve_hsla(&theme, &tokens.panel_bg))
             .text_color(resolve_hsla(&theme, &tokens.panel_fg))
-            .p_3()
+            .p_4()
             .child(panel_content);
         panel = apply_radius(panel, self.radius);
 
@@ -313,5 +316,11 @@ impl IntoElement for Tabs {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Tabs {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

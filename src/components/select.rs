@@ -6,11 +6,11 @@ use gpui::{
     deferred, div, point, px,
 };
 
-use crate::contracts::{FieldLike, MotionAware, ThemeScoped, VariantSupport, WithId};
+use crate::contracts::{FieldLike, MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
-use crate::theme::{ColorValue, Theme};
+use crate::theme::{ColorValue, SelectTokens, Theme};
 
 use super::control;
 use super::icon::Icon;
@@ -54,6 +54,41 @@ fn dropdown_width_px(id: &str) -> f32 {
         .ok()
         .filter(|width| *width >= 1.0)
         .unwrap_or(220.0)
+}
+
+fn control_bg_for_variant(theme: &Theme, tokens: &SelectTokens, variant: Variant) -> gpui::Hsla {
+    let base = resolve_hsla(theme, &tokens.bg);
+    match variant {
+        Variant::Filled | Variant::Default => base,
+        Variant::Light => base.alpha(0.9),
+        Variant::Subtle => base.alpha(0.74),
+        Variant::Outline => base.alpha(0.22),
+        Variant::Ghost => base.alpha(0.0),
+    }
+}
+
+fn control_border_for_variant(
+    theme: &Theme,
+    tokens: &SelectTokens,
+    variant: Variant,
+    opened: bool,
+    has_error: bool,
+) -> gpui::Hsla {
+    let base = if has_error {
+        resolve_hsla(theme, &tokens.border_error)
+    } else if opened {
+        resolve_hsla(theme, &tokens.border_focus)
+    } else {
+        resolve_hsla(theme, &tokens.border)
+    };
+
+    match variant {
+        Variant::Ghost if !opened && !has_error => base.alpha(0.0),
+        Variant::Ghost => base.alpha(0.88),
+        Variant::Subtle => base.alpha(if opened { 0.78 } else { 0.52 }),
+        Variant::Light => base.alpha(if opened { 0.92 } else { 0.7 }),
+        _ => base,
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -100,7 +135,7 @@ pub struct Select {
     size: Size,
     radius: Radius,
     variant: Variant,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_change: Option<SelectChangeHandler>,
     on_open_change: Option<OpenChangeHandler>,
@@ -131,7 +166,7 @@ impl Select {
             size: Size::Md,
             radius: Radius::Sm,
             variant: Variant::Default,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_change: None,
             on_open_change: None,
@@ -304,21 +339,24 @@ impl Select {
             .items_center()
             .gap_2()
             .cursor_pointer()
-            .bg(resolve_hsla(&self.theme, &tokens.bg))
+            .bg(control_bg_for_variant(&self.theme, tokens, self.variant))
             .text_color(resolve_hsla(&self.theme, &tokens.fg))
             .border_1();
 
         control = apply_input_size(control, self.size);
         control = apply_radius(control, self.radius);
 
-        let border = if self.error.is_some() {
-            resolve_hsla(&self.theme, &tokens.border_error)
-        } else if opened {
-            resolve_hsla(&self.theme, &tokens.border_focus)
-        } else {
-            resolve_hsla(&self.theme, &tokens.border)
-        };
+        let border = control_border_for_variant(
+            &self.theme,
+            tokens,
+            self.variant,
+            opened,
+            self.error.is_some(),
+        );
         control = control.border_color(border);
+        if opened {
+            control = control.shadow_sm();
+        }
 
         if self.disabled {
             control = control.cursor_default().opacity(0.55);
@@ -385,6 +423,7 @@ impl Select {
         if let Some(right_slot) = self.right_slot.take() {
             control = control.child(
                 div()
+                    .ml_auto()
                     .flex_none()
                     .text_color(resolve_hsla(&self.theme, &tokens.icon))
                     .child(right_slot()),
@@ -447,16 +486,36 @@ impl Select {
                     .hover(move |style| style.bg(hover_bg))
                     .child(
                         h_stack()
+                            .w_full()
                             .justify_between()
                             .items_center()
-                            .child(option.label.clone())
-                            .children(
-                                selected.then_some(
-                                    Icon::named_outline("check")
-                                        .with_id(format!("{}-selected-{}", self.id, option.value))
-                                        .size(13.0)
-                                        .color(resolve_hsla(&self.theme, &tokens.icon)),
-                                ),
+                            .gap_2()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .child(option.label.clone()),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .flex_none()
+                                    .w(px(14.0))
+                                    .h(px(14.0))
+                                    .children(
+                                        selected.then_some(
+                                            Icon::named_outline("check")
+                                                .with_id(format!(
+                                                    "{}-selected-{}",
+                                                    self.id, option.value
+                                                ))
+                                                .size(12.0)
+                                                .color(resolve_hsla(&self.theme, &tokens.icon)),
+                                        ),
+                                    ),
                             ),
                     );
 
@@ -505,6 +564,7 @@ impl Select {
             .border_1()
             .border_color(resolve_hsla(&self.theme, &tokens.dropdown_border))
             .bg(resolve_hsla(&self.theme, &tokens.dropdown_bg))
+            .shadow_sm()
             .max_h(px(280.0))
             .overflow_y_scroll()
             .p_1p5()
@@ -597,15 +657,9 @@ impl MotionAware for Select {
     }
 }
 
-impl ThemeScoped for Select {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Select {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let opened = self.resolved_opened();
         let dropdown_upward = control::bool_state(&self.id, "dropdown-upward", None, false);
         let mut container = v_stack().id(self.id.clone()).gap_2().relative().w_full();
@@ -635,7 +689,7 @@ impl RenderOnce for Select {
                         deferred(
                             anchored()
                                 .anchor(Corner::BottomLeft)
-                                .offset(point(px(0.0), px(-3.0)))
+                                .offset(point(px(0.0), px(-2.0)))
                                 .snap_to_window_with_margin(px(8.0))
                                 .child(floating),
                         )
@@ -653,7 +707,7 @@ impl RenderOnce for Select {
                         deferred(
                             anchored()
                                 .anchor(Corner::TopLeft)
-                                .offset(point(px(0.0), px(3.0)))
+                                .offset(point(px(0.0), px(2.0)))
                                 .snap_to_window_with_margin(px(8.0))
                                 .child(floating),
                         )
@@ -702,10 +756,12 @@ pub struct MultiSelect {
     default_opened: bool,
     close_on_click_outside: bool,
     disabled: bool,
+    left_slot: Option<SlotRenderer>,
+    right_slot: Option<SlotRenderer>,
     size: Size,
     radius: Radius,
     variant: Variant,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_change: Option<MultiSelectChangeHandler>,
     on_open_change: Option<OpenChangeHandler>,
@@ -731,10 +787,12 @@ impl MultiSelect {
             default_opened: false,
             close_on_click_outside: true,
             disabled: false,
+            left_slot: None,
+            right_slot: None,
             size: Size::Md,
             radius: Radius::Sm,
             variant: Variant::Default,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_change: None,
             on_open_change: None,
@@ -785,6 +843,16 @@ impl MultiSelect {
 
     pub fn disabled(mut self, value: bool) -> Self {
         self.disabled = value;
+        self
+    }
+
+    pub fn left_slot(mut self, content: impl IntoElement + 'static) -> Self {
+        self.left_slot = Some(Box::new(|| content.into_any_element()));
+        self
+    }
+
+    pub fn right_slot(mut self, content: impl IntoElement + 'static) -> Self {
+        self.right_slot = Some(Box::new(|| content.into_any_element()));
         self
     }
 
@@ -919,20 +987,23 @@ impl MultiSelect {
             .items_center()
             .gap_2()
             .cursor_pointer()
-            .bg(resolve_hsla(&self.theme, &tokens.bg))
+            .bg(control_bg_for_variant(&self.theme, tokens, self.variant))
             .border_1();
 
         control = apply_input_size(control, self.size);
         control = apply_radius(control, self.radius);
 
-        let border = if self.error.is_some() {
-            resolve_hsla(&self.theme, &tokens.border_error)
-        } else if opened {
-            resolve_hsla(&self.theme, &tokens.border_focus)
-        } else {
-            resolve_hsla(&self.theme, &tokens.border)
-        };
+        let border = control_border_for_variant(
+            &self.theme,
+            tokens,
+            self.variant,
+            opened,
+            self.error.is_some(),
+        );
         control = control.border_color(border);
+        if opened {
+            control = control.shadow_sm();
+        }
 
         if self.disabled {
             control = control.cursor_default().opacity(0.55);
@@ -964,6 +1035,15 @@ impl MultiSelect {
             });
         }
 
+        if let Some(left_slot) = self.left_slot.take() {
+            control = control.child(
+                div()
+                    .flex_none()
+                    .text_color(resolve_hsla(&self.theme, &tokens.icon))
+                    .child(left_slot()),
+            );
+        }
+
         let selected = self.selected_labels();
         if selected.is_empty() {
             control = control.child(
@@ -989,7 +1069,7 @@ impl MultiSelect {
                     .border_color(resolve_hsla(&self.theme, &tokens.tag_border))
                     .bg(resolve_hsla(&self.theme, &tokens.tag_bg))
                     .text_color(resolve_hsla(&self.theme, &tokens.tag_fg))
-                    .child(label)
+                    .child(div().max_w(px(120.0)).truncate().child(label))
                     .into_any_element()
             });
 
@@ -1000,6 +1080,16 @@ impl MultiSelect {
                     .gap_1()
                     .overflow_hidden()
                     .children(tags),
+            );
+        }
+
+        if let Some(right_slot) = self.right_slot.take() {
+            control = control.child(
+                div()
+                    .ml_auto()
+                    .flex_none()
+                    .text_color(resolve_hsla(&self.theme, &tokens.icon))
+                    .child(right_slot()),
             );
         }
 
@@ -1056,16 +1146,36 @@ impl MultiSelect {
                     .hover(move |style| style.bg(hover_bg))
                     .child(
                         h_stack()
+                            .w_full()
                             .justify_between()
                             .items_center()
-                            .child(option.label.clone())
-                            .children(
-                                checked.then_some(
-                                    Icon::named_outline("check")
-                                        .with_id(format!("{}-selected-{}", self.id, option.value))
-                                        .size(13.0)
-                                        .color(resolve_hsla(&self.theme, &tokens.icon)),
-                                ),
+                            .gap_2()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .child(option.label.clone()),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .flex_none()
+                                    .w(px(14.0))
+                                    .h(px(14.0))
+                                    .children(
+                                        checked.then_some(
+                                            Icon::named_outline("check")
+                                                .with_id(format!(
+                                                    "{}-selected-{}",
+                                                    self.id, option.value
+                                                ))
+                                                .size(12.0)
+                                                .color(resolve_hsla(&self.theme, &tokens.icon)),
+                                        ),
+                                    ),
                             ),
                     );
 
@@ -1106,6 +1216,7 @@ impl MultiSelect {
             .border_1()
             .border_color(resolve_hsla(&self.theme, &tokens.dropdown_border))
             .bg(resolve_hsla(&self.theme, &tokens.dropdown_bg))
+            .shadow_sm()
             .max_h(px(280.0))
             .overflow_y_scroll()
             .p_1p5()
@@ -1198,15 +1309,9 @@ impl MotionAware for MultiSelect {
     }
 }
 
-impl ThemeScoped for MultiSelect {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for MultiSelect {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let opened = self.resolved_opened();
         let dropdown_upward = control::bool_state(&self.id, "dropdown-upward", None, false);
         let mut container = v_stack().id(self.id.clone()).gap_2().relative().w_full();
@@ -1235,7 +1340,7 @@ impl RenderOnce for MultiSelect {
                         deferred(
                             anchored()
                                 .anchor(Corner::BottomLeft)
-                                .offset(point(px(0.0), px(-3.0)))
+                                .offset(point(px(0.0), px(-2.0)))
                                 .snap_to_window_with_margin(px(8.0))
                                 .child(floating),
                         )
@@ -1253,7 +1358,7 @@ impl RenderOnce for MultiSelect {
                         deferred(
                             anchored()
                                 .anchor(Corner::TopLeft)
-                                .offset(point(px(0.0), px(3.0)))
+                                .offset(point(px(0.0), px(2.0)))
                                 .snap_to_window_with_margin(px(8.0))
                                 .child(floating),
                         )
@@ -1282,5 +1387,17 @@ impl IntoElement for MultiSelect {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Select {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for MultiSelect {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

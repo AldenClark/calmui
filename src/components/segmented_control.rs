@@ -5,11 +5,10 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, VariantSupport, WithId};
+use crate::contracts::{MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
-use crate::theme::Theme;
 
 use super::control;
 use super::transition::TransitionExt;
@@ -48,7 +47,7 @@ pub struct SegmentedControl {
     variant: Variant,
     size: Size,
     radius: Radius,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_change: Option<ChangeHandler>,
 }
@@ -66,7 +65,7 @@ impl SegmentedControl {
             variant: Variant::Default,
             size: Size::Md,
             radius: Radius::Md,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -180,15 +179,9 @@ impl MotionAware for SegmentedControl {
     }
 }
 
-impl ThemeScoped for SegmentedControl {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for SegmentedControl {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let tokens = self.theme.components.segmented_control.clone();
         let selected = self.resolved_value();
         let active_bg = self.active_bg();
@@ -290,5 +283,11 @@ impl IntoElement for SegmentedControl {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for SegmentedControl {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

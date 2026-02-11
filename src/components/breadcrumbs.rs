@@ -5,11 +5,10 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, WithId};
+use crate::contracts::{MotionAware, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::Size;
-use crate::theme::Theme;
 
 use super::primitives::h_stack;
 use super::transition::TransitionExt;
@@ -48,7 +47,7 @@ pub struct Breadcrumbs {
     separator: SharedString,
     max_items: Option<usize>,
     size: Size,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_item_click: Option<ItemClickHandler>,
 }
@@ -62,7 +61,7 @@ impl Breadcrumbs {
             separator: "/".into(),
             max_items: None,
             size: Size::Md,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_item_click: None,
         }
@@ -167,15 +166,9 @@ impl MotionAware for Breadcrumbs {
     }
 }
 
-impl ThemeScoped for Breadcrumbs {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Breadcrumbs {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let tokens = self.theme.components.breadcrumbs.clone();
         let nodes = self.nodes();
         let total_nodes = nodes.len();
@@ -248,5 +241,11 @@ impl IntoElement for Breadcrumbs {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Breadcrumbs {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

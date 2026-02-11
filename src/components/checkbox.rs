@@ -5,11 +5,10 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, VariantSupport, WithId};
+use crate::contracts::{MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
-use crate::theme::Theme;
 
 use super::control;
 use super::primitives::{h_stack, v_stack};
@@ -29,7 +28,7 @@ pub struct Checkbox {
     disabled: bool,
     size: Size,
     radius: Radius,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_change: Option<CheckboxChangeHandler>,
 }
@@ -48,7 +47,7 @@ impl Checkbox {
             disabled: false,
             size: Size::Md,
             radius: Radius::Xs,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -135,15 +134,9 @@ impl MotionAware for Checkbox {
     }
 }
 
-impl ThemeScoped for Checkbox {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Checkbox {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let checked = self.resolved_checked();
         let is_controlled = self.checked.is_some();
         let tokens = &self.theme.components.checkbox;
@@ -270,7 +263,7 @@ pub struct CheckboxGroup {
     orientation: GroupOrientation,
     size: Size,
     radius: Radius,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_change: Option<CheckboxGroupChangeHandler>,
 }
@@ -287,7 +280,7 @@ impl CheckboxGroup {
             orientation: GroupOrientation::Vertical,
             size: Size::Md,
             radius: Radius::Xs,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -396,15 +389,9 @@ impl MotionAware for CheckboxGroup {
     }
 }
 
-impl ThemeScoped for CheckboxGroup {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for CheckboxGroup {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let values = self.resolved_values();
         let is_controlled = self.values_controlled;
         let items = self
@@ -420,7 +407,6 @@ impl RenderOnce for CheckboxGroup {
                     .disabled(option.disabled)
                     .size(self.size)
                     .radius(self.radius)
-                    .with_theme(self.theme.clone())
                     .motion(self.motion);
 
                 if let Some(description) = option.description {
@@ -468,5 +454,17 @@ impl IntoElement for CheckboxGroup {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Checkbox {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for CheckboxGroup {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

@@ -2,14 +2,13 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, ClickEvent, Component, Corner, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, anchored, deferred, div,
-    point, px,
+    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, anchored, canvas,
+    deferred, div, point, px,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, WithId};
+use crate::contracts::{MotionAware, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
-use crate::theme::Theme;
 
 use super::control;
 use super::icon::Icon;
@@ -20,6 +19,15 @@ use super::utils::resolve_hsla;
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 type ItemClickHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
 type OpenChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
+
+fn dropdown_width_px(id: &str) -> f32 {
+    control::text_state(id, "dropdown-width-px", None, String::new())
+        .parse::<f32>()
+        .ok()
+        .filter(|width| *width >= 1.0)
+        .map(|width| width.max(180.0))
+        .unwrap_or(220.0)
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MenuItem {
@@ -59,7 +67,7 @@ pub struct Menu {
     close_on_item_click: bool,
     trigger: Option<SlotRenderer>,
     items: Vec<MenuItem>,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_item_click: Option<ItemClickHandler>,
     on_open_change: Option<OpenChangeHandler>,
@@ -72,12 +80,12 @@ impl Menu {
             id: stable_auto_id("menu"),
             opened: None,
             default_opened: false,
-            offset_px: 0.0,
+            offset_px: 4.0,
             close_on_click_outside: true,
             close_on_item_click: true,
             trigger: None,
             items: Vec::new(),
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_item_click: None,
             on_open_change: None,
@@ -179,7 +187,13 @@ impl Menu {
                             .color(resolve_hsla(&self.theme, &tokens.icon)),
                     );
                 }
-                row = row.child(div().min_w_0().truncate().child(item.label.clone()));
+                row = row.child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .child(item.label.clone()),
+                );
 
                 if item.disabled {
                     row = row
@@ -216,7 +230,7 @@ impl Menu {
 
         let mut dropdown = v_stack()
             .id(format!("{}-dropdown", self.id))
-            .w(px(220.0))
+            .w(px(dropdown_width_px(&self.id)))
             .max_w_full()
             .p_1p5()
             .gap_1()
@@ -224,6 +238,7 @@ impl Menu {
             .border_1()
             .border_color(resolve_hsla(&self.theme, &tokens.dropdown_border))
             .bg(resolve_hsla(&self.theme, &tokens.dropdown_bg))
+            .shadow_sm()
             .children(rows);
 
         if self.close_on_click_outside {
@@ -268,15 +283,9 @@ impl MotionAware for Menu {
     }
 }
 
-impl ThemeScoped for Menu {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Menu {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let opened = self.resolved_opened();
         let is_controlled = self.opened.is_some();
 
@@ -289,7 +298,22 @@ impl RenderOnce for Menu {
                     .take()
                     .map(|content| content())
                     .unwrap_or_else(|| div().child("Menu").into_any_element()),
-            );
+            )
+            .child({
+                let id_for_width = self.id.clone();
+                canvas(
+                    move |bounds, _, _cx| {
+                        control::set_text_state(
+                            &id_for_width,
+                            "dropdown-width-px",
+                            format!("{:.2}", f32::from(bounds.size.width)),
+                        );
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .size_full()
+            });
 
         if let Some(handler) = self.on_open_change.clone() {
             let id = self.id.clone();
@@ -341,5 +365,11 @@ impl IntoElement for Menu {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Menu {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

@@ -3,10 +3,9 @@ use gpui::{
     px,
 };
 
-use crate::contracts::{ThemeScoped, WithId};
+use crate::contracts::WithId;
 use crate::id::stable_auto_id;
 use crate::style::{Radius, Size};
-use crate::theme::Theme;
 
 use super::utils::{apply_radius, resolve_hsla};
 
@@ -16,7 +15,7 @@ pub struct Paper {
     radius: Radius,
     bordered: bool,
     with_shadow: bool,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     children: Vec<AnyElement>,
 }
 
@@ -29,7 +28,7 @@ impl Paper {
             radius: Radius::Md,
             bordered: true,
             with_shadow: false,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             children: Vec::new(),
         }
     }
@@ -90,15 +89,9 @@ impl WithId for Paper {
     }
 }
 
-impl ThemeScoped for Paper {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Paper {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.paper;
         let root_id = self.id.clone();
         let padding = self.padding;
@@ -128,5 +121,11 @@ impl IntoElement for Paper {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Paper {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

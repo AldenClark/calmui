@@ -5,10 +5,9 @@ use gpui::{
     RenderOnce, StatefulInteractiveElement, Styled, Window, anchored, deferred, div, point, px,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, WithId};
+use crate::contracts::{MotionAware, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
-use crate::theme::Theme;
 
 use super::control;
 use super::primitives::v_stack;
@@ -31,7 +30,7 @@ pub struct Popover {
     placement: PopoverPlacement,
     offset_px: f32,
     close_on_click_outside: bool,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     trigger: Option<SlotRenderer>,
     content: Option<SlotRenderer>,
@@ -48,7 +47,7 @@ impl Popover {
             placement: PopoverPlacement::Bottom,
             offset_px: 3.0,
             close_on_click_outside: true,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             trigger: None,
             content: None,
@@ -161,15 +160,9 @@ impl MotionAware for Popover {
     }
 }
 
-impl ThemeScoped for Popover {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Popover {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let opened = self.resolved_opened();
         let is_controlled = self.opened.is_some();
 
@@ -274,5 +267,11 @@ impl IntoElement for Popover {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Popover {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

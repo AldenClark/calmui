@@ -3,9 +3,8 @@ use gpui::{
     Window, div, px,
 };
 
-use crate::contracts::{ThemeScoped, WithId};
+use crate::contracts::WithId;
 use crate::id::stable_auto_id;
-use crate::theme::Theme;
 
 use super::utils::resolve_hsla;
 
@@ -19,7 +18,7 @@ pub struct Divider {
     id: String,
     orientation: DividerOrientation,
     label: Option<SharedString>,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
 }
 
 impl Divider {
@@ -29,7 +28,7 @@ impl Divider {
             id: stable_auto_id("divider"),
             orientation: DividerOrientation::Horizontal,
             label: None,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
         }
     }
 
@@ -54,15 +53,9 @@ impl WithId for Divider {
     }
 }
 
-impl ThemeScoped for Divider {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Divider {
-    fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.divider;
         let line = resolve_hsla(&self.theme, &tokens.line);
         let label_color = resolve_hsla(&self.theme, &tokens.label);
@@ -94,5 +87,11 @@ impl IntoElement for Divider {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Divider {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

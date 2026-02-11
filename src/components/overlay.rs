@@ -5,10 +5,10 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, WithId};
+use crate::contracts::{MotionAware, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
-use crate::theme::{ColorValue, Theme};
+use crate::theme::ColorValue;
 
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
@@ -25,7 +25,7 @@ pub struct Overlay {
     opacity: f32,
     frosted: bool,
     blur_strength: f32,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     content: Option<OverlayContent>,
     on_click: Option<OverlayClickHandler>,
@@ -43,7 +43,7 @@ impl Overlay {
             opacity: 1.0,
             frosted: true,
             blur_strength: 1.3,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             content: None,
             on_click: None,
@@ -116,15 +116,9 @@ impl MotionAware for Overlay {
     }
 }
 
-impl ThemeScoped for Overlay {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Overlay {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         if !self.visible {
             return div().into_any_element();
         }
@@ -356,5 +350,11 @@ impl IntoElement for Overlay {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Overlay {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

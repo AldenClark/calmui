@@ -5,11 +5,10 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, VariantSupport, WithId};
+use crate::contracts::{MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
-use crate::theme::Theme;
 
 use super::control;
 use super::primitives::{h_stack, v_stack};
@@ -29,7 +28,7 @@ pub struct Radio {
     disabled: bool,
     size: Size,
     radius: Radius,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_change: Option<RadioChangeHandler>,
 }
@@ -48,7 +47,7 @@ impl Radio {
             disabled: false,
             size: Size::Md,
             radius: Radius::Pill,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -135,15 +134,9 @@ impl MotionAware for Radio {
     }
 }
 
-impl ThemeScoped for Radio {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Radio {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let checked = self.resolved_checked();
         let is_controlled = self.checked.is_some();
         let tokens = &self.theme.components.radio;
@@ -269,7 +262,7 @@ pub struct RadioGroup {
     orientation: GroupOrientation,
     size: Size,
     radius: Radius,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_change: Option<RadioGroupChangeHandler>,
 }
@@ -286,7 +279,7 @@ impl RadioGroup {
             orientation: GroupOrientation::Vertical,
             size: Size::Md,
             radius: Radius::Pill,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -377,15 +370,9 @@ impl MotionAware for RadioGroup {
     }
 }
 
-impl ThemeScoped for RadioGroup {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for RadioGroup {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let selected_value = self.resolved_value();
         let is_controlled = self.value_controlled;
         let radios = self
@@ -403,7 +390,6 @@ impl RenderOnce for RadioGroup {
                     .disabled(option.disabled)
                     .size(self.size)
                     .radius(self.radius)
-                    .with_theme(self.theme.clone())
                     .motion(self.motion);
 
                 if let Some(description) = option.description {
@@ -447,5 +433,17 @@ impl IntoElement for RadioGroup {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Radio {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for RadioGroup {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

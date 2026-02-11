@@ -6,11 +6,11 @@ use gpui::{
 };
 
 use crate::contracts::WithId;
-use crate::contracts::{MotionAware, ThemeScoped, VariantSupport};
+use crate::contracts::{MotionAware, VariantSupport};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
-use crate::theme::{ColorValue, Theme};
+use crate::theme::ColorValue;
 
 use super::control;
 use super::loader::{Loader, LoaderElement, LoaderVariant};
@@ -20,7 +20,7 @@ use super::utils::{apply_button_size, apply_radius, resolve_hsla, variant_text_w
 
 type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)>;
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
-type LoaderRenderer = Box<dyn FnOnce(Size, ColorValue, Theme, String) -> AnyElement>;
+type LoaderRenderer = Box<dyn FnOnce(Size, ColorValue, String) -> AnyElement>;
 
 pub struct Button {
     id: String,
@@ -34,7 +34,7 @@ pub struct Button {
     loader: Option<LoaderRenderer>,
     left_slot: Option<SlotRenderer>,
     right_slot: Option<SlotRenderer>,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_click: Option<ClickHandler>,
 }
@@ -54,7 +54,7 @@ impl Button {
             loader: None,
             left_slot: None,
             right_slot: None,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_click: None,
         }
@@ -84,12 +84,11 @@ impl Button {
     where
         L: LoaderElement,
     {
-        self.loader = Some(Box::new(move |size, color, theme, id| {
+        self.loader = Some(Box::new(move |size, color, id| {
             loader
                 .with_id(id)
                 .size(size)
                 .color(color)
-                .theme(theme)
                 .into_any_element()
         }));
         self
@@ -139,13 +138,12 @@ impl Button {
         if self.loading {
             let loader_id = format!("{}-loader", self.id);
             let loader = if let Some(custom_loader) = self.loader.take() {
-                custom_loader(self.size, fg_token.clone(), self.theme.clone(), loader_id)
+                custom_loader(self.size, fg_token.clone(), loader_id)
             } else {
                 Loader::new()
                     .with_id(loader_id)
                     .variant(self.loading_variant)
                     .size(self.size)
-                    .theme(self.theme.clone())
                     .color(fg_token)
                     .into_any_element()
             };
@@ -237,15 +235,9 @@ impl MotionAware for Button {
     }
 }
 
-impl ThemeScoped for Button {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Button {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let (bg_token, fg_token, border_token) = self.variant_tokens();
         let bg = resolve_hsla(&self.theme, &bg_token);
         let fg = resolve_hsla(&self.theme, &fg_token);
@@ -330,7 +322,7 @@ pub struct ButtonGroup {
     radius: Radius,
     active_variant: Variant,
     inactive_variant: Variant,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_change: Option<GroupChangeHandler>,
 }
@@ -349,7 +341,7 @@ impl ButtonGroup {
             radius: Radius::Sm,
             active_variant: Variant::Filled,
             inactive_variant: Variant::Light,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -451,15 +443,9 @@ impl MotionAware for ButtonGroup {
     }
 }
 
-impl ThemeScoped for ButtonGroup {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for ButtonGroup {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let selected_value = self.resolved_value();
         let is_controlled = self.value_controlled;
         let children = self
@@ -481,7 +467,6 @@ impl RenderOnce for ButtonGroup {
                     .variant(variant)
                     .size(self.size)
                     .radius(self.radius)
-                    .with_theme(self.theme.clone())
                     .motion(self.motion);
 
                 if item.disabled {
@@ -532,5 +517,17 @@ impl IntoElement for ButtonGroup {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Button {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for ButtonGroup {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

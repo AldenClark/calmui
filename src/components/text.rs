@@ -3,10 +3,9 @@ use gpui::{
     div,
 };
 
-use crate::contracts::{ThemeScoped, WithId};
+use crate::contracts::WithId;
 use crate::id::stable_auto_id;
 use crate::style::Size;
-use crate::theme::Theme;
 
 use super::utils::resolve_hsla;
 
@@ -27,7 +26,7 @@ pub struct Text {
     tone: TextTone,
     size: Size,
     truncate: bool,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
 }
 
 impl Text {
@@ -39,7 +38,7 @@ impl Text {
             tone: TextTone::Default,
             size: Size::Md,
             truncate: false,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
         }
     }
 
@@ -83,15 +82,9 @@ impl WithId for Text {
     }
 }
 
-impl ThemeScoped for Text {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Text {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let id = self.id.clone();
         let color = self.text_color();
         let mut node = div().id(id).text_color(color);
@@ -117,5 +110,11 @@ impl IntoElement for Text {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Text {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

@@ -7,7 +7,7 @@ use gpui::{
 
 use crate::motion::{MotionConfig, MotionTransition, TransitionPreset};
 use crate::style::Size;
-use crate::theme::{ColorValue, Theme};
+use crate::theme::ColorValue;
 use crate::{contracts::WithId, id::stable_auto_id};
 
 use super::primitives::h_stack;
@@ -26,7 +26,6 @@ pub enum LoaderVariant {
 pub trait LoaderElement: IntoElement + WithId + Sized + 'static {
     fn size(self, size: Size) -> Self;
     fn color(self, color: ColorValue) -> Self;
-    fn theme(self, theme: Theme) -> Self;
 }
 
 pub struct Loader {
@@ -35,7 +34,7 @@ pub struct Loader {
     variant: LoaderVariant,
     size: Size,
     color: Option<ColorValue>,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
 }
 
@@ -48,7 +47,7 @@ impl Loader {
             variant: LoaderVariant::Dots,
             size: Size::Md,
             color: None,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::new().enter(
                 MotionTransition::new()
                     .preset(TransitionPreset::Pulse)
@@ -75,11 +74,6 @@ impl Loader {
 
     pub fn color(mut self, color: ColorValue) -> Self {
         self.color = Some(color);
-        self
-    }
-
-    pub fn theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
         self
     }
 
@@ -331,7 +325,8 @@ impl WithId for Loader {
 }
 
 impl RenderOnce for Loader {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         match self.variant {
             LoaderVariant::Dots => self.render_dots(),
             LoaderVariant::Pulse => self.render_pulse(),
@@ -349,10 +344,6 @@ impl LoaderElement for Loader {
     fn color(self, color: ColorValue) -> Self {
         Loader::color(self, color)
     }
-
-    fn theme(self, theme: Theme) -> Self {
-        Loader::theme(self, theme)
-    }
 }
 
 impl IntoElement for Loader {
@@ -360,5 +351,11 @@ impl IntoElement for Loader {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Loader {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

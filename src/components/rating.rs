@@ -5,11 +5,10 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, VariantSupport, WithId};
+use crate::contracts::{MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
-use crate::theme::Theme;
 
 use super::control;
 use super::icon::Icon;
@@ -32,7 +31,7 @@ pub struct Rating {
     size: Size,
     radius: Radius,
     variant: Variant,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_change: Option<ChangeHandler>,
 }
@@ -53,7 +52,7 @@ impl Rating {
             size: Size::Md,
             radius: Radius::Sm,
             variant: Variant::Filled,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -165,15 +164,9 @@ impl MotionAware for Rating {
     }
 }
 
-impl ThemeScoped for Rating {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Rating {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.rating;
         let value = self.resolved_value();
         let icon_size = self.icon_size_px();
@@ -196,8 +189,7 @@ impl RenderOnce for Rating {
                 }
                 .with_id(format!("{}-star-{index}", self.id))
                 .size(icon_size)
-                .color(if is_full || is_half { active } else { inactive })
-                .theme(self.theme.clone());
+                .color(if is_full || is_half { active } else { inactive });
 
                 let mut cell = div()
                     .id(format!("{}-cell-{index}", self.id))
@@ -248,5 +240,11 @@ impl IntoElement for Rating {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Rating {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

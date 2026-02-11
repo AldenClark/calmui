@@ -3,11 +3,11 @@ use gpui::{
     SharedString, Styled, div,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, WithId};
+use crate::contracts::{MotionAware, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::Size;
-use crate::theme::{ColorValue, Theme};
+use crate::theme::ColorValue;
 
 use super::loader::{Loader, LoaderElement, LoaderVariant};
 use super::overlay::Overlay;
@@ -15,7 +15,7 @@ use super::primitives::v_stack;
 use super::utils::resolve_hsla;
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
-type LoaderRenderer = Box<dyn FnOnce(Size, ColorValue, Theme, String) -> AnyElement>;
+type LoaderRenderer = Box<dyn FnOnce(Size, ColorValue, String) -> AnyElement>;
 
 pub struct LoadingOverlay {
     id: String,
@@ -23,7 +23,7 @@ pub struct LoadingOverlay {
     label: Option<SharedString>,
     variant: LoaderVariant,
     size: Size,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     content: Option<SlotRenderer>,
     loader: Option<LoaderRenderer>,
@@ -38,7 +38,7 @@ impl LoadingOverlay {
             label: None,
             variant: LoaderVariant::Dots,
             size: Size::Md,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             content: None,
             loader: None,
@@ -74,12 +74,11 @@ impl LoadingOverlay {
     where
         L: LoaderElement,
     {
-        self.loader = Some(Box::new(move |size, color, theme, id| {
+        self.loader = Some(Box::new(move |size, color, id| {
             loader
                 .with_id(id)
                 .size(size)
                 .color(color)
-                .theme(theme)
                 .into_any_element()
         }));
         self
@@ -103,15 +102,9 @@ impl MotionAware for LoadingOverlay {
     }
 }
 
-impl ThemeScoped for LoadingOverlay {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for LoadingOverlay {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let mut root = div().id(self.id.clone()).relative().w_full();
 
         if let Some(content) = self.content.take() {
@@ -128,7 +121,6 @@ impl RenderOnce for LoadingOverlay {
             renderer(
                 self.size,
                 loader_color.clone(),
-                self.theme.clone(),
                 format!("{}-loader", self.id),
             )
         } else {
@@ -137,7 +129,6 @@ impl RenderOnce for LoadingOverlay {
                 .variant(self.variant)
                 .size(self.size)
                 .color(loader_color)
-                .theme(self.theme.clone())
                 .into_any_element()
         };
 
@@ -153,7 +144,6 @@ impl RenderOnce for LoadingOverlay {
 
         let overlay = Overlay::new()
             .with_id(format!("{}-mask", self.id))
-            .with_theme(self.theme.clone())
             .motion(self.motion)
             .color(tokens.bg.clone())
             .content(
@@ -174,5 +164,11 @@ impl IntoElement for LoadingOverlay {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for LoadingOverlay {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

@@ -5,11 +5,11 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, VariantSupport, WithId};
+use crate::contracts::{MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
-use crate::theme::{ColorValue, Theme};
+use crate::theme::ColorValue;
 
 use super::control;
 use super::primitives::{h_stack, v_stack};
@@ -35,7 +35,7 @@ pub struct Chip {
     size: Size,
     radius: Radius,
     variant: Variant,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_change: Option<ChipChangeHandler>,
 }
@@ -54,7 +54,7 @@ impl Chip {
             size: Size::Sm,
             radius: Radius::Pill,
             variant: Variant::Light,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -171,15 +171,9 @@ impl MotionAware for Chip {
     }
 }
 
-impl ThemeScoped for Chip {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Chip {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let checked = self.resolved_checked();
         let is_controlled = self.checked.is_some();
         let (bg_token, fg_token, border_token) = self.color_tokens();
@@ -280,7 +274,7 @@ pub struct ChipGroup {
     size: Size,
     radius: Radius,
     variant: Variant,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_change: Option<ChipGroupChangeHandler>,
 }
@@ -302,7 +296,7 @@ impl ChipGroup {
             size: Size::Sm,
             radius: Radius::Pill,
             variant: Variant::Light,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -442,15 +436,9 @@ impl MotionAware for ChipGroup {
     }
 }
 
-impl ThemeScoped for ChipGroup {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for ChipGroup {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let selected_values = self.resolved_selected_values();
         let single_controlled = self.value_controlled;
         let multiple_controlled = self.values_controlled;
@@ -469,7 +457,6 @@ impl RenderOnce for ChipGroup {
                     .variant(self.variant)
                     .size(self.size)
                     .radius(self.radius)
-                    .with_theme(self.theme.clone())
                     .motion(self.motion);
 
                 if let Some(handler) = self.on_change.clone() {
@@ -572,5 +559,17 @@ impl IntoElement for ChipGroup {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Chip {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for ChipGroup {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

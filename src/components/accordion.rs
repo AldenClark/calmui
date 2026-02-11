@@ -5,11 +5,10 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, VariantSupport, WithId};
+use crate::contracts::{MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
-use crate::theme::Theme;
 
 use super::control;
 use super::icon::Icon;
@@ -77,7 +76,7 @@ pub struct Accordion {
     default_value: Option<SharedString>,
     size: Size,
     radius: Radius,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_change: Option<ChangeHandler>,
 }
@@ -93,7 +92,7 @@ impl Accordion {
             default_value: None,
             size: Size::Md,
             radius: Radius::Md,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -179,15 +178,9 @@ impl MotionAware for Accordion {
     }
 }
 
-impl ThemeScoped for Accordion {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Accordion {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.accordion;
         let active_value = self.resolved_value();
         let is_controlled = self.value_controlled;
@@ -201,9 +194,12 @@ impl RenderOnce for Accordion {
                 let is_open = active_value
                     .as_ref()
                     .is_some_and(|current| current.as_ref() == item.meta.value.as_ref());
+                let header_id = format!("{item_id}-header");
+                let chevron_id = format!("{item_id}-chevron");
+                let panel_id = format!("{item_id}-panel");
 
                 let mut root = v_stack()
-                    .id(item_id)
+                    .id(item_id.clone())
                     .w_full()
                     .bg(resolve_hsla(&self.theme, &tokens.item_bg))
                     .border_1()
@@ -218,7 +214,7 @@ impl RenderOnce for Accordion {
                 };
 
                 let mut header = div()
-                    .id(format!("{}-header", self.id))
+                    .id(header_id)
                     .flex()
                     .items_center()
                     .justify_between()
@@ -247,7 +243,7 @@ impl RenderOnce for Accordion {
                         } else {
                             "chevron-down"
                         })
-                        .with_id(format!("{}-chevron", self.id))
+                        .with_id(chevron_id)
                         .size(14.0)
                         .color(resolve_hsla(&self.theme, &tokens.chevron)),
                     );
@@ -300,7 +296,7 @@ impl RenderOnce for Accordion {
 
                 if is_open {
                     let mut body = v_stack()
-                        .id(format!("{}-panel", self.id))
+                        .id(panel_id.clone())
                         .gap_1()
                         .px(gpui::px(12.0))
                         .pb(gpui::px(10.0))
@@ -314,7 +310,7 @@ impl RenderOnce for Accordion {
                         body = body.child(content());
                     }
                     root = root.child(
-                        body.with_enter_transition(format!("{}-panel-enter", self.id), self.motion),
+                        body.with_enter_transition(format!("{panel_id}-enter"), self.motion),
                     );
                 }
 
@@ -336,5 +332,11 @@ impl IntoElement for Accordion {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Accordion {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

@@ -3,10 +3,9 @@ use gpui::{
     Window, div, px,
 };
 
-use crate::contracts::{ThemeScoped, WithId};
+use crate::contracts::WithId;
 use crate::id::stable_auto_id;
 use crate::style::Size;
-use crate::theme::Theme;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FlexDirection {
@@ -44,7 +43,7 @@ pub struct Flex {
     align: FlexAlign,
     wrap: bool,
     gap: Size,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     children: Vec<AnyElement>,
 }
 
@@ -58,7 +57,7 @@ impl Flex {
             align: FlexAlign::Start,
             wrap: false,
             gap: Size::Md,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             children: Vec::new(),
         }
     }
@@ -114,15 +113,9 @@ impl WithId for Flex {
     }
 }
 
-impl ThemeScoped for Flex {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Flex {
-    fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let mut root = div().id(self.id.clone()).flex();
 
         root = match self.direction {
@@ -231,13 +224,6 @@ impl WithId for Stack {
     }
 }
 
-impl ThemeScoped for Stack {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.inner = self.inner.with_theme(theme);
-        self
-    }
-}
-
 impl RenderOnce for Stack {
     fn render(self, window: &mut Window, cx: &mut gpui::App) -> impl IntoElement {
         self.inner.render(window, cx)
@@ -256,7 +242,7 @@ pub struct Grid {
     id: String,
     columns: usize,
     gap: Size,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     children: Vec<AnyElement>,
 }
 
@@ -267,7 +253,7 @@ impl Grid {
             id: stable_auto_id("grid"),
             columns: 2,
             gap: Size::Md,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             children: Vec::new(),
         }
     }
@@ -308,15 +294,9 @@ impl WithId for Grid {
     }
 }
 
-impl ThemeScoped for Grid {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Grid {
-    fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let gap = self.gap;
         let columns = self.columns.max(1);
         let mut rows = Vec::new();
@@ -404,13 +384,6 @@ impl WithId for SimpleGrid {
     }
 }
 
-impl ThemeScoped for SimpleGrid {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.inner = self.inner.with_theme(theme);
-        self
-    }
-}
-
 impl RenderOnce for SimpleGrid {
     fn render(self, window: &mut Window, cx: &mut gpui::App) -> impl IntoElement {
         self.inner.render(window, cx)
@@ -447,4 +420,16 @@ pub fn v_stack_layout() -> Stack {
 
 pub fn fixed_spacer(width: f32, height: f32) -> impl IntoElement {
     div().w(px(width.max(0.0))).h(px(height.max(0.0)))
+}
+
+impl crate::contracts::ComponentThemePatchable for Flex {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Grid {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
+    }
 }

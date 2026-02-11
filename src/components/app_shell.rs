@@ -5,9 +5,9 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{ThemeScoped, WithId};
+use crate::contracts::WithId;
 use crate::id::stable_auto_id;
-use crate::theme::{ColorValue, Theme};
+use crate::theme::ColorValue;
 
 use super::control;
 use super::overlay::Overlay;
@@ -36,7 +36,7 @@ pub struct TitleBar {
     left_slots: Vec<SlotRenderer>,
     center_slots: Vec<SlotRenderer>,
     right_slots: Vec<SlotRenderer>,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
 }
 
 impl TitleBar {
@@ -52,7 +52,7 @@ impl TitleBar {
             left_slots: Vec::new(),
             center_slots: Vec::new(),
             right_slots: Vec::new(),
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
         }
     }
 
@@ -160,15 +160,9 @@ impl WithId for TitleBar {
     }
 }
 
-impl ThemeScoped for TitleBar {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for TitleBar {
-    fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         if !self.visible {
             return div().into_any_element();
         }
@@ -269,7 +263,7 @@ pub struct Sidebar {
     header: Option<SlotRenderer>,
     content: Option<SlotRenderer>,
     footer: Option<SlotRenderer>,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
 }
 
 impl Sidebar {
@@ -283,7 +277,7 @@ impl Sidebar {
             header: None,
             content: None,
             footer: None,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
         }
     }
 
@@ -328,15 +322,9 @@ impl WithId for Sidebar {
     }
 }
 
-impl ThemeScoped for Sidebar {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Sidebar {
-    fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let sidebar_id = self.id.clone();
         let tokens = &self.theme.components.sidebar;
         let bg_token = self.background.clone().unwrap_or_else(|| tokens.bg.clone());
@@ -419,7 +407,7 @@ pub struct AppShell {
     overlay_sidebar_opened: Option<bool>,
     overlay_sidebar_default_opened: bool,
     on_overlay_sidebar_change: Option<OverlaySidebarChangeHandler>,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
 }
 
 impl AppShell {
@@ -437,7 +425,7 @@ impl AppShell {
             overlay_sidebar_opened: None,
             overlay_sidebar_default_opened: false,
             on_overlay_sidebar_change: None,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
         }
     }
 
@@ -514,15 +502,9 @@ impl WithId for AppShell {
     }
 }
 
-impl ThemeScoped for AppShell {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for AppShell {
     fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.app_shell;
         let content = self
             .content
@@ -542,7 +524,7 @@ impl RenderOnce for AppShell {
             .text_color(body_text);
 
         if let Some(title_bar) = self.title_bar.take() {
-            root = root.child(title_bar.with_theme(self.theme.clone()));
+            root = root.child(title_bar);
         }
 
         let mut body = div()
@@ -558,7 +540,7 @@ impl RenderOnce for AppShell {
             AppShellLayout::Standard => {
                 let mut row = div().size_full().flex().flex_row().min_h_0();
                 if let Some(sidebar) = self.sidebar.take() {
-                    row = row.child(sidebar.with_theme(self.theme.clone()));
+                    row = row.child(sidebar);
                 }
                 row = row.child(div().flex_1().min_w_0().min_h_0().child(content));
                 body = body.child(row);
@@ -566,26 +548,22 @@ impl RenderOnce for AppShell {
             AppShellLayout::DualSidebar => {
                 let mut row = div().size_full().flex().flex_row().min_h_0();
                 if let Some(sidebar) = self.sidebar.take() {
-                    row = row.child(sidebar.with_theme(self.theme.clone()));
+                    row = row.child(sidebar);
                 }
                 row = row.child(div().flex_1().min_w_0().min_h_0().child(content));
                 if let Some(sidebar) = self.secondary_sidebar.take() {
-                    row = row.child(sidebar.with_theme(self.theme.clone()));
+                    row = row.child(sidebar);
                 }
                 body = body.child(row);
             }
             AppShellLayout::Inspector => {
                 let mut row = div().size_full().flex().flex_row().min_h_0();
                 if let Some(sidebar) = self.sidebar.take() {
-                    row = row.child(sidebar.with_theme(self.theme.clone()));
+                    row = row.child(sidebar);
                 }
                 row = row.child(div().flex_1().min_w_0().min_h_0().child(content));
                 if let Some(inspector) = self.secondary_sidebar.take() {
-                    row = row.child(
-                        inspector
-                            .position(SidebarPosition::Right)
-                            .with_theme(self.theme.clone()),
-                    );
+                    row = row.child(inspector.position(SidebarPosition::Right));
                 }
                 body = body.child(row);
             }
@@ -625,7 +603,6 @@ impl RenderOnce for AppShell {
                         host = host.child(
                             Overlay::new()
                                 .with_id(format!("{}-sidebar-overlay-mask", self.id))
-                                .with_theme(self.theme.clone())
                                 .opacity(1.0)
                                 .on_click(
                                     move |_: &ClickEvent,
@@ -648,14 +625,8 @@ impl RenderOnce for AppShell {
                     }
 
                     if let Some(sidebar) = self.sidebar.take() {
-                        host = host.child(
-                            div()
-                                .absolute()
-                                .top_0()
-                                .left_0()
-                                .h_full()
-                                .child(sidebar.with_theme(self.theme.clone())),
-                        );
+                        host =
+                            host.child(div().absolute().top_0().left_0().h_full().child(sidebar));
                     }
                 }
 
@@ -672,5 +643,23 @@ impl IntoElement for AppShell {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for TitleBar {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Sidebar {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for AppShell {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

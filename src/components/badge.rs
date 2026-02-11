@@ -3,11 +3,11 @@ use gpui::{
     SharedString, Styled, div, px,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, VariantSupport, WithId};
+use crate::contracts::{MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
-use crate::theme::{ColorValue, Theme};
+use crate::theme::ColorValue;
 
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
@@ -22,7 +22,7 @@ pub struct Badge {
     radius: Radius,
     left_slot: Option<SlotRenderer>,
     right_slot: Option<SlotRenderer>,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
 }
 
@@ -37,7 +37,7 @@ impl Badge {
             radius: Radius::Pill,
             left_slot: None,
             right_slot: None,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
         }
     }
@@ -111,15 +111,9 @@ impl MotionAware for Badge {
     }
 }
 
-impl ThemeScoped for Badge {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Badge {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let (bg_token, fg_token, border_token) = self.variant_tokens();
         let bg = resolve_hsla(&self.theme, &bg_token);
         let fg = resolve_hsla(&self.theme, &fg_token);
@@ -166,5 +160,11 @@ impl IntoElement for Badge {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Badge {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

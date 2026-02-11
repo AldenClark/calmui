@@ -6,11 +6,10 @@ use gpui::{
     Styled, Window, div, px,
 };
 
-use crate::contracts::{FieldLike, MotionAware, ThemeScoped, VariantSupport, WithId};
+use crate::contracts::{FieldLike, MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
-use crate::theme::Theme;
 
 use super::control;
 use super::icon::Icon;
@@ -48,7 +47,7 @@ pub struct NumberInput {
     variant: Variant,
     size: Size,
     radius: Radius,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     focus_handle: Option<FocusHandle>,
     on_change: Option<ChangeHandler>,
@@ -81,7 +80,7 @@ impl NumberInput {
             variant: Variant::Default,
             size: Size::Md,
             radius: Radius::Sm,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             focus_handle: None,
             on_change: None,
@@ -313,18 +312,6 @@ impl NumberInput {
         }
 
         Some(next)
-    }
-
-    fn stepped_value_text(&self, current_text: &str, direction: f64) -> (String, f64) {
-        Self::stepped_value_text_for(
-            current_text,
-            direction,
-            self.step,
-            self.min,
-            self.max,
-            self.precision,
-            self.default_value,
-        )
     }
 
     fn stepped_value_text_for(
@@ -726,15 +713,9 @@ impl MotionAware for NumberInput {
     }
 }
 
-impl ThemeScoped for NumberInput {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for NumberInput {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         match self.layout {
             FieldLayout::Vertical => v_stack()
                 .gap_2()
@@ -754,5 +735,11 @@ impl IntoElement for NumberInput {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for NumberInput {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

@@ -3,10 +3,9 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{ThemeScoped, WithId};
+use crate::contracts::WithId;
 use crate::id::stable_auto_id;
 use crate::style::Size;
-use crate::theme::Theme;
 
 use super::utils::resolve_hsla;
 
@@ -25,7 +24,7 @@ pub struct ScrollArea {
     viewport_height_px: Option<f32>,
     padding: Size,
     bordered: bool,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     children: Vec<AnyElement>,
 }
 
@@ -37,7 +36,7 @@ impl ScrollArea {
             viewport_height_px: None,
             padding: Size::Md,
             bordered: true,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             children: Vec::new(),
         }
     }
@@ -83,15 +82,9 @@ impl WithId for ScrollArea {
     }
 }
 
-impl ThemeScoped for ScrollArea {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for ScrollArea {
-    fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.scroll_area;
         let mut viewport = div()
             .id(format!("{}-viewport", self.id))
@@ -124,5 +117,11 @@ impl IntoElement for ScrollArea {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for ScrollArea {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

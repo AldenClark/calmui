@@ -5,11 +5,11 @@ use gpui::{
     RenderOnce, SharedString, Styled, div, px,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, VariantSupport, WithId};
+use crate::contracts::{MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
-use crate::theme::{ColorValue, Theme};
+use crate::theme::ColorValue;
 
 use super::primitives::h_stack;
 use super::transition::TransitionExt;
@@ -44,7 +44,7 @@ pub struct Progress {
     variant: Variant,
     size: Size,
     radius: Radius,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
 }
 
@@ -63,7 +63,7 @@ impl Progress {
             variant: Variant::Filled,
             size: Size::Md,
             radius: Radius::Pill,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
         }
     }
@@ -340,15 +340,9 @@ impl MotionAware for Progress {
     }
 }
 
-impl ThemeScoped for Progress {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Progress {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.progress;
         let track_bg = resolve_hsla(&self.theme, &tokens.track_bg);
         let default_fill = self.variant_fill_color();
@@ -434,5 +428,11 @@ impl IntoElement for Progress {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Progress {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

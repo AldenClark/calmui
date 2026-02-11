@@ -12,11 +12,10 @@ use gpui::{
 };
 
 use crate::contracts::WithId;
-use crate::contracts::{FieldLike, MotionAware, ThemeScoped, VariantSupport};
+use crate::contracts::{FieldLike, MotionAware, VariantSupport};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
-use crate::theme::Theme;
 
 use super::control;
 use super::primitives::{h_stack, v_stack};
@@ -60,7 +59,7 @@ pub struct TextInput {
     variant: Variant,
     size: Size,
     radius: Radius,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     focus_handle: Option<FocusHandle>,
     on_change: Option<ChangeHandler>,
@@ -91,7 +90,7 @@ impl TextInput {
             variant: Variant::Default,
             size: Size::Md,
             radius: Radius::Sm,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             focus_handle: None,
             on_change: None,
@@ -578,15 +577,9 @@ impl MotionAware for TextInput {
     }
 }
 
-impl ThemeScoped for TextInput {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for TextInput {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         match self.layout {
             FieldLayout::Vertical => v_stack()
                 .gap_2()
@@ -734,13 +727,6 @@ impl VariantSupport for PasswordInput {
     }
 }
 
-impl ThemeScoped for PasswordInput {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.inner = self.inner.with_theme(theme);
-        self
-    }
-}
-
 impl MotionAware for PasswordInput {
     fn motion(mut self, value: MotionConfig) -> Self {
         self.inner = self.inner.motion(value);
@@ -770,7 +756,7 @@ pub struct PinInput {
     length: usize,
     size: Size,
     radius: Radius,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     focus_handle: Option<FocusHandle>,
     on_change: Option<ChangeHandler>,
@@ -787,7 +773,7 @@ impl PinInput {
             length: length.max(1),
             size: Size::Md,
             radius: Radius::Sm,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             focus_handle: None,
             on_change: None,
@@ -863,13 +849,6 @@ impl VariantSupport for PinInput {
     }
 }
 
-impl ThemeScoped for PinInput {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl MotionAware for PinInput {
     fn motion(mut self, value: MotionConfig) -> Self {
         self.motion = value;
@@ -878,7 +857,8 @@ impl MotionAware for PinInput {
 }
 
 impl RenderOnce for PinInput {
-    fn render(self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let on_change = self.on_change.clone();
         let value = self.resolved_value().to_string();
         let id = self.id.clone();
@@ -1004,5 +984,17 @@ impl IntoElement for PinInput {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for TextInput {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for PinInput {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

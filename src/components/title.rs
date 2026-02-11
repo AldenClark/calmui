@@ -3,9 +3,8 @@ use gpui::{
     div,
 };
 
-use crate::contracts::{ThemeScoped, WithId};
+use crate::contracts::WithId;
 use crate::id::stable_auto_id;
-use crate::theme::Theme;
 
 use super::primitives::v_stack;
 use super::utils::resolve_hsla;
@@ -15,7 +14,7 @@ pub struct Title {
     text: SharedString,
     subtitle: Option<SharedString>,
     order: u8,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
 }
 
 impl Title {
@@ -26,7 +25,7 @@ impl Title {
             text: text.into(),
             subtitle: None,
             order: 2,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
         }
     }
 
@@ -51,15 +50,9 @@ impl WithId for Title {
     }
 }
 
-impl ThemeScoped for Title {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Title {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.title;
         let mut headline = div()
             .font_weight(gpui::FontWeight::BOLD)
@@ -96,5 +89,11 @@ impl IntoElement for Title {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Title {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

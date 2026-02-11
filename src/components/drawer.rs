@@ -5,10 +5,9 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, WithId};
+use crate::contracts::{MotionAware, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
-use crate::theme::Theme;
 
 use super::control;
 use super::icon::Icon;
@@ -37,7 +36,7 @@ pub struct Drawer {
     size_px: f32,
     close_button: bool,
     close_on_click_outside: bool,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     content: Option<SlotRenderer>,
     on_close: Option<CloseHandler>,
@@ -56,7 +55,7 @@ impl Drawer {
             size_px: 360.0,
             close_button: true,
             close_on_click_outside: true,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             content: None,
             on_close: None,
@@ -130,15 +129,9 @@ impl MotionAware for Drawer {
     }
 }
 
-impl ThemeScoped for Drawer {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Drawer {
     fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let opened = self.resolved_opened();
         if !opened {
             return div().into_any_element();
@@ -152,7 +145,6 @@ impl RenderOnce for Drawer {
 
         let overlay = Overlay::new()
             .with_id(format!("{}-overlay", self.id))
-            .with_theme(self.theme.clone())
             .color(tokens.overlay_bg.clone())
             .on_click(
                 move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
@@ -275,5 +267,11 @@ impl IntoElement for Drawer {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Drawer {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

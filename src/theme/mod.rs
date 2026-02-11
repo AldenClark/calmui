@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::{Arc, OnceLock};
 
 use crate::tokens::{ColorScale, PaletteCatalog, PaletteKey};
 
@@ -496,6 +497,52 @@ pub struct TableTokens {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StepperTokens {
+    pub step_bg: ColorValue,
+    pub step_border: ColorValue,
+    pub step_fg: ColorValue,
+    pub step_active_bg: ColorValue,
+    pub step_active_border: ColorValue,
+    pub step_active_fg: ColorValue,
+    pub step_completed_bg: ColorValue,
+    pub step_completed_border: ColorValue,
+    pub step_completed_fg: ColorValue,
+    pub connector: ColorValue,
+    pub label: ColorValue,
+    pub description: ColorValue,
+    pub panel_bg: ColorValue,
+    pub panel_border: ColorValue,
+    pub panel_fg: ColorValue,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TimelineTokens {
+    pub bullet_bg: ColorValue,
+    pub bullet_border: ColorValue,
+    pub bullet_fg: ColorValue,
+    pub bullet_active_bg: ColorValue,
+    pub bullet_active_border: ColorValue,
+    pub bullet_active_fg: ColorValue,
+    pub line: ColorValue,
+    pub line_active: ColorValue,
+    pub title: ColorValue,
+    pub title_active: ColorValue,
+    pub body: ColorValue,
+    pub card_bg: ColorValue,
+    pub card_border: ColorValue,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TreeTokens {
+    pub row_fg: ColorValue,
+    pub row_selected_fg: ColorValue,
+    pub row_selected_bg: ColorValue,
+    pub row_hover_bg: ColorValue,
+    pub row_disabled_fg: ColorValue,
+    pub line: ColorValue,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ComponentTokens {
     pub button: ButtonTokens,
     pub input: InputTokens,
@@ -535,6 +582,9 @@ pub struct ComponentTokens {
     pub pagination: PaginationTokens,
     pub breadcrumbs: BreadcrumbsTokens,
     pub table: TableTokens,
+    pub stepper: StepperTokens,
+    pub timeline: TimelineTokens,
+    pub tree: TreeTokens,
 }
 
 impl ComponentTokens {
@@ -863,6 +913,46 @@ impl ComponentTokens {
                     cell_fg: ColorValue::palette(PaletteKey::Dark, 8),
                     caption: ColorValue::palette(PaletteKey::Gray, 6),
                 },
+                stepper: StepperTokens {
+                    step_bg: ColorValue::White,
+                    step_border: ColorValue::palette(PaletteKey::Gray, 4),
+                    step_fg: ColorValue::palette(PaletteKey::Gray, 7),
+                    step_active_bg: ColorValue::palette(primary, 6),
+                    step_active_border: ColorValue::palette(primary, 6),
+                    step_active_fg: ColorValue::White,
+                    step_completed_bg: ColorValue::palette(primary, 5),
+                    step_completed_border: ColorValue::palette(primary, 5),
+                    step_completed_fg: ColorValue::White,
+                    connector: ColorValue::palette(PaletteKey::Gray, 3),
+                    label: ColorValue::palette(PaletteKey::Dark, 8),
+                    description: ColorValue::palette(PaletteKey::Gray, 6),
+                    panel_bg: ColorValue::White,
+                    panel_border: ColorValue::palette(PaletteKey::Gray, 3),
+                    panel_fg: ColorValue::palette(PaletteKey::Dark, 8),
+                },
+                timeline: TimelineTokens {
+                    bullet_bg: ColorValue::White,
+                    bullet_border: ColorValue::palette(PaletteKey::Gray, 4),
+                    bullet_fg: ColorValue::palette(PaletteKey::Gray, 7),
+                    bullet_active_bg: ColorValue::palette(primary, 6),
+                    bullet_active_border: ColorValue::palette(primary, 6),
+                    bullet_active_fg: ColorValue::White,
+                    line: ColorValue::palette(PaletteKey::Gray, 3),
+                    line_active: ColorValue::palette(primary, 5),
+                    title: ColorValue::palette(PaletteKey::Dark, 8),
+                    title_active: ColorValue::palette(PaletteKey::Dark, 9),
+                    body: ColorValue::palette(PaletteKey::Gray, 6),
+                    card_bg: ColorValue::palette(PaletteKey::Gray, 0),
+                    card_border: ColorValue::palette(PaletteKey::Gray, 3),
+                },
+                tree: TreeTokens {
+                    row_fg: ColorValue::palette(PaletteKey::Dark, 8),
+                    row_selected_fg: ColorValue::palette(primary, 7),
+                    row_selected_bg: ColorValue::palette(primary, 0),
+                    row_hover_bg: ColorValue::palette(PaletteKey::Gray, 0),
+                    row_disabled_fg: ColorValue::palette(PaletteKey::Gray, 5),
+                    line: ColorValue::palette(PaletteKey::Gray, 3),
+                },
             },
             ColorScheme::Dark => Self {
                 button: ButtonTokens {
@@ -1183,6 +1273,46 @@ impl ComponentTokens {
                     cell_fg: ColorValue::palette(PaletteKey::Gray, 2),
                     caption: ColorValue::palette(PaletteKey::Gray, 5),
                 },
+                stepper: StepperTokens {
+                    step_bg: ColorValue::palette(PaletteKey::Dark, 7),
+                    step_border: ColorValue::palette(PaletteKey::Dark, 4),
+                    step_fg: ColorValue::palette(PaletteKey::Gray, 3),
+                    step_active_bg: ColorValue::palette(primary, 5),
+                    step_active_border: ColorValue::palette(primary, 5),
+                    step_active_fg: ColorValue::White,
+                    step_completed_bg: ColorValue::palette(primary, 4),
+                    step_completed_border: ColorValue::palette(primary, 4),
+                    step_completed_fg: ColorValue::White,
+                    connector: ColorValue::palette(PaletteKey::Dark, 4),
+                    label: ColorValue::palette(PaletteKey::Gray, 1),
+                    description: ColorValue::palette(PaletteKey::Gray, 5),
+                    panel_bg: ColorValue::palette(PaletteKey::Dark, 8),
+                    panel_border: ColorValue::palette(PaletteKey::Dark, 4),
+                    panel_fg: ColorValue::palette(PaletteKey::Gray, 2),
+                },
+                timeline: TimelineTokens {
+                    bullet_bg: ColorValue::palette(PaletteKey::Dark, 7),
+                    bullet_border: ColorValue::palette(PaletteKey::Dark, 4),
+                    bullet_fg: ColorValue::palette(PaletteKey::Gray, 4),
+                    bullet_active_bg: ColorValue::palette(primary, 5),
+                    bullet_active_border: ColorValue::palette(primary, 5),
+                    bullet_active_fg: ColorValue::White,
+                    line: ColorValue::palette(PaletteKey::Dark, 4),
+                    line_active: ColorValue::palette(primary, 4),
+                    title: ColorValue::palette(PaletteKey::Gray, 2),
+                    title_active: ColorValue::palette(PaletteKey::Gray, 0),
+                    body: ColorValue::palette(PaletteKey::Gray, 5),
+                    card_bg: ColorValue::palette(PaletteKey::Dark, 7),
+                    card_border: ColorValue::palette(PaletteKey::Dark, 4),
+                },
+                tree: TreeTokens {
+                    row_fg: ColorValue::palette(PaletteKey::Gray, 2),
+                    row_selected_fg: ColorValue::palette(primary, 1),
+                    row_selected_bg: ColorValue::palette(primary, 9),
+                    row_hover_bg: ColorValue::palette(PaletteKey::Dark, 7),
+                    row_disabled_fg: ColorValue::palette(PaletteKey::Dark, 3),
+                    line: ColorValue::palette(PaletteKey::Dark, 4),
+                },
             },
         }
     }
@@ -1261,7 +1391,6 @@ impl Theme {
         }
     }
 
-    #[cfg(feature = "gpui-latest")]
     pub fn resolve_hsla(&self, token: &ColorValue) -> gpui::Hsla {
         let raw = self.resolve_color(token);
         gpui::Rgba::try_from(raw.as_str())
@@ -2704,6 +2833,172 @@ impl TablePatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct StepperPatch {
+    pub step_bg: Option<ColorValue>,
+    pub step_border: Option<ColorValue>,
+    pub step_fg: Option<ColorValue>,
+    pub step_active_bg: Option<ColorValue>,
+    pub step_active_border: Option<ColorValue>,
+    pub step_active_fg: Option<ColorValue>,
+    pub step_completed_bg: Option<ColorValue>,
+    pub step_completed_border: Option<ColorValue>,
+    pub step_completed_fg: Option<ColorValue>,
+    pub connector: Option<ColorValue>,
+    pub label: Option<ColorValue>,
+    pub description: Option<ColorValue>,
+    pub panel_bg: Option<ColorValue>,
+    pub panel_border: Option<ColorValue>,
+    pub panel_fg: Option<ColorValue>,
+}
+
+impl StepperPatch {
+    fn apply(&self, mut current: StepperTokens) -> StepperTokens {
+        if let Some(value) = &self.step_bg {
+            current.step_bg = value.clone();
+        }
+        if let Some(value) = &self.step_border {
+            current.step_border = value.clone();
+        }
+        if let Some(value) = &self.step_fg {
+            current.step_fg = value.clone();
+        }
+        if let Some(value) = &self.step_active_bg {
+            current.step_active_bg = value.clone();
+        }
+        if let Some(value) = &self.step_active_border {
+            current.step_active_border = value.clone();
+        }
+        if let Some(value) = &self.step_active_fg {
+            current.step_active_fg = value.clone();
+        }
+        if let Some(value) = &self.step_completed_bg {
+            current.step_completed_bg = value.clone();
+        }
+        if let Some(value) = &self.step_completed_border {
+            current.step_completed_border = value.clone();
+        }
+        if let Some(value) = &self.step_completed_fg {
+            current.step_completed_fg = value.clone();
+        }
+        if let Some(value) = &self.connector {
+            current.connector = value.clone();
+        }
+        if let Some(value) = &self.label {
+            current.label = value.clone();
+        }
+        if let Some(value) = &self.description {
+            current.description = value.clone();
+        }
+        if let Some(value) = &self.panel_bg {
+            current.panel_bg = value.clone();
+        }
+        if let Some(value) = &self.panel_border {
+            current.panel_border = value.clone();
+        }
+        if let Some(value) = &self.panel_fg {
+            current.panel_fg = value.clone();
+        }
+        current
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TimelinePatch {
+    pub bullet_bg: Option<ColorValue>,
+    pub bullet_border: Option<ColorValue>,
+    pub bullet_fg: Option<ColorValue>,
+    pub bullet_active_bg: Option<ColorValue>,
+    pub bullet_active_border: Option<ColorValue>,
+    pub bullet_active_fg: Option<ColorValue>,
+    pub line: Option<ColorValue>,
+    pub line_active: Option<ColorValue>,
+    pub title: Option<ColorValue>,
+    pub title_active: Option<ColorValue>,
+    pub body: Option<ColorValue>,
+    pub card_bg: Option<ColorValue>,
+    pub card_border: Option<ColorValue>,
+}
+
+impl TimelinePatch {
+    fn apply(&self, mut current: TimelineTokens) -> TimelineTokens {
+        if let Some(value) = &self.bullet_bg {
+            current.bullet_bg = value.clone();
+        }
+        if let Some(value) = &self.bullet_border {
+            current.bullet_border = value.clone();
+        }
+        if let Some(value) = &self.bullet_fg {
+            current.bullet_fg = value.clone();
+        }
+        if let Some(value) = &self.bullet_active_bg {
+            current.bullet_active_bg = value.clone();
+        }
+        if let Some(value) = &self.bullet_active_border {
+            current.bullet_active_border = value.clone();
+        }
+        if let Some(value) = &self.bullet_active_fg {
+            current.bullet_active_fg = value.clone();
+        }
+        if let Some(value) = &self.line {
+            current.line = value.clone();
+        }
+        if let Some(value) = &self.line_active {
+            current.line_active = value.clone();
+        }
+        if let Some(value) = &self.title {
+            current.title = value.clone();
+        }
+        if let Some(value) = &self.title_active {
+            current.title_active = value.clone();
+        }
+        if let Some(value) = &self.body {
+            current.body = value.clone();
+        }
+        if let Some(value) = &self.card_bg {
+            current.card_bg = value.clone();
+        }
+        if let Some(value) = &self.card_border {
+            current.card_border = value.clone();
+        }
+        current
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TreePatch {
+    pub row_fg: Option<ColorValue>,
+    pub row_selected_fg: Option<ColorValue>,
+    pub row_selected_bg: Option<ColorValue>,
+    pub row_hover_bg: Option<ColorValue>,
+    pub row_disabled_fg: Option<ColorValue>,
+    pub line: Option<ColorValue>,
+}
+
+impl TreePatch {
+    fn apply(&self, mut current: TreeTokens) -> TreeTokens {
+        if let Some(value) = &self.row_fg {
+            current.row_fg = value.clone();
+        }
+        if let Some(value) = &self.row_selected_fg {
+            current.row_selected_fg = value.clone();
+        }
+        if let Some(value) = &self.row_selected_bg {
+            current.row_selected_bg = value.clone();
+        }
+        if let Some(value) = &self.row_hover_bg {
+            current.row_hover_bg = value.clone();
+        }
+        if let Some(value) = &self.row_disabled_fg {
+            current.row_disabled_fg = value.clone();
+        }
+        if let Some(value) = &self.line {
+            current.line = value.clone();
+        }
+        current
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ComponentPatch {
     pub button: ButtonPatch,
     pub input: InputPatch,
@@ -2743,6 +3038,9 @@ pub struct ComponentPatch {
     pub pagination: PaginationPatch,
     pub breadcrumbs: BreadcrumbsPatch,
     pub table: TablePatch,
+    pub stepper: StepperPatch,
+    pub timeline: TimelinePatch,
+    pub tree: TreePatch,
 }
 
 impl ComponentPatch {
@@ -2786,6 +3084,9 @@ impl ComponentPatch {
             pagination: self.pagination.apply(current.pagination),
             breadcrumbs: self.breadcrumbs.apply(current.breadcrumbs),
             table: self.table.apply(current.table),
+            stepper: self.stepper.apply(current.stepper),
+            timeline: self.timeline.apply(current.timeline),
+            tree: self.tree.apply(current.tree),
         }
     }
 }
@@ -2798,6 +3099,52 @@ pub struct ThemePatch {
     pub palette_overrides: BTreeMap<PaletteKey, ColorScale>,
     pub semantic: SemanticPatch,
     pub components: ComponentPatch,
+}
+
+#[derive(Clone, Default)]
+pub struct LocalTheme {
+    resolved: Option<Arc<Theme>>,
+    component_patch: Option<ComponentPatch>,
+}
+
+impl LocalTheme {
+    pub fn with_component_patch(mut self, patch: ComponentPatch) -> Self {
+        self.component_patch = Some(patch);
+        self
+    }
+
+    pub fn set_component_patch(&mut self, patch: Option<ComponentPatch>) {
+        self.component_patch = patch;
+        self.resolved = None;
+    }
+
+    pub fn sync_from_provider(&mut self, cx: &gpui::App) {
+        let base = crate::provider::CalmProvider::theme_arc_or_default(cx);
+        if let Some(component_patch) = &self.component_patch {
+            let mut merged = base.as_ref().clone();
+            merged.components = component_patch.apply(merged.components);
+            self.resolved = Some(Arc::new(merged));
+        } else {
+            self.resolved = Some(base);
+        }
+    }
+
+    fn fallback_theme() -> &'static Theme {
+        static FALLBACK: OnceLock<Theme> = OnceLock::new();
+        FALLBACK.get_or_init(Theme::default)
+    }
+}
+
+impl std::ops::Deref for LocalTheme {
+    type Target = Theme;
+
+    fn deref(&self) -> &Self::Target {
+        if let Some(resolved) = self.resolved.as_deref() {
+            resolved
+        } else {
+            Self::fallback_theme()
+        }
+    }
 }
 
 #[cfg(test)]

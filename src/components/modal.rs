@@ -5,10 +5,9 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, WithId};
+use crate::contracts::{MotionAware, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
-use crate::theme::Theme;
 
 use super::control;
 use super::icon::Icon;
@@ -28,7 +27,7 @@ pub struct Modal {
     width_px: f32,
     close_button: bool,
     close_on_click_outside: bool,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     content: Option<SlotRenderer>,
     on_close: Option<CloseHandler>,
@@ -46,7 +45,7 @@ impl Modal {
             width_px: 560.0,
             close_button: true,
             close_on_click_outside: true,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             content: None,
             on_close: None,
@@ -115,15 +114,9 @@ impl MotionAware for Modal {
     }
 }
 
-impl ThemeScoped for Modal {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Modal {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let opened = self.resolved_opened();
         if !opened {
             return div().into_any_element();
@@ -137,7 +130,6 @@ impl RenderOnce for Modal {
 
         let overlay = Overlay::new()
             .with_id(format!("{}-overlay", self.id))
-            .with_theme(self.theme.clone())
             .color(tokens.overlay_bg.clone())
             .on_click(
                 move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
@@ -260,5 +252,11 @@ impl IntoElement for Modal {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Modal {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

@@ -3,11 +3,10 @@ use gpui::{
     SharedString, Styled, div, px,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, WithId};
+use crate::contracts::{MotionAware, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size};
-use crate::theme::Theme;
 
 use super::primitives::v_stack;
 use super::transition::TransitionExt;
@@ -72,7 +71,7 @@ pub struct Table {
     with_column_borders: bool,
     size: Size,
     radius: Radius,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
 }
 
@@ -90,7 +89,7 @@ impl Table {
             with_column_borders: false,
             size: Size::Md,
             radius: Radius::Sm,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
         }
     }
@@ -188,15 +187,9 @@ impl MotionAware for Table {
     }
 }
 
-impl ThemeScoped for Table {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Table {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let tokens = self.theme.components.table.clone();
         let column_count = self.column_count();
         let size = self.size;
@@ -208,6 +201,12 @@ impl RenderOnce for Table {
         let highlight_on_hover = self.highlight_on_hover;
         let with_column_borders = self.with_column_borders;
         let motion = self.motion;
+        let separator = || {
+            div()
+                .w_full()
+                .h(px(1.0))
+                .bg(resolve_hsla(&self.theme, &tokens.row_border))
+        };
 
         let mut root = v_stack()
             .id(table_id.clone())
@@ -232,6 +231,7 @@ impl RenderOnce for Table {
                     .child(caption),
             );
             root = root.child(caption);
+            root = root.child(separator());
         }
 
         if !headers.is_empty() {
@@ -241,9 +241,7 @@ impl RenderOnce for Table {
                 .flex()
                 .items_center()
                 .bg(resolve_hsla(&self.theme, &tokens.header_bg))
-                .text_color(resolve_hsla(&self.theme, &tokens.header_fg))
-                .border_1()
-                .border_color(resolve_hsla(&self.theme, &tokens.row_border));
+                .text_color(resolve_hsla(&self.theme, &tokens.header_fg));
 
             for index in 0..column_count {
                 if index > 0 && with_column_borders {
@@ -270,9 +268,15 @@ impl RenderOnce for Table {
             }
 
             root = root.child(header_row);
+            if !rows.is_empty() {
+                root = root.child(separator());
+            }
         }
 
         for (row_index, row) in rows.into_iter().enumerate() {
+            if row_index > 0 {
+                root = root.child(separator());
+            }
             let row_bg = if striped && row_index % 2 == 1 {
                 resolve_hsla(&self.theme, &tokens.row_alt_bg)
             } else {
@@ -285,9 +289,7 @@ impl RenderOnce for Table {
                 .flex()
                 .items_center()
                 .bg(row_bg)
-                .text_color(resolve_hsla(&self.theme, &tokens.cell_fg))
-                .border_1()
-                .border_color(resolve_hsla(&self.theme, &tokens.row_border));
+                .text_color(resolve_hsla(&self.theme, &tokens.cell_fg));
 
             if highlight_on_hover {
                 let hover_bg = resolve_hsla(&self.theme, &tokens.row_hover_bg);
@@ -340,5 +342,11 @@ impl IntoElement for Table {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Table {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

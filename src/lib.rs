@@ -1,4 +1,4 @@
-#[cfg(feature = "gpui-latest")]
+pub mod application;
 pub mod components;
 pub mod contracts;
 pub mod feedback;
@@ -10,3 +10,5 @@ pub mod provider;
 pub mod style;
 pub mod theme;
 pub mod tokens;
+
+pub use application::CalmApplication;

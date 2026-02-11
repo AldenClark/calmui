@@ -5,11 +5,11 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, VariantSupport, WithId};
+use crate::contracts::{MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
-use crate::theme::{ColorValue, Theme};
+use crate::theme::ColorValue;
 
 use super::icon::Icon;
 use super::transition::TransitionExt;
@@ -24,7 +24,7 @@ pub struct ActionIcon {
     size: Size,
     radius: Radius,
     disabled: bool,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     content: Option<SlotRenderer>,
     on_click: Option<ClickHandler>,
@@ -39,7 +39,7 @@ impl ActionIcon {
             size: Size::Md,
             radius: Radius::Sm,
             disabled: false,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             content: None,
             on_click: None,
@@ -151,15 +151,9 @@ impl MotionAware for ActionIcon {
     }
 }
 
-impl ThemeScoped for ActionIcon {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for ActionIcon {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let (bg_token, fg_token, border_token) = self.variant_tokens();
         let bg = resolve_hsla(&self.theme, &bg_token);
         let fg = resolve_hsla(&self.theme, &fg_token);
@@ -169,7 +163,6 @@ impl RenderOnce for ActionIcon {
             .with_id(format!("{}-fallback", self.id))
             .size(self.icon_size_px())
             .color(fg)
-            .theme(self.theme.clone())
             .into_any_element();
 
         let content = self.content.take().map(|value| value()).unwrap_or(fallback);
@@ -214,5 +207,11 @@ impl IntoElement for ActionIcon {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for ActionIcon {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

@@ -3,7 +3,8 @@ use gpui::{
 };
 
 use crate::icon::{IconRegistry, IconSource};
-use crate::theme::{ColorValue, Theme};
+use crate::provider::CalmProvider;
+use crate::theme::ColorValue;
 use crate::{contracts::WithId, id::stable_auto_id};
 
 use super::utils::resolve_hsla;
@@ -19,7 +20,7 @@ pub struct Icon {
     source: IconSource,
     size: f32,
     color: Option<IconColor>,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     registry: IconRegistry,
 }
 
@@ -31,7 +32,7 @@ impl Icon {
             source,
             size: 16.0,
             color: None,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             registry: IconRegistry::new(),
         }
     }
@@ -71,11 +72,6 @@ impl Icon {
         self
     }
 
-    pub fn theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-
     pub fn registry(mut self, registry: IconRegistry) -> Self {
         self.registry = registry;
         self
@@ -101,7 +97,9 @@ impl WithId for Icon {
 }
 
 impl RenderOnce for Icon {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
+        self.registry = CalmProvider::icons_or(_cx, self.registry);
         let color = self.resolve_color();
         if let Some(path) = self.registry.resolve(&self.source) {
             return svg()
@@ -128,5 +126,11 @@ impl IntoElement for Icon {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Icon {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

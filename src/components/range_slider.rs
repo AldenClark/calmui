@@ -5,11 +5,10 @@ use gpui::{
     RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, canvas, div, px,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, VariantSupport, WithId};
+use crate::contracts::{MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
-use crate::theme::Theme;
 
 use super::control;
 use super::primitives::{h_stack, v_stack};
@@ -51,7 +50,7 @@ pub struct RangeSlider {
     variant: Variant,
     size: Size,
     radius: Radius,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_change: Option<ChangeHandler>,
 }
@@ -74,7 +73,7 @@ impl RangeSlider {
             variant: Variant::Filled,
             size: Size::Md,
             radius: Radius::Pill,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -278,15 +277,9 @@ impl MotionAware for RangeSlider {
     }
 }
 
-impl ThemeScoped for RangeSlider {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for RangeSlider {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.range_slider;
         let values = self.resolved_values();
         let left_ratio = self.ratio(values.0);
@@ -504,5 +497,11 @@ impl IntoElement for RangeSlider {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for RangeSlider {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

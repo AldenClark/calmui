@@ -5,11 +5,10 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, ThemeScoped, VariantSupport, WithId};
+use crate::contracts::{MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
-use crate::theme::Theme;
 
 use super::control;
 use super::primitives::h_stack;
@@ -36,7 +35,7 @@ pub struct Pagination {
     variant: Variant,
     size: Size,
     radius: Radius,
-    theme: Theme,
+    theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     on_change: Option<ChangeHandler>,
 }
@@ -56,7 +55,7 @@ impl Pagination {
             variant: Variant::Default,
             size: Size::Md,
             radius: Radius::Sm,
-            theme: Theme::default(),
+            theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -124,6 +123,16 @@ impl Pagination {
             Size::Md => node.text_base().py_1().px_2p5(),
             Size::Lg => node.text_lg().py_1p5().px_3(),
             Size::Xl => node.text_xl().py_2().px_3p5(),
+        }
+    }
+
+    fn item_min_width_px(size: Size) -> f32 {
+        match size {
+            Size::Xs => 24.0,
+            Size::Sm => 28.0,
+            Size::Md => 32.0,
+            Size::Lg => 36.0,
+            Size::Xl => 40.0,
         }
     }
 
@@ -215,15 +224,9 @@ impl MotionAware for Pagination {
     }
 }
 
-impl ThemeScoped for Pagination {
-    fn with_theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
-        self
-    }
-}
-
 impl RenderOnce for Pagination {
-    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
         let tokens = self.theme.components.pagination.clone();
         let theme = self.theme.clone();
         let current = self.resolved_page();
@@ -249,7 +252,9 @@ impl RenderOnce for Pagination {
                 .child(label);
 
             item = Self::apply_item_size(self.size, item);
-            item = apply_radius(item, self.radius);
+            item = apply_radius(item, self.radius)
+                .min_w(gpui::px(Self::item_min_width_px(self.size)))
+                .text_center();
 
             if disabled || self.disabled {
                 item = item.cursor_default().opacity(0.6);
@@ -307,10 +312,14 @@ impl RenderOnce for Pagination {
                         .child(page.to_string());
 
                     page_item = Self::apply_item_size(self.size, page_item);
-                    page_item = apply_radius(page_item, self.radius);
+                    page_item = apply_radius(page_item, self.radius)
+                        .min_w(gpui::px(Self::item_min_width_px(self.size)))
+                        .text_center();
 
                     if self.disabled {
                         page_item = page_item.cursor_default().opacity(0.6);
+                    } else if is_active {
+                        page_item = page_item.cursor_default();
                     } else {
                         let id = self.id.clone();
                         let on_change = on_change.clone();
@@ -362,5 +371,11 @@ impl IntoElement for Pagination {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemePatchable for Pagination {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }
