@@ -1,0 +1,14 @@
+[package]
+name = "calmui"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["gpui-latest"]
+gpui-latest = []
+extend-icon = []
+
+[dependencies]
+gpui = { git = "https://github.com/zed-industries/zed.git", package = "gpui" }
+rust-embed = "8.5.0"
+core-text = "=21.0.0"

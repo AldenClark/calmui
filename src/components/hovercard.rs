@@ -1,0 +1,290 @@
+use gpui::{
+    AnyElement, Component, Corner, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    SharedString, StatefulInteractiveElement, Styled, Window, anchored, deferred, div, point, px,
+};
+
+use crate::contracts::{MotionAware, ThemeScoped, WithId};
+use crate::id::stable_auto_id;
+use crate::motion::MotionConfig;
+use crate::theme::Theme;
+
+use super::control;
+use super::primitives::v_stack;
+use super::transition::TransitionExt;
+use super::utils::resolve_hsla;
+
+type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
+type OpenChangeHandler = std::rc::Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HoverCardPlacement {
+    Top,
+    Bottom,
+}
+
+pub struct HoverCard {
+    id: String,
+    title: SharedString,
+    body: Option<SharedString>,
+    opened: Option<bool>,
+    default_opened: bool,
+    placement: HoverCardPlacement,
+    offset_px: f32,
+    theme: Theme,
+    motion: MotionConfig,
+    trigger: Option<SlotRenderer>,
+    content: Option<SlotRenderer>,
+    on_open_change: Option<OpenChangeHandler>,
+}
+
+impl HoverCard {
+    #[track_caller]
+    pub fn new(title: impl Into<SharedString>) -> Self {
+        Self {
+            id: stable_auto_id("hover-card"),
+            title: title.into(),
+            body: None,
+            opened: None,
+            default_opened: false,
+            placement: HoverCardPlacement::Bottom,
+            offset_px: 3.0,
+            theme: Theme::default(),
+            motion: MotionConfig::default(),
+            trigger: None,
+            content: None,
+            on_open_change: None,
+        }
+    }
+
+    pub fn body(mut self, value: impl Into<SharedString>) -> Self {
+        self.body = Some(value.into());
+        self
+    }
+
+    pub fn opened(mut self, value: bool) -> Self {
+        self.opened = Some(value);
+        self
+    }
+
+    pub fn default_opened(mut self, value: bool) -> Self {
+        self.default_opened = value;
+        self
+    }
+
+    pub fn placement(mut self, value: HoverCardPlacement) -> Self {
+        self.placement = value;
+        self
+    }
+
+    pub fn offset(mut self, value: f32) -> Self {
+        self.offset_px = value.max(0.0);
+        self
+    }
+
+    pub fn trigger(mut self, trigger: impl IntoElement + 'static) -> Self {
+        self.trigger = Some(Box::new(|| trigger.into_any_element()));
+        self
+    }
+
+    pub fn content(mut self, content: impl IntoElement + 'static) -> Self {
+        self.content = Some(Box::new(|| content.into_any_element()));
+        self
+    }
+
+    pub fn on_open_change(
+        mut self,
+        handler: impl Fn(bool, &mut Window, &mut gpui::App) + 'static,
+    ) -> Self {
+        self.on_open_change = Some(std::rc::Rc::new(handler));
+        self
+    }
+
+    fn trigger_hovered(&self) -> bool {
+        control::bool_state(&self.id, "trigger-hovered", None, false)
+    }
+
+    fn panel_hovered(&self) -> bool {
+        control::bool_state(&self.id, "panel-hovered", None, false)
+    }
+
+    fn resolved_opened(&self) -> bool {
+        let base = control::bool_state(&self.id, "opened", self.opened, self.default_opened);
+        if self.opened.is_some() {
+            base
+        } else {
+            base || self.trigger_hovered() || self.panel_hovered()
+        }
+    }
+
+    fn render_card(&mut self, is_controlled: bool) -> AnyElement {
+        let tokens = &self.theme.components.hover_card;
+        let mut card = v_stack()
+            .id(format!("{}-card", self.id))
+            .gap_1p5()
+            .w(px(260.0))
+            .max_w_full()
+            .p_3()
+            .rounded_md()
+            .border_1()
+            .border_color(resolve_hsla(&self.theme, &tokens.border))
+            .bg(resolve_hsla(&self.theme, &tokens.bg))
+            .child(
+                div()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(resolve_hsla(&self.theme, &tokens.title))
+                    .child(self.title.clone()),
+            );
+
+        if let Some(body) = self.body.clone() {
+            card = card.child(
+                div()
+                    .text_sm()
+                    .text_color(resolve_hsla(&self.theme, &tokens.body))
+                    .child(body),
+            );
+        }
+
+        if let Some(content) = self.content.take() {
+            card = card.child(content());
+        }
+
+        let id = self.id.clone();
+        let handler = self.on_open_change.clone();
+        card = card.on_hover(move |hovered, window, cx| {
+            control::set_bool_state(&id, "panel-hovered", *hovered);
+            let next = *hovered || control::bool_state(&id, "trigger-hovered", None, false);
+            if !is_controlled {
+                control::set_bool_state(&id, "opened", next);
+                window.refresh();
+            }
+            if let Some(on_open_change) = handler.as_ref() {
+                (on_open_change)(next, window, cx);
+            }
+        });
+
+        card.with_enter_transition(format!("{}-card-enter", self.id), self.motion)
+            .into_any_element()
+    }
+}
+
+impl WithId for HoverCard {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn id_mut(&mut self) -> &mut String {
+        &mut self.id
+    }
+}
+
+impl MotionAware for HoverCard {
+    fn motion(mut self, value: MotionConfig) -> Self {
+        self.motion = value;
+        self
+    }
+}
+
+impl ThemeScoped for HoverCard {
+    fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+}
+
+impl RenderOnce for HoverCard {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        let opened = self.resolved_opened();
+        let is_controlled = self.opened.is_some();
+        let trigger_content = self
+            .trigger
+            .take()
+            .map(|render| render())
+            .unwrap_or_else(|| div().child("target").into_any_element());
+
+        let mut trigger = div()
+            .id(format!("{}-trigger", self.id))
+            .relative()
+            .child(trigger_content);
+
+        let id = self.id.clone();
+        let handler = self.on_open_change.clone();
+        trigger = trigger.on_hover(move |hovered, window, cx| {
+            control::set_bool_state(&id, "trigger-hovered", *hovered);
+            let next = *hovered || control::bool_state(&id, "panel-hovered", None, false);
+            if !is_controlled {
+                control::set_bool_state(&id, "opened", next);
+                window.refresh();
+            }
+            if let Some(on_open_change) = handler.as_ref() {
+                (on_open_change)(next, window, cx);
+            }
+        });
+
+        if opened {
+            let card = self.render_card(is_controlled);
+            let floating = card;
+            let anchor_corner = match self.placement {
+                HoverCardPlacement::Top => Corner::BottomLeft,
+                HoverCardPlacement::Bottom => Corner::TopLeft,
+            };
+            let offset = match self.placement {
+                HoverCardPlacement::Top => point(px(0.0), px(-self.offset_px)),
+                HoverCardPlacement::Bottom => point(px(0.0), px(self.offset_px)),
+            };
+
+            let anchor_host = match self.placement {
+                HoverCardPlacement::Top => div()
+                    .id(format!("{}-anchor-host", self.id))
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .w(px(0.0))
+                    .h(px(0.0))
+                    .child(
+                        deferred(
+                            anchored()
+                                .anchor(anchor_corner)
+                                .offset(offset)
+                                .child(floating),
+                        )
+                        .priority(26),
+                    )
+                    .into_any_element(),
+                HoverCardPlacement::Bottom => div()
+                    .id(format!("{}-anchor-host", self.id))
+                    .absolute()
+                    .bottom_0()
+                    .left_0()
+                    .w(px(0.0))
+                    .h(px(0.0))
+                    .child(
+                        deferred(
+                            anchored()
+                                .anchor(anchor_corner)
+                                .offset(offset)
+                                .snap_to_window_with_margin(px(8.0))
+                                .child(floating),
+                        )
+                        .priority(26),
+                    )
+                    .into_any_element(),
+            };
+
+            trigger = trigger.child(anchor_host);
+        }
+
+        div()
+            .id(self.id.clone())
+            .relative()
+            .child(trigger)
+            .into_any_element()
+    }
+}
+
+impl IntoElement for HoverCard {
+    type Element = Component<Self>;
+
+    fn into_element(self) -> Self::Element {
+        Component::new(self)
+    }
+}

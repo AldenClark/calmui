@@ -1,0 +1,132 @@
+use gpui::{
+    Component, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, div, px, svg,
+};
+
+use crate::icon::{IconRegistry, IconSource};
+use crate::theme::{ColorValue, Theme};
+use crate::{contracts::WithId, id::stable_auto_id};
+
+use super::utils::resolve_hsla;
+
+#[derive(Clone)]
+enum IconColor {
+    Token(ColorValue),
+    Raw(gpui::Hsla),
+}
+
+pub struct Icon {
+    id: String,
+    source: IconSource,
+    size: f32,
+    color: Option<IconColor>,
+    theme: Theme,
+    registry: IconRegistry,
+}
+
+impl Icon {
+    #[track_caller]
+    pub fn new(source: IconSource) -> Self {
+        Self {
+            id: stable_auto_id("icon"),
+            source,
+            size: 16.0,
+            color: None,
+            theme: Theme::default(),
+            registry: IconRegistry::new(),
+        }
+    }
+
+    #[track_caller]
+    pub fn named(name: impl Into<String>) -> Self {
+        Self::new(IconSource::named(name))
+    }
+
+    #[track_caller]
+    pub fn named_outline(name: impl Into<String>) -> Self {
+        Self::new(IconSource::named_outline(name))
+    }
+
+    #[track_caller]
+    pub fn named_filled(name: impl Into<String>) -> Self {
+        Self::new(IconSource::named_filled(name))
+    }
+
+    pub fn source(mut self, source: IconSource) -> Self {
+        self.source = source;
+        self
+    }
+
+    pub fn size(mut self, size: f32) -> Self {
+        self.size = size.max(8.0);
+        self
+    }
+
+    pub fn color_token(mut self, token: ColorValue) -> Self {
+        self.color = Some(IconColor::Token(token));
+        self
+    }
+
+    pub fn color(mut self, value: gpui::Hsla) -> Self {
+        self.color = Some(IconColor::Raw(value));
+        self
+    }
+
+    pub fn theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    pub fn registry(mut self, registry: IconRegistry) -> Self {
+        self.registry = registry;
+        self
+    }
+
+    fn resolve_color(&self) -> gpui::Hsla {
+        match &self.color {
+            Some(IconColor::Token(token)) => resolve_hsla(&self.theme, token),
+            Some(IconColor::Raw(value)) => *value,
+            None => resolve_hsla(&self.theme, &self.theme.semantic.text_primary),
+        }
+    }
+}
+
+impl WithId for Icon {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn id_mut(&mut self) -> &mut String {
+        &mut self.id
+    }
+}
+
+impl RenderOnce for Icon {
+    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        let color = self.resolve_color();
+        if let Some(path) = self.registry.resolve(&self.source) {
+            return svg()
+                .external_path(path.to_string_lossy().to_string())
+                .w(px(self.size))
+                .h(px(self.size))
+                .text_color(color)
+                .id(self.id)
+                .into_any_element();
+        }
+
+        div()
+            .id(self.id)
+            .w(px(self.size))
+            .h(px(self.size))
+            .text_color(color)
+            .child("?")
+            .into_any_element()
+    }
+}
+
+impl IntoElement for Icon {
+    type Element = Component<Self>;
+
+    fn into_element(self) -> Self::Element {
+        Component::new(self)
+    }
+}

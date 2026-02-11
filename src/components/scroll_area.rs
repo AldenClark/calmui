@@ -1,0 +1,128 @@
+use gpui::{
+    AnyElement, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    StatefulInteractiveElement, Styled, Window, div, px,
+};
+
+use crate::contracts::{ThemeScoped, WithId};
+use crate::id::stable_auto_id;
+use crate::style::Size;
+use crate::theme::Theme;
+
+use super::utils::resolve_hsla;
+
+fn apply_padding<T: Styled>(node: T, padding: Size) -> T {
+    match padding {
+        Size::Xs => node.p_1(),
+        Size::Sm => node.p_2(),
+        Size::Md => node.p_3(),
+        Size::Lg => node.p_4(),
+        Size::Xl => node.p_5(),
+    }
+}
+
+pub struct ScrollArea {
+    id: String,
+    viewport_height_px: Option<f32>,
+    padding: Size,
+    bordered: bool,
+    theme: Theme,
+    children: Vec<AnyElement>,
+}
+
+impl ScrollArea {
+    #[track_caller]
+    pub fn new() -> Self {
+        Self {
+            id: stable_auto_id("scroll-area"),
+            viewport_height_px: None,
+            padding: Size::Md,
+            bordered: true,
+            theme: Theme::default(),
+            children: Vec::new(),
+        }
+    }
+
+    pub fn viewport_height(mut self, value: f32) -> Self {
+        self.viewport_height_px = Some(value.max(1.0));
+        self
+    }
+
+    pub fn padding(mut self, value: Size) -> Self {
+        self.padding = value;
+        self
+    }
+
+    pub fn bordered(mut self, value: bool) -> Self {
+        self.bordered = value;
+        self
+    }
+
+    pub fn child(mut self, content: impl IntoElement + 'static) -> Self {
+        self.children.push(content.into_any_element());
+        self
+    }
+
+    pub fn children<I, E>(mut self, children: I) -> Self
+    where
+        I: IntoIterator<Item = E>,
+        E: IntoElement + 'static,
+    {
+        self.children
+            .extend(children.into_iter().map(IntoElement::into_any_element));
+        self
+    }
+}
+
+impl WithId for ScrollArea {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn id_mut(&mut self) -> &mut String {
+        &mut self.id
+    }
+}
+
+impl ThemeScoped for ScrollArea {
+    fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+}
+
+impl RenderOnce for ScrollArea {
+    fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+        let tokens = &self.theme.components.scroll_area;
+        let mut viewport = div()
+            .id(format!("{}-viewport", self.id))
+            .w_full()
+            .overflow_y_scroll();
+
+        if let Some(height) = self.viewport_height_px {
+            viewport = viewport.h(px(height));
+        }
+
+        viewport = apply_padding(viewport, self.padding).children(self.children);
+
+        let mut root = div()
+            .id(self.id)
+            .w_full()
+            .bg(resolve_hsla(&self.theme, &tokens.bg));
+
+        if self.bordered {
+            root = root
+                .border_1()
+                .border_color(resolve_hsla(&self.theme, &tokens.border));
+        }
+
+        root.child(viewport)
+    }
+}
+
+impl IntoElement for ScrollArea {
+    type Element = Component<Self>;
+
+    fn into_element(self) -> Self::Element {
+        Component::new(self)
+    }
+}

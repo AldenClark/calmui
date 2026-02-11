@@ -1,0 +1,170 @@
+use gpui::{
+    AnyElement, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    SharedString, Styled, div, px,
+};
+
+use crate::contracts::{MotionAware, ThemeScoped, VariantSupport, WithId};
+use crate::id::stable_auto_id;
+use crate::motion::MotionConfig;
+use crate::style::{Radius, Size, Variant};
+use crate::theme::{ColorValue, Theme};
+
+use super::transition::TransitionExt;
+use super::utils::{apply_radius, resolve_hsla};
+
+type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
+
+pub struct Badge {
+    id: String,
+    label: SharedString,
+    variant: Variant,
+    size: Size,
+    radius: Radius,
+    left_slot: Option<SlotRenderer>,
+    right_slot: Option<SlotRenderer>,
+    theme: Theme,
+    motion: MotionConfig,
+}
+
+impl Badge {
+    #[track_caller]
+    pub fn new(label: impl Into<SharedString>) -> Self {
+        Self {
+            id: stable_auto_id("badge"),
+            label: label.into(),
+            variant: Variant::Filled,
+            size: Size::Sm,
+            radius: Radius::Pill,
+            left_slot: None,
+            right_slot: None,
+            theme: Theme::default(),
+            motion: MotionConfig::default(),
+        }
+    }
+
+    pub fn left_slot(mut self, content: impl IntoElement + 'static) -> Self {
+        self.left_slot = Some(Box::new(|| content.into_any_element()));
+        self
+    }
+
+    pub fn right_slot(mut self, content: impl IntoElement + 'static) -> Self {
+        self.right_slot = Some(Box::new(|| content.into_any_element()));
+        self
+    }
+
+    fn variant_tokens(&self) -> (ColorValue, ColorValue, Option<ColorValue>) {
+        let tokens = &self.theme.components.badge;
+        match self.variant {
+            Variant::Filled => (tokens.filled_bg.clone(), tokens.filled_fg.clone(), None),
+            Variant::Light => (tokens.light_bg.clone(), tokens.light_fg.clone(), None),
+            Variant::Subtle => (tokens.subtle_bg.clone(), tokens.subtle_fg.clone(), None),
+            Variant::Outline => (
+                ColorValue::Custom("#00000000".to_string()),
+                tokens.outline_fg.clone(),
+                Some(tokens.outline_border.clone()),
+            ),
+            Variant::Ghost => (
+                ColorValue::Custom("#00000000".to_string()),
+                tokens.outline_fg.clone(),
+                None,
+            ),
+            Variant::Default => (
+                tokens.default_bg.clone(),
+                tokens.default_fg.clone(),
+                Some(tokens.default_border.clone()),
+            ),
+        }
+    }
+}
+
+impl WithId for Badge {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn id_mut(&mut self) -> &mut String {
+        &mut self.id
+    }
+}
+
+impl VariantSupport for Badge {
+    fn variant(mut self, value: Variant) -> Self {
+        self.variant = value;
+        self
+    }
+
+    fn size(mut self, value: Size) -> Self {
+        self.size = value;
+        self
+    }
+
+    fn radius(mut self, value: Radius) -> Self {
+        self.radius = value;
+        self
+    }
+}
+
+impl MotionAware for Badge {
+    fn motion(mut self, value: MotionConfig) -> Self {
+        self.motion = value;
+        self
+    }
+}
+
+impl ThemeScoped for Badge {
+    fn with_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+}
+
+impl RenderOnce for Badge {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        let (bg_token, fg_token, border_token) = self.variant_tokens();
+        let bg = resolve_hsla(&self.theme, &bg_token);
+        let fg = resolve_hsla(&self.theme, &fg_token);
+
+        let mut root = div()
+            .id(self.id.clone())
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_1()
+            .bg(bg)
+            .text_color(fg)
+            .border_1();
+        root = apply_radius(root, self.radius);
+
+        root = match self.size {
+            Size::Xs => root.text_xs().py(px(1.0)).px(px(6.0)),
+            Size::Sm => root.text_xs().py(px(2.0)).px(px(8.0)),
+            Size::Md => root.text_sm().py(px(3.0)).px(px(10.0)),
+            Size::Lg => root.text_base().py(px(4.0)).px(px(12.0)),
+            Size::Xl => root.text_lg().py(px(5.0)).px(px(14.0)),
+        };
+
+        if let Some(border_token) = border_token {
+            root = root.border_color(resolve_hsla(&self.theme, &border_token));
+        } else {
+            root = root.border_color(bg);
+        }
+
+        if let Some(left) = self.left_slot.take() {
+            root = root.child(left());
+        }
+        root = root.child(self.label);
+        if let Some(right) = self.right_slot.take() {
+            root = root.child(right());
+        }
+
+        root.with_enter_transition(format!("{}-enter", self.id), self.motion)
+    }
+}
+
+impl IntoElement for Badge {
+    type Element = Component<Self>;
+
+    fn into_element(self) -> Self::Element {
+        Component::new(self)
+    }
+}
