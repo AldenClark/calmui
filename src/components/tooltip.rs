@@ -25,6 +25,7 @@ pub struct Tooltip {
     label: SharedString,
     opened: Option<bool>,
     default_opened: bool,
+    disabled: bool,
     trigger_on_click: bool,
     placement: TooltipPlacement,
     offset_px: f32,
@@ -42,6 +43,7 @@ impl Tooltip {
             label: label.into(),
             opened: None,
             default_opened: false,
+            disabled: false,
             trigger_on_click: false,
             placement: TooltipPlacement::Top,
             offset_px: 3.0,
@@ -59,6 +61,11 @@ impl Tooltip {
 
     pub fn default_opened(mut self, value: bool) -> Self {
         self.default_opened = value;
+        self
+    }
+
+    pub fn disabled(mut self, value: bool) -> Self {
+        self.disabled = value;
         self
     }
 
@@ -132,7 +139,11 @@ impl MotionAware for Tooltip {
 impl RenderOnce for Tooltip {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let opened = self.resolved_opened();
+        let opened = if self.disabled {
+            false
+        } else {
+            self.resolved_opened()
+        };
         let is_controlled = self.opened.is_some();
         let trigger_content = self
             .trigger
@@ -145,7 +156,10 @@ impl RenderOnce for Tooltip {
             .relative()
             .child(trigger_content);
 
-        if let Some(handler) = self.on_open_change.clone() {
+        if self.disabled {
+            trigger = trigger.cursor_default().opacity(0.55);
+        } else if let Some(handler) = self.on_open_change.clone() {
+            trigger = trigger.cursor_pointer();
             let id = self.id.clone();
             trigger = trigger.on_hover(move |hovered, window, cx| {
                 if !is_controlled {
@@ -155,14 +169,17 @@ impl RenderOnce for Tooltip {
                 (handler)(*hovered, window, cx);
             });
         } else if !is_controlled {
+            trigger = trigger.cursor_pointer();
             let id = self.id.clone();
             trigger = trigger.on_hover(move |hovered, window, _cx| {
                 control::set_bool_state(&id, "opened", *hovered);
                 window.refresh();
             });
+        } else {
+            trigger = trigger.cursor_pointer();
         }
 
-        if self.trigger_on_click {
+        if self.trigger_on_click && !self.disabled {
             if let Some(handler) = self.on_open_change.clone() {
                 let next = !opened;
                 let id = self.id.clone();

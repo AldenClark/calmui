@@ -1,6 +1,6 @@
 use gpui::{
     AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    StatefulInteractiveElement, Styled, Window, div,
+    StatefulInteractiveElement, Styled, Window, div, px,
 };
 
 use crate::feedback::{ToastEntry, ToastKind, ToastManager, ToastPosition};
@@ -11,7 +11,7 @@ use crate::provider::CalmProvider;
 use crate::{contracts::WithId, id::stable_auto_id};
 
 use super::icon::Icon;
-use super::overlay::Overlay;
+use super::overlay::{Overlay, OverlayCoverage, OverlayMaterialMode};
 use super::primitives::v_stack;
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
@@ -198,18 +198,37 @@ impl ToastLayer {
     }
 
     fn anchor_for(position: ToastPosition) -> gpui::Div {
+        let top_offset = if cfg!(target_os = "macos") {
+            38.0
+        } else if cfg!(target_os = "windows") {
+            42.0
+        } else {
+            16.0
+        };
         match position {
-            ToastPosition::TopLeft => div().absolute().top_4().left_4().flex().flex_col().gap_2(),
+            ToastPosition::TopLeft => div()
+                .absolute()
+                .top(px(top_offset))
+                .left_4()
+                .flex()
+                .flex_col()
+                .gap_2(),
             ToastPosition::TopCenter => div()
                 .absolute()
-                .top_4()
+                .top(px(top_offset))
                 .left_0()
                 .right_0()
                 .flex()
                 .items_center()
                 .flex_col()
                 .gap_2(),
-            ToastPosition::TopRight => div().absolute().top_4().right_4().flex().flex_col().gap_2(),
+            ToastPosition::TopRight => div()
+                .absolute()
+                .top(px(top_offset))
+                .right_4()
+                .flex()
+                .flex_col()
+                .gap_2(),
             ToastPosition::BottomLeft => div()
                 .absolute()
                 .bottom_4()
@@ -343,6 +362,8 @@ impl ModalLayer {
         let close_on_click_outside = entry.close_on_click_outside;
         let overlay = Overlay::new()
             .with_id(format!("{}-overlay", self.id))
+            .coverage(OverlayCoverage::Window)
+            .material_mode(OverlayMaterialMode::Auto)
             .color(self.theme.components.modal.overlay_bg.clone())
             .on_click(
                 move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {

@@ -27,6 +27,7 @@ pub struct Popover {
     id: String,
     opened: Option<bool>,
     default_opened: bool,
+    disabled: bool,
     placement: PopoverPlacement,
     offset_px: f32,
     close_on_click_outside: bool,
@@ -44,6 +45,7 @@ impl Popover {
             id: stable_auto_id("popover"),
             opened: None,
             default_opened: false,
+            disabled: false,
             placement: PopoverPlacement::Bottom,
             offset_px: 3.0,
             close_on_click_outside: true,
@@ -62,6 +64,11 @@ impl Popover {
 
     pub fn default_opened(mut self, value: bool) -> Self {
         self.default_opened = value;
+        self
+    }
+
+    pub fn disabled(mut self, value: bool) -> Self {
+        self.disabled = value;
         self
     }
 
@@ -163,23 +170,26 @@ impl MotionAware for Popover {
 impl RenderOnce for Popover {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let opened = self.resolved_opened();
+        let opened = if self.disabled {
+            false
+        } else {
+            self.resolved_opened()
+        };
         let is_controlled = self.opened.is_some();
 
-        let mut trigger = div()
-            .id(format!("{}-trigger", self.id))
-            .relative()
-            .cursor_pointer()
-            .child(
-                self.trigger
-                    .take()
-                    .map(|content| content())
-                    .unwrap_or_else(|| div().child("Open").into_any_element()),
-            );
+        let mut trigger = div().id(format!("{}-trigger", self.id)).relative().child(
+            self.trigger
+                .take()
+                .map(|content| content())
+                .unwrap_or_else(|| div().child("Open").into_any_element()),
+        );
 
-        if let Some(handler) = self.on_open_change.clone() {
+        if self.disabled {
+            trigger = trigger.cursor_default().opacity(0.55);
+        } else if let Some(handler) = self.on_open_change.clone() {
             let next = !opened;
             let id = self.id.clone();
+            trigger = trigger.cursor_pointer();
             trigger = trigger.on_click(
                 move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
                     if !is_controlled {
@@ -192,12 +202,15 @@ impl RenderOnce for Popover {
         } else if !is_controlled {
             let next = !opened;
             let id = self.id.clone();
+            trigger = trigger.cursor_pointer();
             trigger = trigger.on_click(
                 move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
                     control::set_bool_state(&id, "opened", next);
                     window.refresh();
                 },
             );
+        } else {
+            trigger = trigger.cursor_pointer();
         }
 
         if opened {

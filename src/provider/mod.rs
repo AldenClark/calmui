@@ -1,9 +1,23 @@
+use crate::components::OverlayMaterialCapabilities;
 use crate::feedback::ToastManager;
 use crate::icon::IconRegistry;
 use crate::motion::MotionConfig;
 use crate::overlay::ModalManager;
 use crate::theme::{Theme, ThemePatch};
 use std::sync::Arc;
+
+pub trait OverlayCapabilityProbe: Send + Sync {
+    fn capabilities(&self, window: &gpui::Window, cx: &gpui::App) -> OverlayMaterialCapabilities;
+}
+
+impl<F> OverlayCapabilityProbe for F
+where
+    F: Fn(&gpui::Window, &gpui::App) -> OverlayMaterialCapabilities + Send + Sync,
+{
+    fn capabilities(&self, window: &gpui::Window, cx: &gpui::App) -> OverlayMaterialCapabilities {
+        (self)(window, cx)
+    }
+}
 
 #[derive(Clone, Default)]
 pub struct CalmProvider {
@@ -12,6 +26,8 @@ pub struct CalmProvider {
     icons: IconRegistry,
     toast_manager: ToastManager,
     modal_manager: ModalManager,
+    overlay_capabilities: Option<OverlayMaterialCapabilities>,
+    overlay_capability_probe: Option<Arc<dyn OverlayCapabilityProbe>>,
 }
 
 impl CalmProvider {
@@ -37,6 +53,10 @@ impl CalmProvider {
 
     pub fn modal_manager(&self) -> &ModalManager {
         &self.modal_manager
+    }
+
+    pub fn overlay_capabilities(&self) -> Option<OverlayMaterialCapabilities> {
+        self.overlay_capabilities
     }
 
     pub fn set_theme(mut self, theme: Theme) -> Self {
@@ -66,6 +86,19 @@ impl CalmProvider {
 
     pub fn with_modal_manager(mut self, manager: ModalManager) -> Self {
         self.modal_manager = manager;
+        self
+    }
+
+    pub fn with_overlay_capabilities(mut self, value: OverlayMaterialCapabilities) -> Self {
+        self.overlay_capabilities = Some(value);
+        self
+    }
+
+    pub fn with_overlay_capability_probe(
+        mut self,
+        probe: impl OverlayCapabilityProbe + 'static,
+    ) -> Self {
+        self.overlay_capability_probe = Some(Arc::new(probe));
         self
     }
 }
@@ -111,6 +144,33 @@ impl CalmProvider {
             .unwrap_or(fallback)
     }
 
+    pub fn overlay_capabilities_or(
+        cx: &gpui::App,
+        fallback: OverlayMaterialCapabilities,
+    ) -> OverlayMaterialCapabilities {
+        Self::try_read(cx)
+            .and_then(|provider| provider.overlay_capabilities)
+            .unwrap_or(fallback)
+    }
+
+    pub fn overlay_capabilities_for(
+        window: &gpui::Window,
+        cx: &gpui::App,
+        fallback: OverlayMaterialCapabilities,
+    ) -> OverlayMaterialCapabilities {
+        if let Some(provider) = Self::try_read(cx) {
+            if let Some(override_caps) = provider.overlay_capabilities {
+                return override_caps;
+            }
+            if let Some(probe) = provider.overlay_capability_probe.as_ref() {
+                return probe.capabilities(window, cx);
+            }
+            fallback
+        } else {
+            fallback
+        }
+    }
+
     pub fn set_theme_global(cx: &mut gpui::App, theme: Theme) {
         if cx.has_global::<ProviderGlobal>() {
             cx.global_mut::<ProviderGlobal>().0.theme = Arc::new(theme);
@@ -125,6 +185,35 @@ impl CalmProvider {
             cx.global_mut::<ProviderGlobal>().0.theme = Arc::new(current.merged(&patch));
         } else {
             Self::new().patch_theme(patch).install(cx);
+        }
+    }
+
+    pub fn set_overlay_capabilities_global(cx: &mut gpui::App, value: OverlayMaterialCapabilities) {
+        if cx.has_global::<ProviderGlobal>() {
+            cx.global_mut::<ProviderGlobal>().0.overlay_capabilities = Some(value);
+        } else {
+            Self::new().with_overlay_capabilities(value).install(cx);
+        }
+    }
+
+    pub fn detect_overlay_capabilities_global(cx: &mut gpui::App) {
+        Self::set_overlay_capabilities_global(cx, OverlayMaterialCapabilities::detect_runtime());
+    }
+
+    pub fn clear_overlay_capabilities_global(cx: &mut gpui::App) {
+        if cx.has_global::<ProviderGlobal>() {
+            cx.global_mut::<ProviderGlobal>().0.overlay_capabilities = None;
+        }
+    }
+
+    pub fn set_overlay_capability_probe_global(
+        cx: &mut gpui::App,
+        probe: impl OverlayCapabilityProbe + 'static,
+    ) {
+        if cx.has_global::<ProviderGlobal>() {
+            cx.global_mut::<ProviderGlobal>().0.overlay_capability_probe = Some(Arc::new(probe));
+        } else {
+            Self::new().with_overlay_capability_probe(probe).install(cx);
         }
     }
 }

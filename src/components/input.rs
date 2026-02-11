@@ -269,20 +269,9 @@ impl TextInput {
             .keystroke
             .key_char
             .clone()
-            .filter(|value| !value.is_empty())
-            .or_else(|| {
-                if key.chars().count() == 1 {
-                    Some(key.to_string())
-                } else {
-                    None
-                }
-            })?;
+            .filter(|value| !value.is_empty())?;
 
         if inserted == "\n" || key == "enter" {
-            return None;
-        }
-
-        if inserted.chars().count() > 1 && inserted.contains('\u{7f}') {
             return None;
         }
 
@@ -301,10 +290,12 @@ impl TextInput {
     fn render_input_box(&mut self, window: &Window) -> AnyElement {
         let tokens = &self.theme.components.input;
         let resolved_value = self.resolved_value();
-        let is_focused = self
+        let tracked_focus = control::bool_state(&self.id, "focused", None, false);
+        let handle_focused = self
             .focus_handle
             .as_ref()
             .is_some_and(|focus_handle| focus_handle.is_focused(window));
+        let is_focused = handle_focused || tracked_focus;
 
         let mut input = div()
             .id(format!("{}-box", self.id))
@@ -335,12 +326,27 @@ impl TextInput {
 
         if let Some(focus_handle) = &self.focus_handle {
             let handle_for_click = focus_handle.clone();
+            let id_for_focus = self.id.clone();
             input = input
                 .track_focus(focus_handle)
                 .on_click(move |_, window, cx| {
+                    control::set_bool_state(&id_for_focus, "focused", true);
                     window.focus(&handle_for_click, cx);
+                    window.refresh();
                 });
+        } else {
+            let id_for_focus = self.id.clone();
+            input = input.on_click(move |_, window, _cx| {
+                control::set_bool_state(&id_for_focus, "focused", true);
+                window.refresh();
+            });
         }
+
+        let id_for_blur = self.id.clone();
+        input = input.on_mouse_down_out(move |_, window, _cx| {
+            control::set_bool_state(&id_for_blur, "focused", false);
+            window.refresh();
+        });
 
         if !self.disabled && !self.read_only {
             let on_change = self.on_change.clone();
@@ -348,11 +354,13 @@ impl TextInput {
             let current_value = resolved_value.to_string();
             let max_length = self.max_length;
             let input_id = self.id.clone();
+            let focus_state_id = self.id.clone();
             let masked = self.masked;
             let mask_reveal_ms = self.mask_reveal_ms;
             let value_controlled = self.value_controlled;
 
             input = input.on_key_down(move |event, window, cx| {
+                control::set_bool_state(&focus_state_id, "focused", true);
                 if event.keystroke.key == "enter" {
                     if let Some(handler) = &on_submit {
                         (handler)(current_value.clone().into(), window, cx);

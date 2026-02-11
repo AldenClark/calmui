@@ -62,6 +62,7 @@ pub struct Menu {
     id: String,
     opened: Option<bool>,
     default_opened: bool,
+    disabled: bool,
     offset_px: f32,
     close_on_click_outside: bool,
     close_on_item_click: bool,
@@ -80,6 +81,7 @@ impl Menu {
             id: stable_auto_id("menu"),
             opened: None,
             default_opened: false,
+            disabled: false,
             offset_px: 4.0,
             close_on_click_outside: true,
             close_on_item_click: true,
@@ -99,6 +101,11 @@ impl Menu {
 
     pub fn default_opened(mut self, value: bool) -> Self {
         self.default_opened = value;
+        self
+    }
+
+    pub fn disabled(mut self, value: bool) -> Self {
+        self.disabled = value;
         self
     }
 
@@ -286,7 +293,11 @@ impl MotionAware for Menu {
 impl RenderOnce for Menu {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let opened = self.resolved_opened();
+        let opened = if self.disabled {
+            false
+        } else {
+            self.resolved_opened()
+        };
         let is_controlled = self.opened.is_some();
 
         let mut trigger = div()
@@ -315,7 +326,9 @@ impl RenderOnce for Menu {
                 .size_full()
             });
 
-        if let Some(handler) = self.on_open_change.clone() {
+        if self.disabled {
+            trigger = trigger.opacity(0.55).cursor_default();
+        } else if let Some(handler) = self.on_open_change.clone() {
             let id = self.id.clone();
             let next = !opened;
             trigger = trigger.on_click(move |_, window, cx| {

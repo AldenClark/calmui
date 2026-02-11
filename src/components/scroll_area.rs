@@ -89,10 +89,13 @@ impl RenderOnce for ScrollArea {
         let mut viewport = div()
             .id(format!("{}-viewport", self.id))
             .w_full()
+            .min_h_0()
             .overflow_y_scroll();
 
         if let Some(height) = self.viewport_height_px {
             viewport = viewport.h(px(height));
+        } else {
+            viewport = viewport.h_full();
         }
 
         viewport = apply_padding(viewport, self.padding).children(self.children);
@@ -100,6 +103,8 @@ impl RenderOnce for ScrollArea {
         let mut root = div()
             .id(self.id)
             .w_full()
+            .min_h_0()
+            .h_full()
             .bg(resolve_hsla(&self.theme, &tokens.bg));
 
         if self.bordered {

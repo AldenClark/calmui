@@ -2,12 +2,14 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    StatefulInteractiveElement, Styled, Window, div, px,
+    StatefulInteractiveElement, Styled, Window, WindowBackgroundAppearance, backdrop, canvas, div,
+    px,
 };
 
 use crate::contracts::{MotionAware, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
+use crate::provider::CalmProvider;
 use crate::theme::ColorValue;
 
 use super::transition::TransitionExt;
@@ -16,11 +18,146 @@ use super::utils::resolve_hsla;
 type OverlayContent = Box<dyn FnOnce() -> AnyElement>;
 type OverlayClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)>;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OverlayMaterialMode {
+    Auto,
+    SystemPreferred,
+    RendererBlur,
+    TintOnly,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OverlayCoverage {
+    Parent,
+    Window,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OverlaySystemMaterial {
+    Blurred,
+    MicaBackdrop,
+    MicaAltBackdrop,
+    Transparent,
+}
+
+impl OverlaySystemMaterial {
+    fn to_window_background(self) -> WindowBackgroundAppearance {
+        match self {
+            Self::Blurred => WindowBackgroundAppearance::Blurred,
+            Self::MicaBackdrop => WindowBackgroundAppearance::MicaBackdrop,
+            Self::MicaAltBackdrop => WindowBackgroundAppearance::MicaAltBackdrop,
+            Self::Transparent => WindowBackgroundAppearance::Transparent,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ResolvedMaterialPath {
+    System(WindowBackgroundAppearance),
+    RendererBlur,
+    TintOnly,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct OverlayMaterialCapabilities {
+    pub window_system: bool,
+    pub region_system: bool,
+    pub renderer_blur: bool,
+}
+
+impl OverlayMaterialCapabilities {
+    pub fn from_window(window: &Window) -> Self {
+        Self {
+            window_system: window.supports_window_material(),
+            region_system: window.supports_region_material(),
+            renderer_blur: window.supports_renderer_backdrop_blur(),
+        }
+    }
+
+    fn parse_env_bool(value: &str) -> Option<bool> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => Some(true),
+            "0" | "false" | "no" | "off" => Some(false),
+            _ => None,
+        }
+    }
+
+    fn env_bool(name: &str) -> Option<bool> {
+        std::env::var(name)
+            .ok()
+            .and_then(|value| Self::parse_env_bool(&value))
+    }
+
+    pub fn detect() -> Self {
+        Self {
+            // Conservative default:
+            // - macOS / Windows: mature window-level materials
+            // - Linux / FreeBSD: compositor-dependent and often unavailable
+            window_system: cfg!(target_os = "macos") || cfg!(target_os = "windows"),
+            // GPUI currently exposes no region-scoped system material API.
+            region_system: false,
+            // Renderer-level backdrop blur is implemented on macOS/Windows/Linux paths.
+            renderer_blur: cfg!(any(
+                target_os = "macos",
+                target_os = "windows",
+                target_os = "linux",
+                target_os = "freebsd"
+            )),
+        }
+    }
+
+    pub fn with_env_overrides(mut self) -> Self {
+        if let Some(value) = Self::env_bool("CALMUI_OVERLAY_WINDOW_SYSTEM") {
+            self.window_system = value;
+        }
+        if let Some(value) = Self::env_bool("CALMUI_OVERLAY_REGION_SYSTEM") {
+            self.region_system = value;
+        }
+        if let Some(value) = Self::env_bool("CALMUI_OVERLAY_RENDERER_BLUR") {
+            self.renderer_blur = value;
+        }
+        self
+    }
+
+    pub fn detect_runtime() -> Self {
+        #[allow(unused_mut)]
+        let mut caps = Self::detect();
+
+        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+        {
+            let wayland_display = std::env::var_os("WAYLAND_DISPLAY").is_some();
+            let xdg_session_type = std::env::var("XDG_SESSION_TYPE")
+                .ok()
+                .map(|value| value.to_ascii_lowercase());
+            let is_wayland_session =
+                wayland_display || matches!(xdg_session_type.as_deref(), Some("wayland"));
+            if is_wayland_session {
+                // Many Wayland compositors expose blur-capable paths; keep this optimistic and
+                // allow explicit override below when needed.
+                caps.window_system = true;
+            }
+        }
+
+        caps.with_env_overrides()
+    }
+}
+
+impl Default for OverlayMaterialCapabilities {
+    fn default() -> Self {
+        Self::detect_runtime()
+    }
+}
+
 pub struct Overlay {
     id: String,
     visible: bool,
     absolute: bool,
     cover_parent: bool,
+    coverage: OverlayCoverage,
+    material_mode: OverlayMaterialMode,
+    system_material: OverlaySystemMaterial,
+    restore_window_background: bool,
+    material_capabilities: Option<OverlayMaterialCapabilities>,
     color: Option<ColorValue>,
     opacity: f32,
     frosted: bool,
@@ -39,6 +176,11 @@ impl Overlay {
             visible: true,
             absolute: true,
             cover_parent: true,
+            coverage: OverlayCoverage::Parent,
+            material_mode: OverlayMaterialMode::Auto,
+            system_material: OverlaySystemMaterial::Blurred,
+            restore_window_background: true,
+            material_capabilities: None,
             color: None,
             opacity: 1.0,
             frosted: true,
@@ -63,6 +205,77 @@ impl Overlay {
     pub fn cover_parent(mut self, value: bool) -> Self {
         self.cover_parent = value;
         self
+    }
+
+    pub fn coverage(mut self, value: OverlayCoverage) -> Self {
+        self.coverage = value;
+        self
+    }
+
+    pub fn material_mode(mut self, value: OverlayMaterialMode) -> Self {
+        self.material_mode = value;
+        self
+    }
+
+    pub fn system_material(mut self, value: OverlaySystemMaterial) -> Self {
+        self.system_material = value;
+        self
+    }
+
+    pub fn restore_window_background(mut self, value: bool) -> Self {
+        self.restore_window_background = value;
+        self
+    }
+
+    pub fn material_capabilities(mut self, value: OverlayMaterialCapabilities) -> Self {
+        self.material_capabilities = Some(value);
+        self
+    }
+
+    fn resolve_material_path(
+        &self,
+        capabilities: OverlayMaterialCapabilities,
+    ) -> ResolvedMaterialPath {
+        match self.material_mode {
+            OverlayMaterialMode::TintOnly => ResolvedMaterialPath::TintOnly,
+            OverlayMaterialMode::RendererBlur => {
+                if capabilities.renderer_blur {
+                    ResolvedMaterialPath::RendererBlur
+                } else {
+                    ResolvedMaterialPath::TintOnly
+                }
+            }
+            OverlayMaterialMode::SystemPreferred | OverlayMaterialMode::Auto => {
+                let supports_system = match self.coverage {
+                    OverlayCoverage::Window => capabilities.window_system,
+                    OverlayCoverage::Parent => capabilities.region_system,
+                };
+
+                if supports_system && self.coverage == OverlayCoverage::Window {
+                    ResolvedMaterialPath::System(self.system_material.to_window_background())
+                } else if self.frosted && capabilities.renderer_blur {
+                    ResolvedMaterialPath::RendererBlur
+                } else {
+                    ResolvedMaterialPath::TintOnly
+                }
+            }
+        }
+    }
+
+    fn maybe_apply_window_background(
+        &self,
+        window: &mut Window,
+        material: WindowBackgroundAppearance,
+    ) {
+        if self.coverage == OverlayCoverage::Window {
+            window.set_background_appearance(material);
+        }
+    }
+
+    fn maybe_restore_window_background(&self, window: &mut Window) {
+        if self.restore_window_background && self.coverage == OverlayCoverage::Window {
+            window.set_background_appearance(WindowBackgroundAppearance::Opaque);
+        }
     }
 
     pub fn color(mut self, value: ColorValue) -> Self {
@@ -119,25 +332,53 @@ impl MotionAware for Overlay {
 impl RenderOnce for Overlay {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
+        let window_caps = OverlayMaterialCapabilities::from_window(_window);
+        let static_caps = OverlayMaterialCapabilities::detect();
+        let runtime_caps = OverlayMaterialCapabilities {
+            window_system: window_caps.window_system || static_caps.window_system,
+            region_system: window_caps.region_system || static_caps.region_system,
+            renderer_blur: window_caps.renderer_blur || static_caps.renderer_blur,
+        }
+        .with_env_overrides();
+        let capabilities = self
+            .material_capabilities
+            .unwrap_or_else(|| CalmProvider::overlay_capabilities_for(_window, _cx, runtime_caps));
+        let material_path = self.resolve_material_path(capabilities);
+
         if !self.visible {
+            self.maybe_restore_window_background(_window);
             return div().into_any_element();
         }
+
+        let (use_backdrop_blur, fallback_frosted, effective_opacity) = match material_path {
+            ResolvedMaterialPath::System(material) => {
+                self.maybe_apply_window_background(_window, material);
+                // Keep stronger tint for readability while still letting OS material show through.
+                (false, false, (self.opacity * 0.68).clamp(0.0, 1.0))
+            }
+            ResolvedMaterialPath::RendererBlur => {
+                self.maybe_restore_window_background(_window);
+                (true, false, self.opacity)
+            }
+            ResolvedMaterialPath::TintOnly => {
+                self.maybe_restore_window_background(_window);
+                (false, self.frosted, self.opacity)
+            }
+        };
 
         let token = self
             .color
             .unwrap_or_else(|| self.theme.components.overlay.bg.clone());
         let raw_bg = resolve_hsla(&self.theme, &token);
         let raw_alpha = raw_bg.a;
-        let blended_alpha = if self.frosted {
-            // In frosted mode, stay more *transparent* than a typical overlay. We then
-            // recover readability with highlight/depth/grain passes below.
-            //
-            // The previous mix skewed too opaque ("grey mask" look). This keeps the
-            // base tint lighter, and lets the glass layers do the work.
-            let frosted_base = (0.46 + (0.14 * self.blur_strength)).clamp(0.40, 0.72);
-            ((raw_alpha * 0.42) + (frosted_base * 0.58)) * self.opacity
+        let blended_alpha = if use_backdrop_blur {
+            let backdrop_base = (0.26 + (0.12 * self.blur_strength)).clamp(0.24, 0.42);
+            ((raw_alpha * 0.35) + (backdrop_base * 0.65)) * effective_opacity
+        } else if fallback_frosted {
+            let frosted_base = (0.78 + (0.12 * self.blur_strength)).clamp(0.74, 0.94);
+            ((raw_alpha * 0.24) + (frosted_base * 0.76)) * effective_opacity
         } else {
-            raw_alpha * self.opacity
+            raw_alpha * effective_opacity
         }
         .clamp(0.0, 1.0);
         let bg = raw_bg.opacity(blended_alpha);
@@ -158,20 +399,35 @@ impl RenderOnce for Overlay {
             });
         }
 
-        if self.frosted {
-            // GPUI has no per-element backdrop filter yet. Approximate blur/glass by
-            // stacking haze + depth + low-frequency "fog" + grain + edge/highlight passes.
-            //
-            // Notes:
-            // - Avoid directional textures (grid/scanlines) because they read as "overlay UI",
-            //   not material.
-            // - Use denser, irregular grain to simulate acrylic/matte glass.
-            // - Use a top highlight to fake reflected light.
+        if use_backdrop_blur {
+            let blur_radius = px((8.0 + (26.0 * self.blur_strength)).clamp(8.0, 48.0));
+            let backdrop_tint_alpha = (0.14 + (0.10 * self.blur_strength)).clamp(0.12, 0.30);
+            let backdrop_tint =
+                raw_bg.opacity((backdrop_tint_alpha * effective_opacity).clamp(0.0, 1.0));
+            root = root.child(
+                canvas(
+                    move |bounds, _, _| bounds,
+                    move |bounds, _, window, _cx| {
+                        window.paint_backdrop(backdrop(
+                            bounds,
+                            gpui::Corners::default(),
+                            blur_radius,
+                            backdrop_tint,
+                        ));
+                    },
+                )
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full(),
+            );
+        }
+
+        if fallback_frosted {
             let haze_alpha = (0.10 + (0.18 * self.blur_strength)).clamp(0.08, 0.34);
             let depth_alpha = (0.06 + (0.10 * self.blur_strength)).clamp(0.05, 0.20);
             let edge_alpha = (0.03 + (0.06 * self.blur_strength)).clamp(0.02, 0.12);
-            let fog_alpha = (0.018 + (0.028 * self.blur_strength)).clamp(0.012, 0.06);
-            let noise_alpha = (0.015 + (0.035 * self.blur_strength)).clamp(0.012, 0.075);
+            let noise_alpha = (0.008 + (0.012 * self.blur_strength)).clamp(0.006, 0.022);
 
             let haze = if bg.l <= 0.5 {
                 gpui::white().opacity(haze_alpha)
@@ -188,16 +444,6 @@ impl RenderOnce for Overlay {
             } else {
                 gpui::black().opacity(edge_alpha)
             };
-            let texture_hi = if bg.l <= 0.5 {
-                gpui::white().opacity(fog_alpha)
-            } else {
-                gpui::black().opacity(fog_alpha)
-            };
-            let texture_lo = if bg.l <= 0.5 {
-                gpui::black().opacity(fog_alpha * 0.75)
-            } else {
-                gpui::white().opacity(fog_alpha * 0.75)
-            };
             let grain_hi = if bg.l <= 0.5 {
                 gpui::white().opacity(noise_alpha)
             } else {
@@ -209,38 +455,6 @@ impl RenderOnce for Overlay {
                 gpui::white().opacity(noise_alpha * 0.85)
             };
 
-            // Low-frequency "fog" blobs: gives a subtle diffusion feel without blur.
-            // Keep it non-directional so it doesn't read as UI grid.
-            let mut fog_layer = div()
-                .id(format!("{}-frost-fog", self.id))
-                .absolute()
-                .top_0()
-                .left_0()
-                .size_full();
-            for i in 0..18_u32 {
-                // Deterministic pseudo-random placement/sizing (no RNG dependency).
-                let x = ((i * 173 + 41) % 1440) as f32;
-                let y = ((i * 137 + 29) % 960) as f32;
-                let w = (140.0 + (((i * 97 + 11) % 140) as f32)).min(280.0);
-                let h = (110.0 + (((i * 83 + 23) % 130) as f32)).min(260.0);
-                let tone = if i % 2 == 0 { texture_hi } else { texture_lo };
-
-                // Soft blobs: large rounded rects at very low alpha.
-                // (We avoid heavy rounding helpers to stay compatible with older gpui style APIs.)
-                let blob = div()
-                    .absolute()
-                    .left(px(x - (w * 0.5)))
-                    .top(px(y - (h * 0.5)))
-                    .w(px(w))
-                    .h(px(h))
-                    .rounded_full()
-                    .bg(tone);
-
-                fog_layer = fog_layer.child(blob);
-            }
-
-            // Top highlight: fakes reflected light. Implemented as stacked thin bands
-            // so we don't depend on gradient APIs.
             let highlight_base = if bg.l <= 0.5 {
                 (0.12 + (0.06 * self.blur_strength)).clamp(0.10, 0.20)
             } else {
@@ -273,9 +487,7 @@ impl RenderOnce for Overlay {
                 .top_0()
                 .left_0()
                 .size_full();
-            // Denser micro-grain (avoid round dots; use tiny rectangles).
-            // This reads much closer to acrylic/matte glass than sparse circles.
-            for i in 0..900_u32 {
+            for i in 0..360_u32 {
                 let x = ((i * 53 + 17) % 1440) as f32;
                 let y = ((i * 97 + 29) % 960) as f32;
 
@@ -320,7 +532,6 @@ impl RenderOnce for Overlay {
                         .size_full()
                         .bg(depth),
                 )
-                .child(fog_layer)
                 .child(highlight_layer)
                 .child(noise_layer)
                 .child(
@@ -330,9 +541,7 @@ impl RenderOnce for Overlay {
                         .top_0()
                         .left_0()
                         .size_full()
-                        .bg(edge)
-                        .border_1()
-                        .border_color(edge),
+                        .bg(edge),
                 );
         }
 

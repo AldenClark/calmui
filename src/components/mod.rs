@@ -68,7 +68,10 @@ pub use loading_overlay::LoadingOverlay;
 pub use menu::{Menu, MenuItem};
 pub use modal::Modal;
 pub use number_input::NumberInput;
-pub use overlay::Overlay;
+pub use overlay::{
+    Overlay, OverlayCoverage, OverlayMaterialCapabilities, OverlayMaterialMode,
+    OverlaySystemMaterial,
+};
 pub use pagination::Pagination;
 pub use paper::Paper;
 pub use popover::{Popover, PopoverPlacement};

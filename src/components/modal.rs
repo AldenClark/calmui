@@ -11,7 +11,7 @@ use crate::motion::MotionConfig;
 
 use super::control;
 use super::icon::Icon;
-use super::overlay::Overlay;
+use super::overlay::{Overlay, OverlayCoverage, OverlayMaterialMode};
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
 
@@ -130,6 +130,8 @@ impl RenderOnce for Modal {
 
         let overlay = Overlay::new()
             .with_id(format!("{}-overlay", self.id))
+            .coverage(OverlayCoverage::Window)
+            .material_mode(OverlayMaterialMode::Auto)
             .color(tokens.overlay_bg.clone())
             .on_click(
                 move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {

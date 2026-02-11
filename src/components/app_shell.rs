@@ -10,7 +10,7 @@ use crate::id::stable_auto_id;
 use crate::theme::ColorValue;
 
 use super::control;
-use super::overlay::Overlay;
+use super::overlay::{Overlay, OverlayMaterialMode};
 use super::utils::resolve_hsla;
 
 fn default_title_bar_height() -> f32 {
@@ -48,7 +48,7 @@ impl TitleBar {
             title: None,
             height_px: default_title_bar_height(),
             background: None,
-            show_window_controls: true,
+            show_window_controls: !cfg!(target_os = "macos"),
             left_slots: Vec::new(),
             center_slots: Vec::new(),
             right_slots: Vec::new(),
@@ -97,28 +97,6 @@ impl TitleBar {
         self.right_slots
             .push(Box::new(|| content.into_any_element()));
         self
-    }
-
-    fn render_window_controls_macos(&self) -> AnyElement {
-        let dot = |color: &'static str| {
-            div()
-                .w(px(12.0))
-                .h(px(12.0))
-                .rounded_full()
-                .bg(gpui::Rgba::try_from(color)
-                    .map(Into::into)
-                    .unwrap_or(gpui::black()))
-        };
-
-        div()
-            .id(format!("{}-controls-macos", self.id))
-            .flex()
-            .items_center()
-            .gap_1p5()
-            .child(dot("#FF5F57"))
-            .child(dot("#FEBC2E"))
-            .child(dot("#28C840"))
-            .into_any_element()
     }
 
     fn render_window_controls_windows(&self) -> AnyElement {
@@ -189,8 +167,9 @@ impl RenderOnce for TitleBar {
             .items_center()
             .gap_2();
 
-        if self.show_window_controls && cfg!(target_os = "macos") {
-            left = left.child(self.render_window_controls_macos());
+        if cfg!(target_os = "macos") {
+            // On macOS, rely on native traffic lights to avoid duplicate controls.
+            left = left.child(div().w(px(64.0)).h(px(1.0)).flex_none());
         }
 
         if let Some(title) = self.title.clone() {
@@ -603,6 +582,8 @@ impl RenderOnce for AppShell {
                         host = host.child(
                             Overlay::new()
                                 .with_id(format!("{}-sidebar-overlay-mask", self.id))
+                                .material_mode(OverlayMaterialMode::TintOnly)
+                                .frosted(false)
                                 .opacity(1.0)
                                 .on_click(
                                     move |_: &ClickEvent,

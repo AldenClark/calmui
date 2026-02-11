@@ -1,3 +1,4 @@
+use crate::components::OverlayMaterialCapabilities;
 use crate::motion::MotionConfig;
 use crate::provider::CalmProvider;
 use crate::theme::{Theme, ThemePatch};
@@ -17,10 +18,32 @@ impl Default for CalmApplication {
 }
 
 impl CalmApplication {
+    fn default_provider() -> CalmProvider {
+        CalmProvider::new().with_overlay_capability_probe(
+            |window: &gpui::Window, _cx: &gpui::App| {
+                let mut capabilities = OverlayMaterialCapabilities {
+                    window_system: window.supports_window_material(),
+                    region_system: window.supports_region_material(),
+                    renderer_blur: window.supports_renderer_backdrop_blur(),
+                }
+                .with_env_overrides();
+
+                if !capabilities.window_system
+                    && !capabilities.region_system
+                    && !capabilities.renderer_blur
+                {
+                    capabilities = OverlayMaterialCapabilities::detect_runtime();
+                }
+
+                capabilities
+            },
+        )
+    }
+
     pub fn new() -> Self {
         Self {
             application: gpui::Application::new(),
-            provider: CalmProvider::new(),
+            provider: Self::default_provider(),
             launch_hooks: Vec::new(),
         }
     }
@@ -28,7 +51,7 @@ impl CalmApplication {
     pub fn headless() -> Self {
         Self {
             application: gpui::Application::headless(),
-            provider: CalmProvider::new(),
+            provider: Self::default_provider(),
             launch_hooks: Vec::new(),
         }
     }
@@ -36,7 +59,7 @@ impl CalmApplication {
     pub fn from_application(application: gpui::Application) -> Self {
         Self {
             application,
-            provider: CalmProvider::new(),
+            provider: Self::default_provider(),
             launch_hooks: Vec::new(),
         }
     }

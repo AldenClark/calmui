@@ -111,6 +111,8 @@ impl Loader {
     fn render_dots(self) -> AnyElement {
         let color = resolve_hsla(&self.theme, &self.color_token());
         let dot = self.dot_size_px();
+        let cell_h = dot * 1.8;
+        let baseline_top = (cell_h - dot).max(0.0);
 
         let dots = (0..3).map(|index| {
             let phase = index as f32 / 3.0;
@@ -118,26 +120,36 @@ impl Loader {
                 .repeat()
                 .with_easing(gpui::ease_in_out);
             div()
-                .id(format!("{}-dot-{index}", self.id))
+                .id(format!("{}-dot-cell-{index}", self.id))
                 .w(px(dot))
-                .h(px(dot))
-                .rounded_full()
-                .bg(color)
-                .with_animation(
-                    format!("{}-dot-anim-{index}", self.id),
-                    animation,
-                    move |this, delta| {
-                        let progress = (delta + phase).fract();
-                        let wave = ((progress * TAU).sin() + 1.0) * 0.5;
-                        let lift = dot * 0.6 * wave;
-                        let opacity = 0.3 + (0.7 * wave);
-                        this.mt(px(-lift)).opacity(opacity)
-                    },
+                .h(px(cell_h))
+                .relative()
+                .child(
+                    div()
+                        .id(format!("{}-dot-{index}", self.id))
+                        .absolute()
+                        .left_0()
+                        .top(px(baseline_top))
+                        .w(px(dot))
+                        .h(px(dot))
+                        .rounded_full()
+                        .bg(color)
+                        .with_animation(
+                            format!("{}-dot-anim-{index}", self.id),
+                            animation,
+                            move |this, delta| {
+                                let progress = (delta + phase).fract();
+                                let wave = ((progress * TAU).sin() + 1.0) * 0.5;
+                                let lift = dot * 0.6 * wave;
+                                let opacity = 0.3 + (0.7 * wave);
+                                this.mt(px(-lift)).opacity(opacity)
+                            },
+                        ),
                 )
                 .into_any_element()
         });
 
-        let mut row = h_stack().gap_1().children(dots);
+        let mut row = h_stack().items_center().gap_1().children(dots);
         if let Some(label) = self.label {
             row = row
                 .gap_2()

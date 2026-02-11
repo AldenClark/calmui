@@ -10,7 +10,7 @@ use crate::style::Size;
 use crate::theme::ColorValue;
 
 use super::loader::{Loader, LoaderElement, LoaderVariant};
-use super::overlay::Overlay;
+use super::overlay::{Overlay, OverlayMaterialMode};
 use super::primitives::v_stack;
 use super::utils::resolve_hsla;
 
@@ -144,6 +144,7 @@ impl RenderOnce for LoadingOverlay {
 
         let overlay = Overlay::new()
             .with_id(format!("{}-mask", self.id))
+            .material_mode(OverlayMaterialMode::Auto)
             .motion(self.motion)
             .color(tokens.bg.clone())
             .content(

@@ -27,6 +27,7 @@ pub struct HoverCard {
     body: Option<SharedString>,
     opened: Option<bool>,
     default_opened: bool,
+    disabled: bool,
     placement: HoverCardPlacement,
     offset_px: f32,
     theme: crate::theme::LocalTheme,
@@ -45,6 +46,7 @@ impl HoverCard {
             body: None,
             opened: None,
             default_opened: false,
+            disabled: false,
             placement: HoverCardPlacement::Bottom,
             offset_px: 3.0,
             theme: crate::theme::LocalTheme::default(),
@@ -67,6 +69,11 @@ impl HoverCard {
 
     pub fn default_opened(mut self, value: bool) -> Self {
         self.default_opened = value;
+        self
+    }
+
+    pub fn disabled(mut self, value: bool) -> Self {
+        self.disabled = value;
         self
     }
 
@@ -186,7 +193,11 @@ impl MotionAware for HoverCard {
 impl RenderOnce for HoverCard {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let opened = self.resolved_opened();
+        let opened = if self.disabled {
+            false
+        } else {
+            self.resolved_opened()
+        };
         let is_controlled = self.opened.is_some();
         let trigger_content = self
             .trigger
@@ -199,19 +210,24 @@ impl RenderOnce for HoverCard {
             .relative()
             .child(trigger_content);
 
-        let id = self.id.clone();
-        let handler = self.on_open_change.clone();
-        trigger = trigger.on_hover(move |hovered, window, cx| {
-            control::set_bool_state(&id, "trigger-hovered", *hovered);
-            let next = *hovered || control::bool_state(&id, "panel-hovered", None, false);
-            if !is_controlled {
-                control::set_bool_state(&id, "opened", next);
-                window.refresh();
-            }
-            if let Some(on_open_change) = handler.as_ref() {
-                (on_open_change)(next, window, cx);
-            }
-        });
+        if self.disabled {
+            trigger = trigger.cursor_default().opacity(0.55);
+        } else {
+            trigger = trigger.cursor_pointer();
+            let id = self.id.clone();
+            let handler = self.on_open_change.clone();
+            trigger = trigger.on_hover(move |hovered, window, cx| {
+                control::set_bool_state(&id, "trigger-hovered", *hovered);
+                let next = *hovered || control::bool_state(&id, "panel-hovered", None, false);
+                if !is_controlled {
+                    control::set_bool_state(&id, "opened", next);
+                    window.refresh();
+                }
+                if let Some(on_open_change) = handler.as_ref() {
+                    (on_open_change)(next, window, cx);
+                }
+            });
+        }
 
         if opened {
             let card = self.render_card(is_controlled);
