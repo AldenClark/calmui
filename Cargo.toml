@@ -7,7 +7,7 @@ edition = "2024"
 extend-icon = []
 
 [dependencies]
-gpui = { git = "https://github.com/AldenClark/zed.git", package = "gpui", rev = "de37e4b11df532fa9b610a8bf34779c9ef0f8fb0" }
+gpui = { git = "https://github.com/AldenClark/zed.git", package = "gpui" }
 rust-embed = "8.5.0"
 pulldown-cmark = "0.12"
 rust_decimal = "1.36"
