@@ -2,24 +2,39 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window, div, px,
+    SharedString, StatefulInteractiveElement, Styled, Window, WindowControlArea, div, px, rgb,
 };
 
 use crate::contracts::WithId;
 use crate::id::stable_auto_id;
-use crate::theme::ColorValue;
+use crate::theme::{ColorScheme, ColorValue};
 
 use super::control;
 use super::overlay::{Overlay, OverlayMaterialMode};
+use super::scroll_area::{ScrollArea, ScrollDirection};
 use super::utils::resolve_hsla;
 
 fn default_title_bar_height() -> f32 {
     if cfg!(target_os = "macos") {
-        28.0
+        30.0
     } else if cfg!(target_os = "windows") {
         32.0
     } else {
-        30.0
+        34.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TitleBarControlPlacement {
+    Left,
+    Right,
+}
+
+fn default_control_placement() -> TitleBarControlPlacement {
+    if cfg!(target_os = "macos") {
+        TitleBarControlPlacement::Left
+    } else {
+        TitleBarControlPlacement::Right
     }
 }
 
@@ -31,6 +46,7 @@ pub struct TitleBar {
     visible: bool,
     title: Option<SharedString>,
     height_px: f32,
+    immersive: bool,
     background: Option<ColorValue>,
     show_window_controls: bool,
     left_slots: Vec<SlotRenderer>,
@@ -47,8 +63,9 @@ impl TitleBar {
             visible: true,
             title: None,
             height_px: default_title_bar_height(),
+            immersive: false,
             background: None,
-            show_window_controls: !cfg!(target_os = "macos"),
+            show_window_controls: true,
             left_slots: Vec::new(),
             center_slots: Vec::new(),
             right_slots: Vec::new(),
@@ -76,9 +93,18 @@ impl TitleBar {
         self
     }
 
+    pub fn immersive(mut self, value: bool) -> Self {
+        self.immersive = value;
+        self
+    }
+
     pub fn show_window_controls(mut self, value: bool) -> Self {
         self.show_window_controls = value;
         self
+    }
+
+    pub fn height_px(&self) -> f32 {
+        self.height_px
     }
 
     pub fn left_slot(mut self, content: impl IntoElement + 'static) -> Self {
@@ -99,32 +125,186 @@ impl TitleBar {
         self
     }
 
-    fn render_window_controls_windows(&self) -> AnyElement {
-        let tokens = &self.theme.components.title_bar;
+    fn render_window_controls_windows(&self, window: &mut Window) -> (AnyElement, f32) {
         let fg = resolve_hsla(&self.theme, &self.theme.components.title_bar.fg);
-        let controls_bg = resolve_hsla(&self.theme, &tokens.controls_bg);
+        let (neutral_hover_bg, neutral_active_bg) = match self.theme.color_scheme {
+            ColorScheme::Dark => (gpui::white().opacity(0.14), gpui::white().opacity(0.22)),
+            ColorScheme::Light => (gpui::black().opacity(0.08), gpui::black().opacity(0.14)),
+        };
+        let max_or_restore_icon = if window.is_maximized() {
+            "\u{e923}"
+        } else {
+            "\u{e922}"
+        };
 
-        let button = |id: String, text: &'static str| {
+        let button = |id: String, text: &'static str, area: WindowControlArea, close: bool| {
+            let (hover_bg, active_bg, hover_fg) = if close {
+                let close_bg: gpui::Hsla = rgb(0xe81123).into();
+                (close_bg, close_bg.opacity(0.85), gpui::white())
+            } else {
+                (neutral_hover_bg, neutral_active_bg, fg)
+            };
             div()
                 .id(id)
-                .w(px(36.0))
-                .h(px(self.height_px.max(24.0)))
+                .w(px(45.0))
+                .h(px(self.height_px))
                 .flex()
                 .items_center()
                 .justify_center()
-                .bg(controls_bg)
+                .font_family("Segoe MDL2 Assets")
+                .text_size(px(10.0))
+                .bg(gpui::transparent_black())
                 .text_color(fg)
+                .cursor_pointer()
+                .hover(move |style| style.bg(hover_bg).text_color(hover_fg))
+                .active(move |style| style.bg(active_bg).text_color(hover_fg))
+                .window_control_area(area)
                 .child(text)
         };
 
-        div()
-            .id(format!("{}-controls-win", self.id))
-            .flex()
-            .items_center()
-            .child(button(format!("{}-win-min", self.id), "-"))
-            .child(button(format!("{}-win-max", self.id), "□"))
-            .child(button(format!("{}-win-close", self.id), "×"))
-            .into_any_element()
+        (
+            div()
+                .id(format!("{}-controls-win", self.id))
+                .flex()
+                .items_center()
+                .h(px(self.height_px))
+                .child(button(
+                    format!("{}-win-min", self.id),
+                    "\u{e921}",
+                    WindowControlArea::Min,
+                    false,
+                ))
+                .child(button(
+                    format!("{}-win-max", self.id),
+                    max_or_restore_icon,
+                    WindowControlArea::Max,
+                    false,
+                ))
+                .child(button(
+                    format!("{}-win-close", self.id),
+                    "\u{e8bb}",
+                    WindowControlArea::Close,
+                    true,
+                ))
+                .into_any_element(),
+            135.0,
+        )
+    }
+
+    fn render_window_controls_macos(&self) -> (AnyElement, f32) {
+        let circle = |id: String, color: gpui::Hsla, area: WindowControlArea| {
+            div()
+                .id(id)
+                .w(px(12.0))
+                .h(px(12.0))
+                .rounded_full()
+                .bg(color)
+                .border_1()
+                .border_color(color.opacity(0.75))
+                .cursor_pointer()
+                .window_control_area(area)
+        };
+
+        (
+            div()
+                .id(format!("{}-controls-macos", self.id))
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .child(circle(
+                    format!("{}-mac-close", self.id),
+                    rgb(0xff5f57).into(),
+                    WindowControlArea::Close,
+                ))
+                .child(circle(
+                    format!("{}-mac-min", self.id),
+                    rgb(0xfebc2e).into(),
+                    WindowControlArea::Min,
+                ))
+                .child(circle(
+                    format!("{}-mac-max", self.id),
+                    rgb(0x28c840).into(),
+                    WindowControlArea::Max,
+                ))
+                .into_any_element(),
+            52.0,
+        )
+    }
+
+    fn render_window_controls_linux(&self) -> (AnyElement, f32) {
+        let tokens = &self.theme.components.title_bar;
+        let fg = resolve_hsla(&self.theme, &tokens.fg);
+        let bg = resolve_hsla(&self.theme, &tokens.controls_bg);
+
+        let button = |id: String, text: &'static str, area: WindowControlArea, close: bool| {
+            let hover_bg = if close {
+                rgb(0xcc3344).into()
+            } else {
+                bg.opacity(0.9)
+            };
+            div()
+                .id(id)
+                .w(px(28.0))
+                .h(px(24.0))
+                .rounded_sm()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(bg)
+                .text_color(fg)
+                .cursor_pointer()
+                .hover(move |style| style.bg(hover_bg))
+                .active(move |style| style.bg(hover_bg.opacity(0.85)))
+                .window_control_area(area)
+                .child(text)
+        };
+
+        (
+            div()
+                .id(format!("{}-controls-linux", self.id))
+                .flex()
+                .items_center()
+                .gap(px(6.0))
+                .child(button(
+                    format!("{}-linux-min", self.id),
+                    "—",
+                    WindowControlArea::Min,
+                    false,
+                ))
+                .child(button(
+                    format!("{}-linux-max", self.id),
+                    "□",
+                    WindowControlArea::Max,
+                    false,
+                ))
+                .child(button(
+                    format!("{}-linux-close", self.id),
+                    "×",
+                    WindowControlArea::Close,
+                    true,
+                ))
+                .into_any_element(),
+            96.0,
+        )
+    }
+
+    fn render_window_controls(
+        &self,
+        window: &mut Window,
+    ) -> Option<(AnyElement, TitleBarControlPlacement, f32)> {
+        if !self.show_window_controls {
+            return None;
+        }
+
+        let (controls, width) = if cfg!(target_os = "macos") {
+            self.render_window_controls_macos()
+        } else if cfg!(target_os = "windows") {
+            self.render_window_controls_windows(window)
+        } else {
+            self.render_window_controls_linux()
+        };
+
+        Some((controls, default_control_placement(), width))
     }
 }
 
@@ -139,38 +319,45 @@ impl WithId for TitleBar {
 }
 
 impl RenderOnce for TitleBar {
-    fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         if !self.visible {
             return div().into_any_element();
         }
 
         let tokens = &self.theme.components.title_bar;
-        let bg_token = self.background.clone().unwrap_or_else(|| tokens.bg.clone());
+        let bg_token = if self.immersive && self.background.is_none() {
+            ColorValue::Custom("#00000000".to_string())
+        } else {
+            self.background.clone().unwrap_or_else(|| tokens.bg.clone())
+        };
         let fg = resolve_hsla(&self.theme, &tokens.fg);
+        let (padding_left, padding_right) = if cfg!(target_os = "windows") {
+            (12.0, 0.0)
+        } else {
+            (12.0, 12.0)
+        };
 
         let mut left = div()
             .id(format!("{}-left", self.id))
             .flex()
             .items_center()
-            .gap_2();
+            .gap_2()
+            .window_control_area(WindowControlArea::Drag);
         let mut center = div()
             .id(format!("{}-center", self.id))
             .flex_1()
             .flex()
             .items_center()
             .justify_center()
-            .gap_2();
+            .gap_2()
+            .window_control_area(WindowControlArea::Drag);
         let mut right = div()
             .id(format!("{}-right", self.id))
             .flex()
             .items_center()
-            .gap_2();
-
-        if cfg!(target_os = "macos") {
-            // On macOS, rely on native traffic lights to avoid duplicate controls.
-            left = left.child(div().w(px(64.0)).h(px(1.0)).flex_none());
-        }
+            .gap_2()
+            .window_control_area(WindowControlArea::Drag);
 
         if let Some(title) = self.title.clone() {
             center = center.child(
@@ -181,11 +368,7 @@ impl RenderOnce for TitleBar {
             );
         }
 
-        let windows_controls = if self.show_window_controls && !cfg!(target_os = "macos") {
-            Some(self.render_window_controls_windows())
-        } else {
-            None
-        };
+        let window_controls = self.render_window_controls(window);
 
         for slot in self.left_slots {
             left = left.child(slot());
@@ -197,26 +380,42 @@ impl RenderOnce for TitleBar {
             right = right.child(slot());
         }
 
-        if let Some(controls) = windows_controls {
-            right = right.child(controls);
+        if let Some((controls, placement, width_px)) = window_controls {
+            match placement {
+                TitleBarControlPlacement::Left => {
+                    left = left.child(controls);
+                    right = right.child(div().w(px(width_px)).h(px(1.0)).invisible());
+                }
+                TitleBarControlPlacement::Right => {
+                    left = left.child(div().w(px(width_px)).h(px(1.0)).invisible());
+                    right = right.child(controls);
+                }
+            }
         }
 
-        div()
+        let mut root = div()
             .id(self.id)
             .w_full()
             .h(px(self.height_px))
-            .px(px(12.0))
+            .pl(px(padding_left))
+            .pr(px(padding_right))
             .flex()
             .items_center()
             .justify_between()
+            .window_control_area(WindowControlArea::Drag)
             .bg(resolve_hsla(&self.theme, &bg_token))
-            .border_1()
-            .border_color(resolve_hsla(&self.theme, &tokens.border))
             .text_color(fg)
             .child(left)
             .child(center)
-            .child(right)
-            .into_any_element()
+            .child(right);
+
+        if !self.immersive {
+            root = root
+                .border_1()
+                .border_color(resolve_hsla(&self.theme, &tokens.border));
+        }
+
+        root.into_any_element()
     }
 }
 
@@ -333,10 +532,15 @@ impl RenderOnce for Sidebar {
                     .id(format!("{}-sidebar-content", sidebar_id))
                     .flex_1()
                     .min_h_0()
-                    .overflow_y_scroll()
-                    .p_3()
                     .text_color(resolve_hsla(&self.theme, &tokens.content_fg))
-                    .child(content()),
+                    .child(
+                        ScrollArea::new()
+                            .with_id(format!("{}-sidebar-scroll", sidebar_id))
+                            .direction(ScrollDirection::Vertical)
+                            .bordered(false)
+                            .padding(crate::style::Size::Md)
+                            .child(content()),
+                    ),
             );
         } else {
             root = root.child(div().flex_1().min_h_0());
@@ -378,6 +582,7 @@ pub struct AppShell {
     id: String,
     layout: AppShellLayout,
     title_bar: Option<TitleBar>,
+    title_bar_immersive: bool,
     sidebar: Option<Sidebar>,
     secondary_sidebar: Option<Sidebar>,
     content: Option<SlotRenderer>,
@@ -396,6 +601,7 @@ impl AppShell {
             id: stable_auto_id("app-shell"),
             layout: AppShellLayout::Standard,
             title_bar: None,
+            title_bar_immersive: false,
             sidebar: None,
             secondary_sidebar: None,
             content: None,
@@ -415,6 +621,11 @@ impl AppShell {
 
     pub fn title_bar(mut self, value: TitleBar) -> Self {
         self.title_bar = Some(value);
+        self
+    }
+
+    pub fn title_bar_immersive(mut self, value: bool) -> Self {
+        self.title_bar_immersive = value;
         self
     }
 
@@ -493,6 +704,10 @@ impl RenderOnce for AppShell {
 
         let body_text = self.theme.resolve_hsla(&self.theme.semantic.text_primary);
         let body_bg = resolve_hsla(&self.theme, &tokens.bg);
+        let title_bar = self
+            .title_bar
+            .take()
+            .map(|title_bar| title_bar.immersive(self.title_bar_immersive));
 
         let mut root = div()
             .id(self.id.clone())
@@ -501,9 +716,8 @@ impl RenderOnce for AppShell {
             .flex_col()
             .bg(body_bg)
             .text_color(body_text);
-
-        if let Some(title_bar) = self.title_bar.take() {
-            root = root.child(title_bar);
+        if self.title_bar_immersive {
+            root = root.relative();
         }
 
         let mut body = div()
@@ -615,7 +829,25 @@ impl RenderOnce for AppShell {
             }
         }
 
-        root.child(body).into_any_element()
+        if let Some(title_bar) = title_bar {
+            if self.title_bar_immersive {
+                root = root.child(body).child(
+                    div()
+                        .id(format!("{}-titlebar-overlay", self.id))
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .right_0()
+                        .child(title_bar),
+                );
+            } else {
+                root = root.child(title_bar).child(body);
+            }
+        } else {
+            root = root.child(body);
+        }
+
+        root.into_any_element()
     }
 }
 

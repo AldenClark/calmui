@@ -26,6 +26,8 @@ pub struct Text {
     tone: TextTone,
     size: Size,
     truncate: bool,
+    line_clamp: Option<usize>,
+    with_ellipsis: bool,
     theme: crate::theme::LocalTheme,
 }
 
@@ -38,6 +40,8 @@ impl Text {
             tone: TextTone::Default,
             size: Size::Md,
             truncate: false,
+            line_clamp: None,
+            with_ellipsis: true,
             theme: crate::theme::LocalTheme::default(),
         }
     }
@@ -55,6 +59,26 @@ impl Text {
     pub fn truncate(mut self, value: bool) -> Self {
         self.truncate = value;
         self
+    }
+
+    pub fn line_clamp(mut self, value: usize) -> Self {
+        self.line_clamp = Some(value.max(1));
+        self
+    }
+
+    pub fn with_ellipsis(mut self, value: bool) -> Self {
+        self.with_ellipsis = value;
+        self
+    }
+
+    fn line_height_px(&self) -> f32 {
+        match self.size {
+            Size::Xs => 14.0,
+            Size::Sm => 16.0,
+            Size::Md => 18.0,
+            Size::Lg => 22.0,
+            Size::Xl => 26.0,
+        }
     }
 
     fn text_color(&self) -> gpui::Hsla {
@@ -98,7 +122,21 @@ impl RenderOnce for Text {
         };
 
         if self.truncate {
-            node = node.truncate();
+            if self.with_ellipsis {
+                node = node.truncate();
+            } else {
+                node = node.overflow_hidden().whitespace_nowrap();
+            }
+        }
+
+        if let Some(lines) = self.line_clamp {
+            if self.with_ellipsis {
+                node = node.line_clamp(lines);
+            } else {
+                node = node
+                    .overflow_hidden()
+                    .max_h(gpui::px(self.line_height_px() * lines as f32));
+            }
         }
 
         node.child(self.content)

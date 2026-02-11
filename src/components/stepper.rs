@@ -60,6 +60,7 @@ pub struct Stepper {
     active_controlled: bool,
     default_active: usize,
     orientation: GroupOrientation,
+    content_position: StepperContentPosition,
     variant: Variant,
     size: Size,
     radius: Radius,
@@ -78,6 +79,7 @@ impl Stepper {
             active_controlled: false,
             default_active: 0,
             orientation: GroupOrientation::Horizontal,
+            content_position: StepperContentPosition::Right,
             variant: Variant::Default,
             size: Size::Md,
             radius: Radius::Pill,
@@ -110,6 +112,11 @@ impl Stepper {
 
     pub fn orientation(mut self, value: GroupOrientation) -> Self {
         self.orientation = value;
+        self
+    }
+
+    pub fn content_position(mut self, value: StepperContentPosition) -> Self {
+        self.content_position = value;
         self
     }
 
@@ -211,6 +218,12 @@ impl MotionAware for Stepper {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StepperContentPosition {
+    Below,
+    Right,
+}
+
 impl RenderOnce for Stepper {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
@@ -310,15 +323,26 @@ impl RenderOnce for Stepper {
                 }
 
                 let mut item = match self.orientation {
-                    GroupOrientation::Horizontal => v_stack()
-                        .id(format!("{}-step-{index}", self.id))
-                        .items_center()
-                        .gap_1()
-                        .p_1()
-                        .flex_1()
-                        .min_w_0()
-                        .child(indicator)
-                        .child(text_block),
+                    GroupOrientation::Horizontal => match self.content_position {
+                        StepperContentPosition::Below => v_stack()
+                            .id(format!("{}-step-{index}", self.id))
+                            .items_center()
+                            .gap_1()
+                            .p_1()
+                            .flex_1()
+                            .min_w_0()
+                            .child(indicator)
+                            .child(text_block),
+                        StepperContentPosition::Right => h_stack()
+                            .id(format!("{}-step-{index}", self.id))
+                            .items_center()
+                            .gap_2()
+                            .p_1()
+                            .flex_1()
+                            .min_w_0()
+                            .child(indicator)
+                            .child(text_block.min_w_0()),
+                    },
                     GroupOrientation::Vertical => h_stack()
                         .id(format!("{}-step-{index}", self.id))
                         .items_start()

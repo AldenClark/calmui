@@ -179,7 +179,7 @@ impl RenderOnce for Timeline {
                 .with_enter_transition(format!("{}-enter", self.id), self.motion);
         }
 
-        let mut rows = v_stack().id(self.id.clone()).w_full().gap_2();
+        let mut rows = v_stack().id(self.id.clone()).w_full().gap_0();
         for (index, mut item) in self.items.into_iter().enumerate() {
             let is_done = index < active;
             let is_current = index == active;
@@ -229,13 +229,27 @@ impl RenderOnce for Timeline {
                 bullet = bullet.child("•");
             }
 
-            let mut left_col = v_stack().items_center().gap_0().child(bullet);
+            let mut left_col = div()
+                .w(px(bullet_size))
+                .h_full()
+                .min_h(px(bullet_size + 8.0))
+                .flex()
+                .flex_col()
+                .items_center()
+                .child(bullet);
             if has_next {
-                left_col = left_col.child(div().w(px(line_width)).h(px(34.0)).bg(if is_done {
-                    resolve_hsla(&theme, &tokens.line_active)
-                } else {
-                    resolve_hsla(&theme, &tokens.line)
-                }));
+                left_col = left_col.child(
+                    div()
+                        .mt(px(0.0))
+                        .w(px(line_width))
+                        .flex_1()
+                        .min_h(px(24.0))
+                        .bg(if is_done {
+                            resolve_hsla(&theme, &tokens.line_active)
+                        } else {
+                            resolve_hsla(&theme, &tokens.line)
+                        }),
+                );
             }
 
             let mut right_col = v_stack().gap_1().min_w_0().child(
@@ -277,6 +291,7 @@ impl RenderOnce for Timeline {
                     .id(format!("{}-item-{index}", self.id))
                     .items_start()
                     .gap_2()
+                    .py(px(0.0))
                     .w_full()
                     .child(left_col)
                     .child(right_col),

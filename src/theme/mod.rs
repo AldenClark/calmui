@@ -780,7 +780,7 @@ impl ComponentTokens {
                     body: ColorValue::palette(PaletteKey::Gray, 8),
                 },
                 app_shell: AppShellTokens {
-                    bg: ColorValue::palette(PaletteKey::Gray, 0),
+                    bg: ColorValue::White,
                 },
                 title_bar: TitleBarTokens {
                     bg: ColorValue::Custom("#00000000".to_string()),
@@ -789,7 +789,7 @@ impl ComponentTokens {
                     controls_bg: ColorValue::palette(PaletteKey::Gray, 1),
                 },
                 sidebar: SidebarTokens {
-                    bg: ColorValue::White,
+                    bg: ColorValue::palette(PaletteKey::Gray, 0),
                     border: ColorValue::palette(PaletteKey::Gray, 3),
                     header_fg: ColorValue::palette(PaletteKey::Dark, 8),
                     content_fg: ColorValue::palette(PaletteKey::Dark, 8),

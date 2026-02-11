@@ -14,10 +14,18 @@ pub enum DividerOrientation {
     Vertical,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DividerLabelPosition {
+    Start,
+    Center,
+    End,
+}
+
 pub struct Divider {
     id: String,
     orientation: DividerOrientation,
     label: Option<SharedString>,
+    label_position: DividerLabelPosition,
     theme: crate::theme::LocalTheme,
 }
 
@@ -28,6 +36,7 @@ impl Divider {
             id: stable_auto_id("divider"),
             orientation: DividerOrientation::Horizontal,
             label: None,
+            label_position: DividerLabelPosition::Center,
             theme: crate::theme::LocalTheme::default(),
         }
     }
@@ -39,6 +48,11 @@ impl Divider {
 
     pub fn label(mut self, label: impl Into<SharedString>) -> Self {
         self.label = Some(label.into());
+        self
+    }
+
+    pub fn label_position(mut self, value: DividerLabelPosition) -> Self {
+        self.label_position = value;
         self
     }
 }
@@ -64,6 +78,28 @@ impl RenderOnce for Divider {
             DividerOrientation::Vertical => div().id(self.id).w(px(1.0)).h_full().bg(line),
             DividerOrientation::Horizontal => {
                 if let Some(label) = self.label {
+                    let left_flex = match self.label_position {
+                        DividerLabelPosition::Start => 0.0,
+                        DividerLabelPosition::Center => 1.0,
+                        DividerLabelPosition::End => 1.0,
+                    };
+                    let right_flex = match self.label_position {
+                        DividerLabelPosition::Start => 1.0,
+                        DividerLabelPosition::Center => 1.0,
+                        DividerLabelPosition::End => 0.0,
+                    };
+
+                    let left_line = if left_flex == 0.0 {
+                        div().w(px(16.0)).h(px(1.0)).bg(line)
+                    } else {
+                        div().flex_1().h(px(1.0)).bg(line)
+                    };
+                    let right_line = if right_flex == 0.0 {
+                        div().w(px(16.0)).h(px(1.0)).bg(line)
+                    } else {
+                        div().flex_1().h(px(1.0)).bg(line)
+                    };
+
                     div()
                         .id(self.id)
                         .w_full()
@@ -71,9 +107,9 @@ impl RenderOnce for Divider {
                         .flex_row()
                         .items_center()
                         .gap_2()
-                        .child(div().flex_1().h(px(1.0)).bg(line))
+                        .child(left_line)
                         .child(div().text_xs().text_color(label_color).child(label))
-                        .child(div().flex_1().h(px(1.0)).bg(line))
+                        .child(right_line)
                 } else {
                     div().id(self.id).w_full().h(px(1.0)).bg(line)
                 }

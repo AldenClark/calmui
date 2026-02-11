@@ -26,6 +26,12 @@ struct SliderDragState {
     controlled: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SliderOrientation {
+    Horizontal,
+    Vertical,
+}
+
 pub struct Slider {
     id: String,
     value: f32,
@@ -38,6 +44,7 @@ pub struct Slider {
     show_value: bool,
     disabled: bool,
     width_px: f32,
+    orientation: SliderOrientation,
     variant: Variant,
     size: Size,
     radius: Radius,
@@ -61,6 +68,7 @@ impl Slider {
             show_value: true,
             disabled: false,
             width_px: 260.0,
+            orientation: SliderOrientation::Horizontal,
             variant: Variant::Filled,
             size: Size::Md,
             radius: Radius::Pill,
@@ -126,6 +134,11 @@ impl Slider {
 
     pub fn width(mut self, width_px: f32) -> Self {
         self.width_px = width_px.max(120.0);
+        self
+    }
+
+    pub fn orientation(mut self, value: SliderOrientation) -> Self {
+        self.orientation = value;
         self
     }
 
@@ -251,6 +264,140 @@ impl RenderOnce for Slider {
         let segment_count = self.segments();
         let display_precision = if self.step < 1.0 { 2 } else { 0 };
         let is_controlled = self.value_controlled;
+        let orientation = self.orientation;
+        let track_len = self.width_px;
+        let on_change = self.on_change.clone();
+
+        if orientation == SliderOrientation::Vertical {
+            let track_left = ((thumb_size - track_height) * 0.5).max(0.0);
+            let thumb_top = ((track_len - thumb_size) * (1.0 - ratio)).max(0.0);
+
+            let mut track = div()
+                .id(format!("{}-track", self.id))
+                .absolute()
+                .top_0()
+                .left(px(track_left))
+                .w(px(track_height))
+                .h(px(track_len))
+                .overflow_hidden()
+                .border_1()
+                .border_color(resolve_hsla(&self.theme, &tokens.track_bg))
+                .bg(resolve_hsla(&self.theme, &tokens.track_bg));
+            track = apply_radius(track, self.radius);
+
+            let fill_top = (thumb_top + (thumb_size * 0.5)).clamp(0.0, track_len);
+            let fill_height = (track_len - fill_top).max(0.0);
+            let mut fill = div()
+                .id(format!("{}-fill", self.id))
+                .absolute()
+                .left(px(track_left))
+                .top(px(fill_top))
+                .w(px(track_height))
+                .h(px(fill_height))
+                .bg(self.filled_color());
+            fill = apply_radius(fill, self.radius);
+
+            let mut thumb = div()
+                .id(format!("{}-thumb", self.id))
+                .absolute()
+                .top(px(thumb_top))
+                .left_0()
+                .w(px(thumb_size))
+                .h(px(thumb_size))
+                .cursor_pointer()
+                .border_1()
+                .border_color(resolve_hsla(&self.theme, &tokens.thumb_border))
+                .bg(resolve_hsla(&self.theme, &tokens.thumb_bg));
+            thumb = apply_radius(thumb, Radius::Pill);
+            if self.disabled {
+                thumb = thumb.opacity(0.65);
+            }
+
+            let mut rail = div()
+                .id(format!("{}-rail", self.id))
+                .relative()
+                .w(px(thumb_size))
+                .h(px(track_len))
+                .child(track)
+                .child(fill)
+                .child(thumb);
+
+            if !self.disabled {
+                let id = self.id.clone();
+                let min = self.min;
+                let max = self.max;
+                let step = self.step;
+                let on_change = on_change.clone();
+                let drag_state = SliderDragState {
+                    slider_id: self.id.clone(),
+                    min: self.min,
+                    max: self.max,
+                    step: self.step,
+                    controlled: is_controlled,
+                };
+                let slider_id = self.id.clone();
+                let on_change_for_drag = on_change.clone();
+
+                rail = rail
+                    .cursor_pointer()
+                    .on_click(move |event: &ClickEvent, window, cx| {
+                        let local_y = f32::from(event.position().y).clamp(0.0, track_len);
+                        let ratio = 1.0 - (local_y / track_len.max(1.0));
+                        let raw = min + ((max - min).max(0.001) * ratio);
+                        let next = Self::normalize_with(min, max, step, raw);
+                        if !is_controlled {
+                            control::set_text_state(&id, "value", next.to_string());
+                            window.refresh();
+                        }
+                        if let Some(handler) = on_change.as_ref() {
+                            (handler)(next, window, cx);
+                        }
+                    })
+                    .on_drag(drag_state, |_drag, _, _, cx| cx.new(|_| EmptyView))
+                    .on_drag_move::<SliderDragState>(move |event, window, cx| {
+                        let drag = event.drag(cx);
+                        if drag.slider_id != slider_id {
+                            return;
+                        }
+                        let bounds = event.bounds;
+                        let height = f32::from(bounds.size.height).max(1.0);
+                        let local_y = (f32::from(event.event.position.y)
+                            - f32::from(bounds.origin.y))
+                        .clamp(0.0, height);
+                        let ratio = 1.0 - (local_y / height);
+                        let raw = drag.min + ((drag.max - drag.min).max(0.001) * ratio);
+                        let next = Self::normalize_with(drag.min, drag.max, drag.step, raw);
+
+                        if !drag.controlled {
+                            control::set_text_state(&slider_id, "value", next.to_string());
+                            window.refresh();
+                        }
+                        if let Some(handler) = on_change_for_drag.as_ref() {
+                            (handler)(next, window, cx);
+                        }
+                    });
+            }
+
+            let mut container = v_stack().id(self.id.clone()).gap_1p5().items_center();
+            if self.label.is_some() || self.show_value {
+                let mut header = v_stack()
+                    .items_center()
+                    .gap_0p5()
+                    .text_sm()
+                    .text_color(resolve_hsla(&self.theme, &tokens.label));
+                if let Some(label) = self.label {
+                    header = header.child(label);
+                }
+                if self.show_value {
+                    header = header.child(format!("{value:.display_precision$}"));
+                }
+                container = container.child(header);
+            }
+
+            return container
+                .child(rail)
+                .with_enter_transition(format!("{}-enter", self.id), self.motion);
+        }
 
         let mut track = h_stack()
             .id(format!("{}-track", self.id))
@@ -267,8 +414,6 @@ impl RenderOnce for Slider {
         let segment_span = (self.max - self.min) / segment_count as f32;
         let filled_color = self.filled_color();
         let empty_color = resolve_hsla(&self.theme, &tokens.track_bg);
-        let on_change = self.on_change.clone();
-
         let segments = (0..segment_count).map(|index| {
             let segment_value = self.min + ((index + 1) as f32 * segment_span);
             let target = self.normalize(segment_value);

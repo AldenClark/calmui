@@ -219,18 +219,21 @@ impl Progress {
             .w(px(secondary_band_width))
             .children(secondary_stripes);
 
-        let animation_ms = (1500.0 + width_px * 2.4).clamp(1700.0, 2900.0) as u64;
+        let animation_ms = (2800.0 + width_px * 4.0).clamp(3200.0, 5200.0) as u64;
 
         let primary_band = if animated {
             let animation = Animation::new(Duration::from_millis(animation_ms))
                 .repeat()
-                .with_easing(gpui::linear);
+                .with_easing(gpui::ease_in_out);
             let travel = width_px * 1.35;
             primary_band
                 .with_animation(
                     format!("{key}-move-primary"),
                     animation,
-                    move |this, delta| this.left(px(-width_px * 1.15 + travel * delta)),
+                    move |this, delta| {
+                        let eased = gpui::ease_in_out(delta);
+                        this.left(px(-width_px * 1.15 + travel * eased))
+                    },
                 )
                 .into_any_element()
         } else {
@@ -239,15 +242,18 @@ impl Progress {
 
         let secondary_band = if animated {
             let animation =
-                Animation::new(Duration::from_millis((animation_ms as f32 * 2.1) as u64))
+                Animation::new(Duration::from_millis((animation_ms as f32 * 1.8) as u64))
                     .repeat()
-                    .with_easing(gpui::linear);
+                    .with_easing(gpui::ease_in_out);
             let travel = width_px * 1.1;
             secondary_band
                 .with_animation(
                     format!("{key}-move-secondary"),
                     animation,
-                    move |this, delta| this.left(px(-width_px * 0.2 - travel * delta)),
+                    move |this, delta| {
+                        let eased = gpui::ease_in_out(delta);
+                        this.left(px(-width_px * 0.2 - travel * eased))
+                    },
                 )
                 .into_any_element()
         } else {
@@ -267,9 +273,9 @@ impl Progress {
 
         let sheen = if animated {
             let animation =
-                Animation::new(Duration::from_millis((animation_ms as f32 * 1.9) as u64))
+                Animation::new(Duration::from_millis((animation_ms as f32 * 2.6) as u64))
                     .repeat()
-                    .with_easing(gpui::linear);
+                    .with_easing(gpui::ease_in_out);
             let travel = width_px + sheen_width * 2.0;
             sheen
                 .with_animation(

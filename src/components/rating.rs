@@ -193,6 +193,7 @@ impl RenderOnce for Rating {
 
                 let mut cell = div()
                     .id(format!("{}-cell-{index}", self.id))
+                    .relative()
                     .child(icon)
                     .text_color(if is_full || is_half { active } else { inactive });
 
@@ -202,24 +203,92 @@ impl RenderOnce for Rating {
                     let id = self.id.clone();
                     let clearable = self.clearable;
                     let current = value;
-                    let next_value = if clearable && (current - index_value).abs() < f32::EPSILON {
-                        0.0
-                    } else {
-                        index_value
-                    };
                     let value_controlled = self.value_controlled;
                     let on_change = self.on_change.clone();
-                    cell = cell
-                        .cursor_pointer()
-                        .on_click(move |_: &ClickEvent, window, cx| {
-                            if !value_controlled {
-                                control::set_text_state(&id, "value", next_value.to_string());
-                                window.refresh();
-                            }
-                            if let Some(handler) = on_change.as_ref() {
-                                (handler)(next_value, window, cx);
-                            }
-                        });
+                    if self.allow_half {
+                        let id_for_left = id.clone();
+                        let id_for_right = id.clone();
+                        let on_change_left = on_change.clone();
+                        let on_change_right = on_change.clone();
+                        let left_target = (index_value - 0.5).max(0.0);
+                        let right_target = index_value;
+                        let left_value = if clearable && (current - left_target).abs() < 0.001 {
+                            0.0
+                        } else {
+                            left_target
+                        };
+                        let right_value = if clearable && (current - right_target).abs() < 0.001 {
+                            0.0
+                        } else {
+                            right_target
+                        };
+
+                        cell = cell
+                            .cursor_pointer()
+                            .child(
+                                div()
+                                    .id(format!("{}-cell-{index}-left", self.id))
+                                    .absolute()
+                                    .top_0()
+                                    .left_0()
+                                    .w(gpui::px(icon_size * 0.5))
+                                    .h(gpui::px(icon_size))
+                                    .cursor_pointer()
+                                    .on_click(move |_: &ClickEvent, window, cx| {
+                                        if !value_controlled {
+                                            control::set_text_state(
+                                                &id_for_left,
+                                                "value",
+                                                left_value.to_string(),
+                                            );
+                                            window.refresh();
+                                        }
+                                        if let Some(handler) = on_change_left.as_ref() {
+                                            (handler)(left_value, window, cx);
+                                        }
+                                    }),
+                            )
+                            .child(
+                                div()
+                                    .id(format!("{}-cell-{index}-right", self.id))
+                                    .absolute()
+                                    .top_0()
+                                    .right_0()
+                                    .w(gpui::px(icon_size * 0.5))
+                                    .h(gpui::px(icon_size))
+                                    .cursor_pointer()
+                                    .on_click(move |_: &ClickEvent, window, cx| {
+                                        if !value_controlled {
+                                            control::set_text_state(
+                                                &id_for_right,
+                                                "value",
+                                                right_value.to_string(),
+                                            );
+                                            window.refresh();
+                                        }
+                                        if let Some(handler) = on_change_right.as_ref() {
+                                            (handler)(right_value, window, cx);
+                                        }
+                                    }),
+                            );
+                    } else {
+                        let next_value = if clearable && (current - index_value).abs() < 0.001 {
+                            0.0
+                        } else {
+                            index_value
+                        };
+                        cell = cell
+                            .cursor_pointer()
+                            .on_click(move |_: &ClickEvent, window, cx| {
+                                if !value_controlled {
+                                    control::set_text_state(&id, "value", next_value.to_string());
+                                    window.refresh();
+                                }
+                                if let Some(handler) = on_change.as_ref() {
+                                    (handler)(next_value, window, cx);
+                                }
+                            });
+                    }
                 }
 
                 cell.into_any_element()

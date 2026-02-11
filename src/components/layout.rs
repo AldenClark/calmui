@@ -241,7 +241,8 @@ impl IntoElement for Stack {
 pub struct Grid {
     id: String,
     columns: usize,
-    gap: Size,
+    gap_x: Size,
+    gap_y: Size,
     theme: crate::theme::LocalTheme,
     children: Vec<AnyElement>,
 }
@@ -252,7 +253,8 @@ impl Grid {
         Self {
             id: stable_auto_id("grid"),
             columns: 2,
-            gap: Size::Md,
+            gap_x: Size::Md,
+            gap_y: Size::Md,
             theme: crate::theme::LocalTheme::default(),
             children: Vec::new(),
         }
@@ -264,7 +266,18 @@ impl Grid {
     }
 
     pub fn gap(mut self, gap: Size) -> Self {
-        self.gap = gap;
+        self.gap_x = gap;
+        self.gap_y = gap;
+        self
+    }
+
+    pub fn gap_x(mut self, gap: Size) -> Self {
+        self.gap_x = gap;
+        self
+    }
+
+    pub fn gap_y(mut self, gap: Size) -> Self {
+        self.gap_y = gap;
         self
     }
 
@@ -297,7 +310,8 @@ impl WithId for Grid {
 impl RenderOnce for Grid {
     fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let gap = self.gap;
+        let gap_x = self.gap_x;
+        let gap_y = self.gap_y;
         let columns = self.columns.max(1);
         let mut rows = Vec::new();
 
@@ -306,7 +320,7 @@ impl RenderOnce for Grid {
             current_row.push(child);
             if current_row.len() == columns {
                 let mut row = div().flex().flex_row().w_full();
-                row = apply_gap(row, gap);
+                row = apply_gap(row, gap_x);
                 let items = current_row
                     .drain(..)
                     .map(|item| div().flex_1().min_w_0().child(item).into_any_element())
@@ -317,7 +331,10 @@ impl RenderOnce for Grid {
 
         if !current_row.is_empty() {
             let mut row = div().flex().flex_row().w_full();
-            row = apply_gap(row, gap);
+            row = apply_gap(row, gap_x);
+            while current_row.len() < columns {
+                current_row.push(div().w_full().h_full().into_any_element());
+            }
             let items = current_row
                 .drain(..)
                 .map(|item| div().flex_1().min_w_0().child(item).into_any_element())
@@ -325,7 +342,7 @@ impl RenderOnce for Grid {
             rows.push(row.children(items).into_any_element());
         }
 
-        apply_gap(div().id(self.id).flex().flex_col().w_full(), gap)
+        apply_gap(div().id(self.id).flex().flex_col().w_full(), gap_y)
             .text_color(self.theme.resolve_hsla(&self.theme.semantic.text_primary))
             .children(rows)
     }
@@ -356,6 +373,16 @@ impl SimpleGrid {
 
     pub fn spacing(mut self, value: Size) -> Self {
         self.inner = self.inner.gap(value);
+        self
+    }
+
+    pub fn spacing_x(mut self, value: Size) -> Self {
+        self.inner = self.inner.gap_x(value);
+        self
+    }
+
+    pub fn spacing_y(mut self, value: Size) -> Self {
+        self.inner = self.inner.gap_y(value);
         self
     }
 
@@ -396,14 +423,6 @@ impl IntoElement for SimpleGrid {
     fn into_element(self) -> Self::Element {
         Component::new(self)
     }
-}
-
-pub fn flex_row() -> Flex {
-    Flex::new().direction(FlexDirection::Row)
-}
-
-pub fn flex_col() -> Flex {
-    Flex::new().direction(FlexDirection::Column)
 }
 
 pub fn stack() -> Stack {

@@ -70,6 +70,7 @@ pub struct Tree {
     expanded_controlled: bool,
     default_expanded_values: Vec<SharedString>,
     show_lines: bool,
+    toggle_position: TreeTogglePosition,
     variant: Variant,
     size: Size,
     radius: Radius,
@@ -92,6 +93,7 @@ impl Tree {
             expanded_controlled: false,
             default_expanded_values: Vec::new(),
             show_lines: true,
+            toggle_position: TreeTogglePosition::Left,
             variant: Variant::Default,
             size: Size::Md,
             radius: Radius::Sm,
@@ -145,6 +147,11 @@ impl Tree {
 
     pub fn show_lines(mut self, value: bool) -> Self {
         self.show_lines = value;
+        self
+    }
+
+    pub fn toggle_position(mut self, value: TreeTogglePosition) -> Self {
+        self.toggle_position = value;
         self
     }
 
@@ -271,6 +278,12 @@ impl MotionAware for Tree {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TreeTogglePosition {
+    Left,
+    Right,
+}
+
 #[derive(Clone)]
 struct TreeRenderCtx {
     tree_id: String,
@@ -282,6 +295,7 @@ struct TreeRenderCtx {
     selected_controlled: bool,
     expanded_controlled: bool,
     show_lines: bool,
+    toggle_position: TreeTogglePosition,
     indent_px: f32,
     radius: Radius,
     selected_bg: gpui::Hsla,
@@ -395,13 +409,33 @@ impl TreeRenderCtx {
             }
         }
 
-        row = row.child(toggle).child(
-            div()
-                .id(format!("{}-label-{path}", self.tree_id))
-                .min_w_0()
-                .truncate()
-                .child(node.label.clone()),
-        );
+        let connector = if self.show_lines && depth > 0 {
+            Some(
+                div()
+                    .id(format!("{}-line-h-{path}", self.tree_id))
+                    .w(px(8.0))
+                    .h(px(1.0))
+                    .bg(resolve_hsla(&self.theme, &self.tokens.line))
+                    .into_any_element(),
+            )
+        } else {
+            None
+        };
+
+        let label = div()
+            .id(format!("{}-label-{path}", self.tree_id))
+            .flex_1()
+            .min_w_0()
+            .truncate()
+            .child(node.label.clone());
+
+        if let Some(connector) = connector {
+            row = row.child(connector);
+        }
+        row = match self.toggle_position {
+            TreeTogglePosition::Left => row.child(toggle).child(label),
+            TreeTogglePosition::Right => row.child(label).child(toggle),
+        };
 
         if !node.disabled {
             let hover_bg = resolve_hsla(&self.theme, &self.tokens.row_hover_bg);
@@ -484,6 +518,7 @@ impl RenderOnce for Tree {
             selected_controlled: self.value_controlled,
             expanded_controlled: self.expanded_controlled,
             show_lines: self.show_lines,
+            toggle_position: self.toggle_position,
             indent_px: self.indent_px(),
             radius: self.radius,
             selected_bg: self.selected_bg(),

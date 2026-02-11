@@ -23,6 +23,12 @@ enum RangeThumb {
     Right,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RangeSliderOrientation {
+    Horizontal,
+    Vertical,
+}
+
 #[derive(Clone)]
 struct RangeSliderDragState {
     slider_id: String,
@@ -47,6 +53,7 @@ pub struct RangeSlider {
     show_value: bool,
     disabled: bool,
     width_px: f32,
+    orientation: RangeSliderOrientation,
     variant: Variant,
     size: Size,
     radius: Radius,
@@ -70,6 +77,7 @@ impl RangeSlider {
             show_value: true,
             disabled: false,
             width_px: 260.0,
+            orientation: RangeSliderOrientation::Horizontal,
             variant: Variant::Filled,
             size: Size::Md,
             radius: Radius::Pill,
@@ -125,6 +133,11 @@ impl RangeSlider {
 
     pub fn width(mut self, width_px: f32) -> Self {
         self.width_px = width_px.max(140.0);
+        self
+    }
+
+    pub fn orientation(mut self, value: RangeSliderOrientation) -> Self {
+        self.orientation = value;
         self
     }
 
@@ -221,8 +234,12 @@ impl RangeSlider {
         }
     }
 
-    fn rail_origin_and_width(id: &str, fallback_width: f32) -> (f32, f32) {
+    fn rail_geometry(id: &str, fallback_width: f32, fallback_height: f32) -> (f32, f32, f32, f32) {
         let origin_x = control::text_state(id, "rail-origin-x", None, "0".to_string())
+            .parse::<f32>()
+            .ok()
+            .unwrap_or(0.0);
+        let origin_y = control::text_state(id, "rail-origin-y", None, "0".to_string())
             .parse::<f32>()
             .ok()
             .unwrap_or(0.0);
@@ -231,7 +248,12 @@ impl RangeSlider {
             .ok()
             .filter(|width| *width > 1.0)
             .unwrap_or(fallback_width);
-        (origin_x, width)
+        let height = control::text_state(id, "rail-height", None, fallback_height.to_string())
+            .parse::<f32>()
+            .ok()
+            .filter(|height| *height > 1.0)
+            .unwrap_or(fallback_height);
+        (origin_x, width, origin_y, height)
     }
 
     fn set_values_state(id: &str, values: (f32, f32)) {
@@ -291,6 +313,256 @@ impl RenderOnce for RangeSlider {
         let right_thumb_x = ((self.width_px - thumb_size) * right_ratio).max(0.0);
         let display_precision = if self.step < 1.0 { 2 } else { 0 };
         let is_controlled = self.values_controlled;
+        let orientation = self.orientation;
+        let track_len = self.width_px;
+
+        if orientation == RangeSliderOrientation::Vertical {
+            let track_left = ((thumb_size - track_height) * 0.5).max(0.0);
+            let left_thumb_y = ((track_len - thumb_size) * (1.0 - left_ratio)).max(0.0);
+            let right_thumb_y = ((track_len - thumb_size) * (1.0 - right_ratio)).max(0.0);
+            let fill_top = right_thumb_y + (thumb_size * 0.5);
+            let fill_bottom = left_thumb_y + (thumb_size * 0.5);
+            let fill_height = (fill_bottom - fill_top).max(0.0);
+
+            let mut track = div()
+                .id(format!("{}-track", self.id))
+                .absolute()
+                .top_0()
+                .left(px(track_left))
+                .w(px(track_height))
+                .h(px(track_len))
+                .border_1()
+                .border_color(resolve_hsla(&self.theme, &tokens.track_bg))
+                .bg(resolve_hsla(&self.theme, &tokens.track_bg));
+            track = apply_radius(track, self.radius);
+
+            let mut fill = div()
+                .id(format!("{}-range-fill", self.id))
+                .absolute()
+                .top(px(fill_top))
+                .left(px(track_left))
+                .w(px(track_height))
+                .h(px(fill_height))
+                .bg(resolve_hsla(&self.theme, &tokens.range_bg));
+            fill = apply_radius(fill, self.radius);
+
+            let mut left_thumb = div()
+                .id(format!("{}-thumb-left", self.id))
+                .absolute()
+                .top(px(left_thumb_y))
+                .left_0()
+                .w(px(thumb_size))
+                .h(px(thumb_size))
+                .cursor_pointer()
+                .border_1()
+                .border_color(resolve_hsla(&self.theme, &tokens.thumb_border))
+                .bg(resolve_hsla(&self.theme, &tokens.thumb_bg));
+            left_thumb = apply_radius(left_thumb, Radius::Pill);
+
+            let mut right_thumb = div()
+                .id(format!("{}-thumb-right", self.id))
+                .absolute()
+                .top(px(right_thumb_y))
+                .left_0()
+                .w(px(thumb_size))
+                .h(px(thumb_size))
+                .cursor_pointer()
+                .border_1()
+                .border_color(resolve_hsla(&self.theme, &tokens.thumb_border))
+                .bg(resolve_hsla(&self.theme, &tokens.thumb_bg));
+            right_thumb = apply_radius(right_thumb, Radius::Pill);
+
+            if !self.disabled {
+                let drag_common = |thumb: RangeThumb| RangeSliderDragState {
+                    slider_id: self.id.clone(),
+                    thumb,
+                    min: self.min,
+                    max: self.max,
+                    step: self.step,
+                    controlled: is_controlled,
+                    fallback_left: values.0,
+                    fallback_right: values.1,
+                };
+
+                let on_change_for_drag_left = self.on_change.clone();
+                let on_change_for_drag_right = self.on_change.clone();
+                let slider_id_for_drag_left = self.id.clone();
+                let slider_id_for_drag_right = self.id.clone();
+
+                left_thumb = left_thumb
+                    .on_drag(drag_common(RangeThumb::Left), |_drag, _, _, cx| {
+                        cx.new(|_| EmptyView)
+                    })
+                    .on_drag_move::<RangeSliderDragState>(move |event, window, cx| {
+                        let drag = event.drag(cx);
+                        if drag.slider_id != slider_id_for_drag_left {
+                            return;
+                        }
+
+                        let (_x, _w, origin_y, height) =
+                            Self::rail_geometry(&drag.slider_id, 260.0, 260.0);
+                        let local_y = (f32::from(event.event.position.y) - origin_y)
+                            .clamp(0.0, height.max(1.0));
+                        let ratio = 1.0 - (local_y / height.max(1.0));
+                        let raw = drag.min + ((drag.max - drag.min).max(0.001) * ratio);
+                        let target = Self::normalize_with(drag.min, drag.max, drag.step, raw);
+                        let fallback = (drag.fallback_left, drag.fallback_right);
+                        let (_left, right) = Self::state_values(
+                            &drag.slider_id,
+                            fallback,
+                            drag.min,
+                            drag.max,
+                            drag.step,
+                        );
+                        let next = (target.min(right), right);
+
+                        if !drag.controlled {
+                            Self::set_values_state(&drag.slider_id, next);
+                            window.refresh();
+                        }
+                        if let Some(handler) = on_change_for_drag_left.as_ref() {
+                            (handler)(next, window, cx);
+                        }
+                    });
+
+                right_thumb = right_thumb
+                    .on_drag(drag_common(RangeThumb::Right), |_drag, _, _, cx| {
+                        cx.new(|_| EmptyView)
+                    })
+                    .on_drag_move::<RangeSliderDragState>(move |event, window, cx| {
+                        let drag = event.drag(cx);
+                        if drag.slider_id != slider_id_for_drag_right {
+                            return;
+                        }
+
+                        let (_x, _w, origin_y, height) =
+                            Self::rail_geometry(&drag.slider_id, 260.0, 260.0);
+                        let local_y = (f32::from(event.event.position.y) - origin_y)
+                            .clamp(0.0, height.max(1.0));
+                        let ratio = 1.0 - (local_y / height.max(1.0));
+                        let raw = drag.min + ((drag.max - drag.min).max(0.001) * ratio);
+                        let target = Self::normalize_with(drag.min, drag.max, drag.step, raw);
+                        let fallback = (drag.fallback_left, drag.fallback_right);
+                        let (left, _right) = Self::state_values(
+                            &drag.slider_id,
+                            fallback,
+                            drag.min,
+                            drag.max,
+                            drag.step,
+                        );
+                        let next = (left, target.max(left));
+
+                        if !drag.controlled {
+                            Self::set_values_state(&drag.slider_id, next);
+                            window.refresh();
+                        }
+                        if let Some(handler) = on_change_for_drag_right.as_ref() {
+                            (handler)(next, window, cx);
+                        }
+                    });
+            }
+
+            let mut rail = div()
+                .id(format!("{}-rail", self.id))
+                .relative()
+                .w(px(thumb_size))
+                .h(px(track_len))
+                .child(track)
+                .child(fill)
+                .child(
+                    canvas(
+                        {
+                            let id = self.id.clone();
+                            move |bounds, _, _cx| {
+                                control::set_text_state(
+                                    &id,
+                                    "rail-origin-x",
+                                    f32::from(bounds.origin.x).to_string(),
+                                );
+                                control::set_text_state(
+                                    &id,
+                                    "rail-width",
+                                    f32::from(bounds.size.width).to_string(),
+                                );
+                                control::set_text_state(
+                                    &id,
+                                    "rail-origin-y",
+                                    f32::from(bounds.origin.y).to_string(),
+                                );
+                                control::set_text_state(
+                                    &id,
+                                    "rail-height",
+                                    f32::from(bounds.size.height).to_string(),
+                                );
+                            }
+                        },
+                        |_, _, _, _| {},
+                    )
+                    .absolute()
+                    .size_full(),
+                )
+                .child(left_thumb)
+                .child(right_thumb);
+
+            if self.disabled {
+                rail = rail.opacity(0.65);
+            } else {
+                let id = self.id.clone();
+                let min = self.min;
+                let max = self.max;
+                let step = self.step;
+                let fallback = values;
+                let on_change = self.on_change.clone();
+                rail = rail
+                    .cursor_pointer()
+                    .on_click(move |event: &ClickEvent, window, cx| {
+                        let (_origin_x, _width, origin_y, height) =
+                            Self::rail_geometry(&id, 260.0, 260.0);
+                        let local_y = (f32::from(event.position().y) - origin_y).clamp(0.0, height);
+                        let ratio = 1.0 - (local_y / height.max(1.0));
+                        let raw = min + ((max - min).max(0.001) * ratio);
+                        let target = Self::normalize_with(min, max, step, raw);
+
+                        let (left, right) = Self::state_values(&id, fallback, min, max, step);
+                        let next = if (target - left).abs() <= (target - right).abs() {
+                            (target.min(right), right)
+                        } else {
+                            (left, target.max(left))
+                        };
+
+                        if !is_controlled {
+                            Self::set_values_state(&id, next);
+                            window.refresh();
+                        }
+                        if let Some(handler) = on_change.as_ref() {
+                            (handler)(next, window, cx);
+                        }
+                    });
+            }
+
+            let mut container = v_stack().id(self.id.clone()).gap_1p5().items_center();
+            if self.label.is_some() || self.show_value {
+                let mut header = v_stack()
+                    .items_center()
+                    .gap_0p5()
+                    .text_sm()
+                    .text_color(resolve_hsla(&self.theme, &tokens.label));
+                if let Some(label) = self.label {
+                    header = header.child(label);
+                }
+                if self.show_value {
+                    header = header.child(format!(
+                        "{:.display_precision$} - {:.display_precision$}",
+                        values.0, values.1
+                    ));
+                }
+                container = container.child(header);
+            }
+
+            return container
+                .child(rail)
+                .with_enter_transition(format!("{}-enter", self.id), self.motion);
+        }
 
         let mut track = div()
             .id(format!("{}-track", self.id))
@@ -310,7 +582,7 @@ impl RenderOnce for RangeSlider {
         let fill = div()
             .id(format!("{}-range-fill", self.id))
             .absolute()
-            .top_0()
+            .top(px(track_top))
             .left(px(fill_left))
             .w(px(fill_width))
             .h(px(track_height))
@@ -323,6 +595,7 @@ impl RenderOnce for RangeSlider {
             .left(px(left_thumb_x))
             .w(px(thumb_size))
             .h(px(thumb_size))
+            .cursor_pointer()
             .border_1()
             .border_color(resolve_hsla(&self.theme, &tokens.thumb_border))
             .bg(resolve_hsla(&self.theme, &tokens.thumb_bg));
@@ -335,78 +608,13 @@ impl RenderOnce for RangeSlider {
             .left(px(right_thumb_x))
             .w(px(thumb_size))
             .h(px(thumb_size))
+            .cursor_pointer()
             .border_1()
             .border_color(resolve_hsla(&self.theme, &tokens.thumb_border))
             .bg(resolve_hsla(&self.theme, &tokens.thumb_bg));
         right_thumb = apply_radius(right_thumb, Radius::Pill);
 
-        let mut rail = div()
-            .id(format!("{}-rail", self.id))
-            .relative()
-            .w(px(self.width_px))
-            .h(px(thumb_size))
-            .child(track)
-            .child(fill)
-            .child(
-                canvas(
-                    {
-                        let id = self.id.clone();
-                        move |bounds, _, _cx| {
-                            control::set_text_state(
-                                &id,
-                                "rail-origin-x",
-                                f32::from(bounds.origin.x).to_string(),
-                            );
-                            control::set_text_state(
-                                &id,
-                                "rail-width",
-                                f32::from(bounds.size.width).to_string(),
-                            );
-                        }
-                    },
-                    |_, _, _, _| {},
-                )
-                .absolute()
-                .size_full(),
-            )
-            .child(left_thumb)
-            .child(right_thumb);
-
-        if self.disabled {
-            rail = rail.opacity(0.65);
-        } else {
-            let id = self.id.clone();
-            let min = self.min;
-            let max = self.max;
-            let step = self.step;
-            let fallback = values;
-            let on_change = self.on_change.clone();
-
-            rail = rail
-                .cursor_pointer()
-                .on_click(move |event: &ClickEvent, window, cx| {
-                    let (origin_x, width) = Self::rail_origin_and_width(&id, 260.0);
-                    let local_x = (f32::from(event.position().x) - origin_x).clamp(0.0, width);
-                    let ratio = local_x / width.max(1.0);
-                    let raw = min + ((max - min).max(0.001) * ratio);
-                    let target = Self::normalize_with(min, max, step, raw);
-
-                    let (left, right) = Self::state_values(&id, fallback, min, max, step);
-                    let next = if (target - left).abs() <= (target - right).abs() {
-                        (target.min(right), right)
-                    } else {
-                        (left, target.max(left))
-                    };
-
-                    if !is_controlled {
-                        Self::set_values_state(&id, next);
-                        window.refresh();
-                    }
-                    if let Some(handler) = on_change.as_ref() {
-                        (handler)(next, window, cx);
-                    }
-                });
-
+        if !self.disabled {
             let drag_common = |thumb: RangeThumb| RangeSliderDragState {
                 slider_id: self.id.clone(),
                 thumb,
@@ -418,23 +626,23 @@ impl RenderOnce for RangeSlider {
                 fallback_right: values.1,
             };
 
-            let on_change_for_drag = self.on_change.clone();
-            let slider_id_for_drag = self.id.clone();
+            let on_change_for_drag_left = self.on_change.clone();
+            let on_change_for_drag_right = self.on_change.clone();
+            let slider_id_for_drag_left = self.id.clone();
+            let slider_id_for_drag_right = self.id.clone();
 
-            rail = rail
+            left_thumb = left_thumb
                 .on_drag(drag_common(RangeThumb::Left), |_drag, _, _, cx| {
-                    cx.new(|_| EmptyView)
-                })
-                .on_drag(drag_common(RangeThumb::Right), |_drag, _, _, cx| {
                     cx.new(|_| EmptyView)
                 })
                 .on_drag_move::<RangeSliderDragState>(move |event, window, cx| {
                     let drag = event.drag(cx);
-                    if drag.slider_id != slider_id_for_drag {
+                    if drag.slider_id != slider_id_for_drag_left {
                         return;
                     }
 
-                    let (origin_x, width) = Self::rail_origin_and_width(&drag.slider_id, 260.0);
+                    let (origin_x, width, _origin_y, _height) =
+                        Self::rail_geometry(&drag.slider_id, 260.0, 260.0);
                     let local_x =
                         (f32::from(event.event.position.x) - origin_x).clamp(0.0, width.max(1.0));
                     let ratio = local_x / width.max(1.0);
@@ -459,7 +667,127 @@ impl RenderOnce for RangeSlider {
                         Self::set_values_state(&drag.slider_id, next);
                         window.refresh();
                     }
-                    if let Some(handler) = on_change_for_drag.as_ref() {
+                    if let Some(handler) = on_change_for_drag_left.as_ref() {
+                        (handler)(next, window, cx);
+                    }
+                });
+
+            right_thumb = right_thumb
+                .on_drag(drag_common(RangeThumb::Right), |_drag, _, _, cx| {
+                    cx.new(|_| EmptyView)
+                })
+                .on_drag_move::<RangeSliderDragState>(move |event, window, cx| {
+                    let drag = event.drag(cx);
+                    if drag.slider_id != slider_id_for_drag_right {
+                        return;
+                    }
+
+                    let (origin_x, width, _origin_y, _height) =
+                        Self::rail_geometry(&drag.slider_id, 260.0, 260.0);
+                    let local_x =
+                        (f32::from(event.event.position.x) - origin_x).clamp(0.0, width.max(1.0));
+                    let ratio = local_x / width.max(1.0);
+                    let raw = drag.min + ((drag.max - drag.min).max(0.001) * ratio);
+                    let target = Self::normalize_with(drag.min, drag.max, drag.step, raw);
+
+                    let fallback = (drag.fallback_left, drag.fallback_right);
+                    let (left, right) = Self::state_values(
+                        &drag.slider_id,
+                        fallback,
+                        drag.min,
+                        drag.max,
+                        drag.step,
+                    );
+
+                    let next = match drag.thumb {
+                        RangeThumb::Left => (target.min(right), right),
+                        RangeThumb::Right => (left, target.max(left)),
+                    };
+
+                    if !drag.controlled {
+                        Self::set_values_state(&drag.slider_id, next);
+                        window.refresh();
+                    }
+                    if let Some(handler) = on_change_for_drag_right.as_ref() {
+                        (handler)(next, window, cx);
+                    }
+                });
+        }
+
+        let mut rail = div()
+            .id(format!("{}-rail", self.id))
+            .relative()
+            .w(px(self.width_px))
+            .h(px(thumb_size))
+            .child(track)
+            .child(fill)
+            .child(
+                canvas(
+                    {
+                        let id = self.id.clone();
+                        move |bounds, _, _cx| {
+                            control::set_text_state(
+                                &id,
+                                "rail-origin-x",
+                                f32::from(bounds.origin.x).to_string(),
+                            );
+                            control::set_text_state(
+                                &id,
+                                "rail-width",
+                                f32::from(bounds.size.width).to_string(),
+                            );
+                            control::set_text_state(
+                                &id,
+                                "rail-origin-y",
+                                f32::from(bounds.origin.y).to_string(),
+                            );
+                            control::set_text_state(
+                                &id,
+                                "rail-height",
+                                f32::from(bounds.size.height).to_string(),
+                            );
+                        }
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .size_full(),
+            )
+            .child(left_thumb)
+            .child(right_thumb);
+
+        if self.disabled {
+            rail = rail.opacity(0.65);
+        } else {
+            let id = self.id.clone();
+            let min = self.min;
+            let max = self.max;
+            let step = self.step;
+            let fallback = values;
+            let on_change = self.on_change.clone();
+
+            rail = rail
+                .cursor_pointer()
+                .on_click(move |event: &ClickEvent, window, cx| {
+                    let (origin_x, width, _origin_y, _height) =
+                        Self::rail_geometry(&id, 260.0, 260.0);
+                    let local_x = (f32::from(event.position().x) - origin_x).clamp(0.0, width);
+                    let ratio = local_x / width.max(1.0);
+                    let raw = min + ((max - min).max(0.001) * ratio);
+                    let target = Self::normalize_with(min, max, step, raw);
+
+                    let (left, right) = Self::state_values(&id, fallback, min, max, step);
+                    let next = if (target - left).abs() <= (target - right).abs() {
+                        (target.min(right), right)
+                    } else {
+                        (left, target.max(left))
+                    };
+
+                    if !is_controlled {
+                        Self::set_values_state(&id, next);
+                        window.refresh();
+                    }
+                    if let Some(handler) = on_change.as_ref() {
                         (handler)(next, window, cx);
                     }
                 });

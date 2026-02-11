@@ -1,10 +1,12 @@
-use std::{rc::Rc, time::Duration};
+use std::{rc::Rc, str::FromStr, time::Duration};
 
 use gpui::{
     Animation, AnimationExt, AnyElement, ClickEvent, Component, FocusHandle, InteractiveElement,
     IntoElement, KeyDownEvent, ParentElement, RenderOnce, SharedString, StatefulInteractiveElement,
     Styled, Window, div, px,
 };
+use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 
 use crate::contracts::{FieldLike, MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
@@ -187,39 +189,33 @@ impl NumberInput {
         self
     }
 
-    fn clamp_value(&self, value: f64) -> f64 {
+    fn decimal_from_f64(value: f64) -> Decimal {
+        if !value.is_finite() {
+            return Decimal::ZERO;
+        }
+        Decimal::from_str(&format!("{value:.18}")).unwrap_or(Decimal::ZERO)
+    }
+
+    fn clamp_decimal(&self, value: Decimal) -> Decimal {
         let mut next = value;
         if let Some(min) = self.min {
-            next = next.max(min);
+            next = next.max(Self::decimal_from_f64(min));
         }
         if let Some(max) = self.max {
-            next = next.min(max);
+            next = next.min(Self::decimal_from_f64(max));
         }
         next
     }
 
-    fn decimals_from_step(step: f64) -> usize {
-        let mut text = format!("{step:.8}");
-        while text.ends_with('0') {
-            text.pop();
-        }
-        if text.ends_with('.') {
-            return 0;
-        }
+    fn decimals_from_step(step: Decimal) -> usize {
+        let text = step.normalize().to_string();
         text.split('.').nth(1).map(|part| part.len()).unwrap_or(0)
     }
 
-    fn format_value(value: f64, precision: Option<usize>, step: f64) -> String {
+    fn format_decimal_value(value: Decimal, precision: Option<usize>, step: Decimal) -> String {
         let precision = precision.unwrap_or_else(|| Self::decimals_from_step(step));
-        let mut text = format!("{value:.precision$}");
-        if text.contains('.') {
-            while text.ends_with('0') {
-                text.pop();
-            }
-            if text.ends_with('.') {
-                text.pop();
-            }
-        }
+        let rounded = value.round_dp(precision as u32).normalize();
+        let text = rounded.to_string();
         if text == "-0" { "0".to_string() } else { text }
     }
 
@@ -228,23 +224,26 @@ impl NumberInput {
         trimmed.is_empty() || trimmed == "-" || trimmed == "." || trimmed == "-."
     }
 
-    fn parse_number(text: &str) -> Option<f64> {
+    fn parse_number(text: &str) -> Option<Decimal> {
         if Self::is_incomplete_number(text) {
             return None;
         }
-        text.trim().parse::<f64>().ok()
+        Decimal::from_str(text.trim()).ok()
     }
 
     fn resolved_text(&self) -> String {
+        let step = Self::decimal_from_f64(self.step.abs().max(0.000_001));
         let controlled = self
             .value_controlled
             .then_some(self.value.unwrap_or(self.default_value))
-            .map(|value| Self::format_value(self.clamp_value(value), self.precision, self.step));
+            .map(Self::decimal_from_f64)
+            .map(|value| self.clamp_decimal(value))
+            .map(|value| Self::format_decimal_value(value, self.precision, step));
 
-        let default = Self::format_value(
-            self.clamp_value(self.default_value),
+        let default = Self::format_decimal_value(
+            self.clamp_decimal(Self::decimal_from_f64(self.default_value)),
             self.precision,
-            self.step,
+            step,
         );
 
         control::text_state(&self.id, "value-text", controlled, default)
@@ -323,11 +322,13 @@ impl NumberInput {
         precision: Option<usize>,
         default_value: f64,
     ) -> (String, f64) {
-        let clamp = |mut value: f64| {
-            if let Some(min) = min {
+        let min_decimal = min.map(Self::decimal_from_f64);
+        let max_decimal = max.map(Self::decimal_from_f64);
+        let clamp = |mut value: Decimal| {
+            if let Some(min) = min_decimal {
                 value = value.max(min);
             }
-            if let Some(max) = max {
+            if let Some(max) = max_decimal {
                 value = value.min(max);
             }
             value
@@ -335,14 +336,21 @@ impl NumberInput {
 
         let current = Self::parse_number(current_text)
             .map(clamp)
-            .unwrap_or_else(|| clamp(default_value));
+            .unwrap_or_else(|| clamp(Self::decimal_from_f64(default_value)));
 
-        let step = step.abs().max(0.000_001);
-        let base = min.unwrap_or(0.0);
-        let raw_next = current + (step * direction);
-        let stepped = (((raw_next - base) / step).round() * step) + base;
+        let step_decimal = Self::decimal_from_f64(step.abs().max(0.000_001));
+        let base = min_decimal.unwrap_or(Decimal::ZERO);
+        let delta = if direction < 0.0 {
+            -step_decimal
+        } else {
+            step_decimal
+        };
+        let raw_next = current + delta;
+        let stepped = (((raw_next - base) / step_decimal).round() * step_decimal) + base;
         let clamped = clamp(stepped);
-        (Self::format_value(clamped, precision, step), clamped)
+        let formatted = Self::format_decimal_value(clamped, precision, step_decimal);
+        let as_f64 = clamped.to_f64().unwrap_or(default_value);
+        (formatted, as_f64)
     }
 
     fn caret_height_px(&self) -> f32 {
@@ -469,13 +477,13 @@ impl NumberInput {
                     if let Some(parsed) = Self::parse_number(&next) {
                         let mut clamped = parsed;
                         if let Some(min) = min {
-                            clamped = clamped.max(min);
+                            clamped = clamped.max(Self::decimal_from_f64(min));
                         }
                         if let Some(max) = max {
-                            clamped = clamped.min(max);
+                            clamped = clamped.min(Self::decimal_from_f64(max));
                         }
                         if let Some(handler) = on_change.as_ref() {
-                            (handler)(clamped, window, cx);
+                            (handler)(clamped.to_f64().unwrap_or(0.0), window, cx);
                         }
                     }
                 }

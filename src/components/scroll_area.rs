@@ -19,10 +19,20 @@ fn apply_padding<T: Styled>(node: T, padding: Size) -> T {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScrollDirection {
+    Vertical,
+    Horizontal,
+    Both,
+}
+
 pub struct ScrollArea {
     id: String,
     viewport_height_px: Option<f32>,
+    viewport_width_px: Option<f32>,
     padding: Size,
+    direction: ScrollDirection,
+    show_scrollbars: bool,
     bordered: bool,
     theme: crate::theme::LocalTheme,
     children: Vec<AnyElement>,
@@ -34,7 +44,10 @@ impl ScrollArea {
         Self {
             id: stable_auto_id("scroll-area"),
             viewport_height_px: None,
+            viewport_width_px: None,
             padding: Size::Md,
+            direction: ScrollDirection::Vertical,
+            show_scrollbars: true,
             bordered: true,
             theme: crate::theme::LocalTheme::default(),
             children: Vec::new(),
@@ -46,8 +59,23 @@ impl ScrollArea {
         self
     }
 
+    pub fn viewport_width(mut self, value: f32) -> Self {
+        self.viewport_width_px = Some(value.max(1.0));
+        self
+    }
+
     pub fn padding(mut self, value: Size) -> Self {
         self.padding = value;
+        self
+    }
+
+    pub fn direction(mut self, value: ScrollDirection) -> Self {
+        self.direction = value;
+        self
+    }
+
+    pub fn show_scrollbars(mut self, value: bool) -> Self {
+        self.show_scrollbars = value;
         self
     }
 
@@ -86,16 +114,26 @@ impl RenderOnce for ScrollArea {
     fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.scroll_area;
-        let mut viewport = div()
-            .id(format!("{}-viewport", self.id))
-            .w_full()
-            .min_h_0()
-            .overflow_y_scroll();
+        let mut viewport = div().id(format!("{}-viewport", self.id)).w_full().min_h_0();
+
+        viewport = match self.direction {
+            ScrollDirection::Vertical => viewport.overflow_y_scroll(),
+            ScrollDirection::Horizontal => viewport.overflow_x_scroll(),
+            ScrollDirection::Both => viewport.overflow_scroll(),
+        };
 
         if let Some(height) = self.viewport_height_px {
             viewport = viewport.h(px(height));
         } else {
             viewport = viewport.h_full();
+        }
+
+        if let Some(width) = self.viewport_width_px {
+            viewport = viewport.w(px(width));
+        }
+
+        if !self.show_scrollbars {
+            viewport = viewport.scrollbar_width(px(0.0));
         }
 
         viewport = apply_padding(viewport, self.padding).children(self.children);

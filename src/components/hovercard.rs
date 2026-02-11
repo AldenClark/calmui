@@ -1,6 +1,9 @@
+use std::time::Duration;
+
 use gpui::{
     AnyElement, Component, Corner, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window, anchored, deferred, div, point, px,
+    SharedString, StatefulInteractiveElement, Styled, Window, anchored, canvas, deferred, div,
+    point, px,
 };
 
 use crate::contracts::{MotionAware, WithId};
@@ -14,6 +17,14 @@ use super::utils::resolve_hsla;
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 type OpenChangeHandler = std::rc::Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
+
+fn panel_width_px(id: &str, fallback: f32) -> f32 {
+    control::text_state(id, "trigger-width-px", None, fallback.to_string())
+        .parse::<f32>()
+        .ok()
+        .filter(|width| *width >= 1.0)
+        .unwrap_or(fallback)
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HoverCardPlacement {
@@ -30,6 +41,7 @@ pub struct HoverCard {
     disabled: bool,
     placement: HoverCardPlacement,
     offset_px: f32,
+    match_trigger_width: bool,
     theme: crate::theme::LocalTheme,
     motion: MotionConfig,
     trigger: Option<SlotRenderer>,
@@ -48,7 +60,8 @@ impl HoverCard {
             default_opened: false,
             disabled: false,
             placement: HoverCardPlacement::Bottom,
-            offset_px: 3.0,
+            offset_px: 2.0,
+            match_trigger_width: true,
             theme: crate::theme::LocalTheme::default(),
             motion: MotionConfig::default(),
             trigger: None,
@@ -84,6 +97,11 @@ impl HoverCard {
 
     pub fn offset(mut self, value: f32) -> Self {
         self.offset_px = value.max(0.0);
+        self
+    }
+
+    pub fn match_trigger_width(mut self, value: bool) -> Self {
+        self.match_trigger_width = value;
         self
     }
 
@@ -124,10 +142,15 @@ impl HoverCard {
 
     fn render_card(&mut self, is_controlled: bool) -> AnyElement {
         let tokens = &self.theme.components.hover_card;
+        let panel_width = if self.match_trigger_width {
+            panel_width_px(&self.id, 260.0).max(120.0)
+        } else {
+            260.0
+        };
         let mut card = v_stack()
             .id(format!("{}-card", self.id))
             .gap_1p5()
-            .w(px(260.0))
+            .w(px(panel_width))
             .max_w_full()
             .p_3()
             .rounded_md()
@@ -160,8 +183,36 @@ impl HoverCard {
             control::set_bool_state(&id, "panel-hovered", *hovered);
             let next = *hovered || control::bool_state(&id, "trigger-hovered", None, false);
             if !is_controlled {
-                control::set_bool_state(&id, "opened", next);
-                window.refresh();
+                if *hovered {
+                    control::set_bool_state(&id, "opened", true);
+                    window.refresh();
+                } else {
+                    let id_for_delay = id.clone();
+                    let window_handle = window.window_handle();
+                    cx.spawn({
+                        async move |cx| {
+                            cx.background_executor()
+                                .timer(Duration::from_millis(120))
+                                .await;
+                            let _ = window_handle.update(cx, |_, window, _| {
+                                let still_open = control::bool_state(
+                                    &id_for_delay,
+                                    "trigger-hovered",
+                                    None,
+                                    false,
+                                ) || control::bool_state(
+                                    &id_for_delay,
+                                    "panel-hovered",
+                                    None,
+                                    false,
+                                );
+                                control::set_bool_state(&id_for_delay, "opened", still_open);
+                                window.refresh();
+                            });
+                        }
+                    })
+                    .detach();
+                }
             }
             if let Some(on_open_change) = handler.as_ref() {
                 (on_open_change)(next, window, cx);
@@ -209,6 +260,21 @@ impl RenderOnce for HoverCard {
             .id(format!("{}-trigger", self.id))
             .relative()
             .child(trigger_content);
+        trigger = trigger.child({
+            let id_for_width = self.id.clone();
+            canvas(
+                move |bounds, _, _cx| {
+                    control::set_text_state(
+                        &id_for_width,
+                        "trigger-width-px",
+                        format!("{:.2}", f32::from(bounds.size.width)),
+                    );
+                },
+                |_, _, _, _| {},
+            )
+            .absolute()
+            .size_full()
+        });
 
         if self.disabled {
             trigger = trigger.cursor_default().opacity(0.55);
@@ -220,8 +286,36 @@ impl RenderOnce for HoverCard {
                 control::set_bool_state(&id, "trigger-hovered", *hovered);
                 let next = *hovered || control::bool_state(&id, "panel-hovered", None, false);
                 if !is_controlled {
-                    control::set_bool_state(&id, "opened", next);
-                    window.refresh();
+                    if *hovered {
+                        control::set_bool_state(&id, "opened", true);
+                        window.refresh();
+                    } else {
+                        let id_for_delay = id.clone();
+                        let window_handle = window.window_handle();
+                        cx.spawn({
+                            async move |cx| {
+                                cx.background_executor()
+                                    .timer(Duration::from_millis(120))
+                                    .await;
+                                let _ = window_handle.update(cx, |_, window, _| {
+                                    let still_open = control::bool_state(
+                                        &id_for_delay,
+                                        "trigger-hovered",
+                                        None,
+                                        false,
+                                    ) || control::bool_state(
+                                        &id_for_delay,
+                                        "panel-hovered",
+                                        None,
+                                        false,
+                                    );
+                                    control::set_bool_state(&id_for_delay, "opened", still_open);
+                                    window.refresh();
+                                });
+                            }
+                        })
+                        .detach();
+                    }
                 }
                 if let Some(on_open_change) = handler.as_ref() {
                     (on_open_change)(next, window, cx);

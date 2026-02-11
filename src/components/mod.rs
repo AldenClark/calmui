@@ -11,11 +11,13 @@ mod divider;
 mod drawer;
 mod hovercard;
 mod icon;
+mod indicator;
 mod input;
 mod layers;
 mod layout;
 mod loader;
 mod loading_overlay;
+mod markdown;
 mod menu;
 mod modal;
 mod number_input;
@@ -53,18 +55,20 @@ pub use breadcrumbs::{BreadcrumbItem, Breadcrumbs};
 pub use button::{Button, ButtonGroup, ButtonGroupItem};
 pub use checkbox::{Checkbox, CheckboxGroup, CheckboxOption};
 pub use chip::{Chip, ChipGroup, ChipOption, ChipSelectionMode};
-pub use divider::{Divider, DividerOrientation};
+pub use divider::{Divider, DividerLabelPosition, DividerOrientation};
 pub use drawer::{Drawer, DrawerPlacement};
 pub use hovercard::{HoverCard, HoverCardPlacement};
 pub use icon::Icon;
+pub use indicator::{Indicator, IndicatorPosition};
 pub use input::{PasswordInput, PinInput, TextInput};
 pub use layers::{ModalLayer, ToastLayer};
 pub use layout::{
-    Flex, FlexAlign, FlexDirection, FlexJustify, Grid, SimpleGrid, Stack, StackDirection,
-    fixed_spacer, flex_col, flex_row, h_stack_layout, stack, v_stack_layout,
+    FlexAlign, FlexJustify, Grid, SimpleGrid, Stack, StackDirection, fixed_spacer, h_stack_layout,
+    stack, v_stack_layout,
 };
 pub use loader::{Loader, LoaderElement, LoaderVariant};
 pub use loading_overlay::LoadingOverlay;
+pub use markdown::Markdown;
 pub use menu::{Menu, MenuItem};
 pub use modal::Modal;
 pub use number_input::NumberInput;
@@ -78,15 +82,17 @@ pub use popover::{Popover, PopoverPlacement};
 pub use primitives::{h_stack, v_stack};
 pub use progress::{Progress, ProgressSection};
 pub use radio::{Radio, RadioGroup, RadioOption};
-pub use range_slider::RangeSlider;
+pub use range_slider::{RangeSlider, RangeSliderOrientation};
 pub use rating::Rating;
-pub use scroll_area::ScrollArea;
+pub use scroll_area::{ScrollArea, ScrollDirection};
 pub use segmented_control::{SegmentedControl, SegmentedControlItem};
 pub use select::{MultiSelect, Select, SelectOption};
-pub use slider::Slider;
-pub use stepper::{Stepper, StepperStep};
+pub use slider::{Slider, SliderOrientation};
+pub use stepper::{Stepper, StepperContentPosition, StepperStep};
 pub use switch::Switch;
-pub use table::{Table, TableAlign, TableCell, TableRow};
+pub use table::{
+    Table, TableAlign, TableCell, TablePaginationPosition, TableRow, TableSort, TableSortDirection,
+};
 pub use tabs::{TabItem, Tabs};
 pub use text::{Text, TextTone};
 pub use textarea::Textarea;
@@ -94,4 +100,4 @@ pub use timeline::{Timeline, TimelineItem};
 pub use title::Title;
 pub use tooltip::{Tooltip, TooltipPlacement};
 pub use transition::{TransitionExt, TransitionStage};
-pub use tree::{Tree, TreeNode};
+pub use tree::{Tree, TreeNode, TreeTogglePosition};
