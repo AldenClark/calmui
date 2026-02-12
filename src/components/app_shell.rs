@@ -324,6 +324,7 @@ impl RenderOnce for TitleBar {
         if !self.visible {
             return div().into_any_element();
         }
+        let disable_drag_area = cfg!(target_os = "macos") && window.is_fullscreen();
 
         let tokens = &self.theme.components.title_bar;
         let bg_token = if self.immersive && self.background.is_none() {
@@ -342,22 +343,25 @@ impl RenderOnce for TitleBar {
             .id(format!("{}-left", self.id))
             .flex()
             .items_center()
-            .gap_2()
-            .window_control_area(WindowControlArea::Drag);
+            .gap_2();
         let mut center = div()
             .id(format!("{}-center", self.id))
             .flex_1()
             .flex()
             .items_center()
             .justify_center()
-            .gap_2()
-            .window_control_area(WindowControlArea::Drag);
+            .gap_2();
         let mut right = div()
             .id(format!("{}-right", self.id))
             .flex()
             .items_center()
-            .gap_2()
-            .window_control_area(WindowControlArea::Drag);
+            .gap_2();
+
+        if !disable_drag_area {
+            left = left.window_control_area(WindowControlArea::Drag);
+            center = center.window_control_area(WindowControlArea::Drag);
+            right = right.window_control_area(WindowControlArea::Drag);
+        }
 
         if let Some(title) = self.title.clone() {
             center = center.child(
@@ -402,12 +406,15 @@ impl RenderOnce for TitleBar {
             .flex()
             .items_center()
             .justify_between()
-            .window_control_area(WindowControlArea::Drag)
             .bg(resolve_hsla(&self.theme, &bg_token))
             .text_color(fg)
             .child(left)
             .child(center)
             .child(right);
+
+        if !disable_drag_area {
+            root = root.window_control_area(WindowControlArea::Drag);
+        }
 
         if !self.immersive {
             root = root
@@ -696,6 +703,8 @@ impl RenderOnce for AppShell {
     fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.app_shell;
+        let macos_fullscreen = cfg!(target_os = "macos") && _window.is_fullscreen();
+        let effective_title_bar_immersive = self.title_bar_immersive && !macos_fullscreen;
         let content = self
             .content
             .take()
@@ -707,7 +716,7 @@ impl RenderOnce for AppShell {
         let title_bar = self
             .title_bar
             .take()
-            .map(|title_bar| title_bar.immersive(self.title_bar_immersive));
+            .map(|title_bar| title_bar.immersive(effective_title_bar_immersive));
 
         let mut root = div()
             .id(self.id.clone())
@@ -716,7 +725,7 @@ impl RenderOnce for AppShell {
             .flex_col()
             .bg(body_bg)
             .text_color(body_text);
-        if self.title_bar_immersive {
+        if effective_title_bar_immersive {
             root = root.relative();
         }
 
@@ -830,7 +839,7 @@ impl RenderOnce for AppShell {
         }
 
         if let Some(title_bar) = title_bar {
-            if self.title_bar_immersive {
+            if effective_title_bar_immersive {
                 root = root.child(body).child(
                     div()
                         .id(format!("{}-titlebar-overlay", self.id))
