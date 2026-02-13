@@ -368,6 +368,58 @@ impl TitleBar {
         )
     }
 
+    fn render_window_controls_macos_fullscreen(&self) -> (AnyElement, f32) {
+        let button =
+            |id: String,
+             color: gpui::Hsla,
+             on_click: Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)>| {
+                div()
+                    .id(id)
+                    .size_4()
+                    .rounded_full()
+                    .bg(color)
+                    .cursor_pointer()
+                    .on_click(move |event, window, cx| {
+                        (on_click)(event, window, cx);
+                    })
+            };
+
+        let close = Rc::new(|_: &ClickEvent, window: &mut Window, _: &mut gpui::App| {
+            window.remove_window();
+        });
+        let minimize = Rc::new(|_: &ClickEvent, window: &mut Window, _: &mut gpui::App| {
+            window.minimize_window();
+        });
+        let fullscreen = Rc::new(|_: &ClickEvent, window: &mut Window, _: &mut gpui::App| {
+            window.toggle_fullscreen();
+        });
+
+        (
+            div()
+                .id(format!("{}-controls-macos-fullscreen", self.id))
+                .flex()
+                .items_center()
+                .gap_1p5()
+                .child(button(
+                    format!("{}-macos-fs-close", self.id),
+                    rgb(0xe76e5d).into(),
+                    close,
+                ))
+                .child(button(
+                    format!("{}-macos-fs-min", self.id),
+                    rgb(0xf6bf4f).into(),
+                    minimize,
+                ))
+                .child(button(
+                    format!("{}-macos-fs-zoom", self.id),
+                    rgb(0x61c554).into(),
+                    fullscreen,
+                ))
+                .into_any_element(),
+            56.0,
+        )
+    }
+
     fn render_window_controls(
         &self,
         window: &mut Window,
@@ -377,6 +429,10 @@ impl TitleBar {
         }
 
         if cfg!(target_os = "macos") {
+            if window.is_fullscreen() {
+                let (controls, width) = self.render_window_controls_macos_fullscreen();
+                return Some((controls, TitleBarControlPlacement::Left, width));
+            }
             return None;
         }
 
@@ -734,6 +790,7 @@ pub struct AppShell {
     title_bar: Option<TitleBar>,
     title_bar_immersive: bool,
     title_bar_show_in_macos_fullscreen: bool,
+    title_bar_reveal_on_macos_fullscreen_edge: bool,
     sidebar: Option<Sidebar>,
     secondary_sidebar: Option<Sidebar>,
     content: Option<SlotRenderer>,
@@ -754,6 +811,7 @@ impl AppShell {
             title_bar: None,
             title_bar_immersive: false,
             title_bar_show_in_macos_fullscreen: false,
+            title_bar_reveal_on_macos_fullscreen_edge: true,
             sidebar: None,
             secondary_sidebar: None,
             content: None,
@@ -783,6 +841,11 @@ impl AppShell {
 
     pub fn title_bar_show_in_macos_fullscreen(mut self, value: bool) -> Self {
         self.title_bar_show_in_macos_fullscreen = value;
+        self
+    }
+
+    pub fn title_bar_reveal_on_macos_fullscreen_edge(mut self, value: bool) -> Self {
+        self.title_bar_reveal_on_macos_fullscreen_edge = value;
         self
     }
 
@@ -859,14 +922,28 @@ impl RenderOnce for AppShell {
             .as_ref()
             .map(TitleBar::height_px)
             .unwrap_or_else(default_title_bar_height);
-        let hide_titlebar_on_macos_fullscreen =
-            macos_fullscreen && !self.title_bar_show_in_macos_fullscreen && title_bar.is_some();
-        let show_title_bar = title_bar.is_some() && !hide_titlebar_on_macos_fullscreen;
-        let content_top_padding = if show_title_bar && !self.title_bar_immersive {
-            titlebar_height_px
+        let reveal_state_key = "macos-fullscreen-titlebar-reveal";
+        let reveal_titlebar = if macos_fullscreen
+            && self.title_bar_reveal_on_macos_fullscreen_edge
+            && !self.title_bar_show_in_macos_fullscreen
+        {
+            control::bool_state(&self.id, reveal_state_key, None, false)
         } else {
-            0.0
+            false
         };
+        let hide_titlebar_on_macos_fullscreen = macos_fullscreen
+            && !self.title_bar_show_in_macos_fullscreen
+            && !reveal_titlebar
+            && title_bar.is_some();
+        let show_title_bar = title_bar.is_some() && !hide_titlebar_on_macos_fullscreen;
+        let overlay_reveal_mode =
+            macos_fullscreen && self.title_bar_reveal_on_macos_fullscreen_edge && reveal_titlebar;
+        let content_top_padding =
+            if show_title_bar && !self.title_bar_immersive && !overlay_reveal_mode {
+                titlebar_height_px
+            } else {
+                0.0
+            };
 
         if !show_title_bar {
             title_bar = None;
@@ -889,6 +966,30 @@ impl RenderOnce for AppShell {
             .relative()
             .bg(body_bg)
             .text_color(body_text);
+
+        if cfg!(target_os = "macos") && self.title_bar_reveal_on_macos_fullscreen_edge {
+            let shell_id = self.id.clone();
+            let reveal_threshold_px = 2.0;
+            let hide_threshold_px = (titlebar_height_px + 10.0).max(24.0);
+            root = root.on_mouse_move(move |event, window, _cx| {
+                if !window.is_fullscreen() {
+                    return;
+                }
+                let y = f32::from(event.position.y);
+                let current = control::bool_state(&shell_id, reveal_state_key, None, false);
+                let target = if y <= reveal_threshold_px {
+                    true
+                } else if y > hide_threshold_px {
+                    false
+                } else {
+                    current
+                };
+                if target != current {
+                    control::set_bool_state(&shell_id, reveal_state_key, target);
+                    window.refresh();
+                }
+            });
+        }
 
         let mut body = div()
             .id(format!("{}-body", self.id))
