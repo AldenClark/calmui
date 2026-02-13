@@ -733,6 +733,7 @@ pub struct AppShell {
     layout: AppShellLayout,
     title_bar: Option<TitleBar>,
     title_bar_immersive: bool,
+    title_bar_show_in_macos_fullscreen: bool,
     sidebar: Option<Sidebar>,
     secondary_sidebar: Option<Sidebar>,
     content: Option<SlotRenderer>,
@@ -752,6 +753,7 @@ impl AppShell {
             layout: AppShellLayout::Standard,
             title_bar: None,
             title_bar_immersive: false,
+            title_bar_show_in_macos_fullscreen: false,
             sidebar: None,
             secondary_sidebar: None,
             content: None,
@@ -776,6 +778,11 @@ impl AppShell {
 
     pub fn title_bar_immersive(mut self, value: bool) -> Self {
         self.title_bar_immersive = value;
+        self
+    }
+
+    pub fn title_bar_show_in_macos_fullscreen(mut self, value: bool) -> Self {
+        self.title_bar_show_in_macos_fullscreen = value;
         self
     }
 
@@ -852,10 +859,8 @@ impl RenderOnce for AppShell {
             .as_ref()
             .map(TitleBar::height_px)
             .unwrap_or_else(default_title_bar_height);
-        let hide_titlebar_on_macos_fullscreen = macos_fullscreen
-            && title_bar
-                .as_ref()
-                .is_some_and(|titlebar| !titlebar.has_any_slot_content());
+        let hide_titlebar_on_macos_fullscreen =
+            macos_fullscreen && !self.title_bar_show_in_macos_fullscreen && title_bar.is_some();
         let show_title_bar = title_bar.is_some() && !hide_titlebar_on_macos_fullscreen;
         let content_top_padding = if show_title_bar && !self.title_bar_immersive {
             titlebar_height_px
