@@ -1,8 +1,11 @@
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window, WindowControlArea, div, px, rgb,
+    AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, MouseButton, ParentElement,
+    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, WindowControlArea,
+    WindowOptions, div, px, rgb,
 };
 
 use crate::contracts::WithId;
@@ -30,6 +33,13 @@ enum TitleBarControlPlacement {
     Right,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TitleTextSlot {
+    Left,
+    Center,
+    Right,
+}
+
 fn default_control_placement() -> TitleBarControlPlacement {
     if cfg!(target_os = "macos") {
         TitleBarControlPlacement::Left
@@ -38,13 +48,105 @@ fn default_control_placement() -> TitleBarControlPlacement {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct AppShellWindowConfig {
+    macos_traffic_light_position: Option<gpui::Point<gpui::Pixels>>,
+}
+
+impl Default for AppShellWindowConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AppShellWindowConfig {
+    pub fn new() -> Self {
+        Self {
+            macos_traffic_light_position: None,
+        }
+    }
+
+    pub fn macos_traffic_light_position(mut self, value: gpui::Point<gpui::Pixels>) -> Self {
+        self.macos_traffic_light_position = Some(value);
+        self
+    }
+
+    pub fn apply_to_window_options(&self, mut options: WindowOptions) -> WindowOptions {
+        if cfg!(target_os = "macos") {
+            let mut titlebar = options.titlebar.unwrap_or_default();
+            titlebar.appears_transparent = true;
+            titlebar.title = None;
+            titlebar.traffic_light_position = self.macos_traffic_light_position;
+            options.titlebar = Some(titlebar);
+            return options;
+        }
+
+        if cfg!(target_os = "windows") {
+            let mut titlebar = options.titlebar.unwrap_or_default();
+            titlebar.appears_transparent = true;
+            options.titlebar = Some(titlebar);
+            return options;
+        }
+
+        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+        {
+            options.window_decorations = Some(gpui::WindowDecorations::Client);
+        }
+
+        options
+    }
+}
+
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 type OverlaySidebarChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
+static TITLEBAR_SHORTCUTS_INSTALLED: AtomicBool = AtomicBool::new(false);
+
+fn install_titlebar_shortcuts_once(cx: &mut gpui::App) {
+    if TITLEBAR_SHORTCUTS_INSTALLED.swap(true, Ordering::AcqRel) {
+        return;
+    }
+
+    let subscription = cx.observe_keystrokes(|event, window, _cx| {
+        let key = event.keystroke.key.as_str();
+        let modifiers = event.keystroke.modifiers;
+        let secondary_only =
+            modifiers.secondary() && !modifiers.alt && !modifiers.shift && !modifiers.function;
+
+        if secondary_only && key == "m" {
+            window.minimize_window();
+            return;
+        }
+        if secondary_only && key == "w" {
+            window.remove_window();
+            return;
+        }
+
+        if cfg!(target_os = "macos")
+            && key == "f"
+            && modifiers.platform
+            && modifiers.control
+            && !modifiers.alt
+            && !modifiers.shift
+            && !modifiers.function
+        {
+            window.toggle_fullscreen();
+            return;
+        }
+
+        if !cfg!(target_os = "macos") && key == "f11" && !modifiers.modified() {
+            window.toggle_fullscreen();
+        }
+    });
+
+    // Keep this global observer for app lifetime.
+    std::mem::forget(subscription);
+}
 
 pub struct TitleBar {
     id: String,
     visible: bool,
     title: Option<SharedString>,
+    title_slot: TitleTextSlot,
     height_px: f32,
     immersive: bool,
     background: Option<ColorValue>,
@@ -62,6 +164,7 @@ impl TitleBar {
             id: stable_auto_id("title-bar"),
             visible: true,
             title: None,
+            title_slot: TitleTextSlot::Center,
             height_px: default_title_bar_height(),
             immersive: false,
             background: None,
@@ -80,6 +183,16 @@ impl TitleBar {
 
     pub fn title(mut self, value: impl Into<SharedString>) -> Self {
         self.title = Some(value.into());
+        self
+    }
+
+    pub fn clear_title(mut self) -> Self {
+        self.title = None;
+        self
+    }
+
+    pub fn title_slot(mut self, value: TitleTextSlot) -> Self {
+        self.title_slot = value;
         self
     }
 
@@ -123,6 +236,13 @@ impl TitleBar {
         self.right_slots
             .push(Box::new(|| content.into_any_element()));
         self
+    }
+
+    pub fn has_any_slot_content(&self) -> bool {
+        self.title.is_some()
+            || !self.left_slots.is_empty()
+            || !self.center_slots.is_empty()
+            || !self.right_slots.is_empty()
     }
 
     fn render_window_controls_windows(&self, window: &mut Window) -> (AnyElement, f32) {
@@ -191,46 +311,6 @@ impl TitleBar {
         )
     }
 
-    fn render_window_controls_macos(&self) -> (AnyElement, f32) {
-        let circle = |id: String, color: gpui::Hsla, area: WindowControlArea| {
-            div()
-                .id(id)
-                .w(px(12.0))
-                .h(px(12.0))
-                .rounded_full()
-                .bg(color)
-                .border_1()
-                .border_color(color.opacity(0.75))
-                .cursor_pointer()
-                .window_control_area(area)
-        };
-
-        (
-            div()
-                .id(format!("{}-controls-macos", self.id))
-                .flex()
-                .items_center()
-                .gap(px(8.0))
-                .child(circle(
-                    format!("{}-mac-close", self.id),
-                    rgb(0xff5f57).into(),
-                    WindowControlArea::Close,
-                ))
-                .child(circle(
-                    format!("{}-mac-min", self.id),
-                    rgb(0xfebc2e).into(),
-                    WindowControlArea::Min,
-                ))
-                .child(circle(
-                    format!("{}-mac-max", self.id),
-                    rgb(0x28c840).into(),
-                    WindowControlArea::Max,
-                ))
-                .into_any_element(),
-            52.0,
-        )
-    }
-
     fn render_window_controls_linux(&self) -> (AnyElement, f32) {
         let tokens = &self.theme.components.title_bar;
         let fg = resolve_hsla(&self.theme, &tokens.fg);
@@ -296,9 +376,11 @@ impl TitleBar {
             return None;
         }
 
-        let (controls, width) = if cfg!(target_os = "macos") {
-            self.render_window_controls_macos()
-        } else if cfg!(target_os = "windows") {
+        if cfg!(target_os = "macos") {
+            return None;
+        }
+
+        let (controls, width) = if cfg!(target_os = "windows") {
             self.render_window_controls_windows(window)
         } else {
             self.render_window_controls_linux()
@@ -321,10 +403,11 @@ impl WithId for TitleBar {
 impl RenderOnce for TitleBar {
     fn render(mut self, window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
+        install_titlebar_shortcuts_once(_cx);
         if !self.visible {
             return div().into_any_element();
         }
-        let disable_drag_area = cfg!(target_os = "macos") && window.is_fullscreen();
+        let macos_fullscreen = cfg!(target_os = "macos") && window.is_fullscreen();
 
         let tokens = &self.theme.components.title_bar;
         let bg_token = if self.immersive && self.background.is_none() {
@@ -343,33 +426,50 @@ impl RenderOnce for TitleBar {
             .id(format!("{}-left", self.id))
             .flex()
             .items_center()
-            .gap_2();
+            .gap_2()
+            .window_control_area(WindowControlArea::Drag);
         let mut center = div()
             .id(format!("{}-center", self.id))
             .flex_1()
             .flex()
             .items_center()
             .justify_center()
-            .gap_2();
+            .gap_2()
+            .window_control_area(WindowControlArea::Drag);
         let mut right = div()
             .id(format!("{}-right", self.id))
             .flex()
             .items_center()
-            .gap_2();
+            .gap_2()
+            .window_control_area(WindowControlArea::Drag);
 
-        if !disable_drag_area {
-            left = left.window_control_area(WindowControlArea::Drag);
-            center = center.window_control_area(WindowControlArea::Drag);
-            right = right.window_control_area(WindowControlArea::Drag);
+        if cfg!(target_os = "macos") && !macos_fullscreen {
+            // Reserve native traffic-light area on macOS. Native controls are provided by system titlebar.
+            left = left.child(
+                div()
+                    .w(px(76.0))
+                    .h(px(self.height_px))
+                    .flex_none()
+                    .invisible(),
+            );
         }
 
         if let Some(title) = self.title.clone() {
-            center = center.child(
-                div()
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(fg)
-                    .child(title),
-            );
+            let title_element = div()
+                .font_weight(gpui::FontWeight::MEDIUM)
+                .text_color(fg)
+                .child(title);
+            match self.title_slot {
+                TitleTextSlot::Left => {
+                    left = left.child(title_element);
+                }
+                TitleTextSlot::Center => {
+                    center = center.child(title_element);
+                }
+                TitleTextSlot::Right => {
+                    right = right.child(title_element);
+                }
+            }
         }
 
         let window_controls = self.render_window_controls(window);
@@ -397,8 +497,9 @@ impl RenderOnce for TitleBar {
             }
         }
 
+        let root_id = self.id.clone();
         let mut root = div()
-            .id(self.id)
+            .id(root_id)
             .w_full()
             .h(px(self.height_px))
             .pl(px(padding_left))
@@ -410,11 +511,53 @@ impl RenderOnce for TitleBar {
             .text_color(fg)
             .child(left)
             .child(center)
-            .child(right);
+            .child(right)
+            .window_control_area(WindowControlArea::Drag);
 
-        if !disable_drag_area {
-            root = root.window_control_area(WindowControlArea::Drag);
-        }
+        let press_state_id = self.id.clone();
+        let press_state_id_for_timer = self.id.clone();
+        let press_state_id_for_up = self.id.clone();
+        let press_state_id_for_up_out = self.id.clone();
+        root = root
+            .on_mouse_down(MouseButton::Left, move |event, window, cx| {
+                control::set_bool_state(&press_state_id, "mouse-pressing", true);
+                control::set_bool_state(&press_state_id, "mouse-long-press-fired", false);
+
+                if event.click_count >= 2 {
+                    control::set_bool_state(&press_state_id, "mouse-pressing", false);
+                    window.titlebar_double_click();
+                    window.refresh();
+                    return;
+                }
+
+                let window_handle = window.window_handle();
+                let id = press_state_id_for_timer.clone();
+                cx.spawn(async move |cx| {
+                    cx.background_executor()
+                        .timer(Duration::from_millis(520))
+                        .await;
+                    let _ = window_handle.update(cx, |_, window, _| {
+                        let pressing = control::bool_state(&id, "mouse-pressing", None, false);
+                        let already_fired =
+                            control::bool_state(&id, "mouse-long-press-fired", None, false);
+                        if pressing && !already_fired {
+                            control::set_bool_state(&id, "mouse-long-press-fired", true);
+                            control::set_bool_state(&id, "mouse-pressing", false);
+                            window.titlebar_double_click();
+                            window.refresh();
+                        }
+                    });
+                })
+                .detach();
+            })
+            .on_mouse_up(MouseButton::Left, move |_, window, _| {
+                control::set_bool_state(&press_state_id_for_up, "mouse-pressing", false);
+                window.refresh();
+            })
+            .on_mouse_up_out(MouseButton::Left, move |_, window, _| {
+                control::set_bool_state(&press_state_id_for_up_out, "mouse-pressing", false);
+                window.refresh();
+            });
 
         if !self.immersive {
             root = root
@@ -704,7 +847,26 @@ impl RenderOnce for AppShell {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.app_shell;
         let macos_fullscreen = cfg!(target_os = "macos") && _window.is_fullscreen();
-        let effective_title_bar_immersive = self.title_bar_immersive && !macos_fullscreen;
+        let mut title_bar = self.title_bar.take();
+        let titlebar_height_px = title_bar
+            .as_ref()
+            .map(TitleBar::height_px)
+            .unwrap_or_else(default_title_bar_height);
+        let hide_titlebar_on_macos_fullscreen = macos_fullscreen
+            && title_bar
+                .as_ref()
+                .is_some_and(|titlebar| !titlebar.has_any_slot_content());
+        let show_title_bar = title_bar.is_some() && !hide_titlebar_on_macos_fullscreen;
+        let content_top_padding = if show_title_bar && !self.title_bar_immersive {
+            titlebar_height_px
+        } else {
+            0.0
+        };
+
+        if !show_title_bar {
+            title_bar = None;
+        }
+
         let content = self
             .content
             .take()
@@ -713,27 +875,22 @@ impl RenderOnce for AppShell {
 
         let body_text = self.theme.resolve_hsla(&self.theme.semantic.text_primary);
         let body_bg = resolve_hsla(&self.theme, &tokens.bg);
-        let title_bar = self
-            .title_bar
-            .take()
-            .map(|title_bar| title_bar.immersive(effective_title_bar_immersive));
 
         let mut root = div()
             .id(self.id.clone())
             .size_full()
             .flex()
             .flex_col()
+            .relative()
             .bg(body_bg)
             .text_color(body_text);
-        if effective_title_bar_immersive {
-            root = root.relative();
-        }
 
         let mut body = div()
             .id(format!("{}-body", self.id))
             .flex_1()
             .min_h_0()
-            .w_full();
+            .w_full()
+            .pt(px(content_top_padding));
 
         match self.layout {
             AppShellLayout::Focus => {
@@ -839,19 +996,15 @@ impl RenderOnce for AppShell {
         }
 
         if let Some(title_bar) = title_bar {
-            if effective_title_bar_immersive {
-                root = root.child(body).child(
-                    div()
-                        .id(format!("{}-titlebar-overlay", self.id))
-                        .absolute()
-                        .top_0()
-                        .left_0()
-                        .right_0()
-                        .child(title_bar),
-                );
-            } else {
-                root = root.child(title_bar).child(body);
-            }
+            root = root.child(body).child(
+                div()
+                    .id(format!("{}-titlebar-overlay", self.id))
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .right_0()
+                    .child(title_bar),
+            );
         } else {
             root = root.child(body);
         }

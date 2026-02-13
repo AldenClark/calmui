@@ -49,7 +49,8 @@ mod utils;
 
 pub use accordion::{Accordion, AccordionItem, AccordionItemMeta};
 pub use action_icon::ActionIcon;
-pub use app_shell::{AppShell, AppShellLayout, Sidebar, SidebarPosition, TitleBar};
+pub use app_shell::AppShellWindowConfig;
+pub use app_shell::{AppShell, AppShellLayout, Sidebar, SidebarPosition, TitleBar, TitleTextSlot};
 pub use badge::Badge;
 pub use breadcrumbs::{BreadcrumbItem, Breadcrumbs};
 pub use button::{Button, ButtonGroup, ButtonGroupItem};

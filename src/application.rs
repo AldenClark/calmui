@@ -1,13 +1,69 @@
-use crate::components::OverlayMaterialCapabilities;
+use crate::components::{AppShellWindowConfig, OverlayMaterialCapabilities};
 use crate::motion::MotionConfig;
 use crate::provider::CalmProvider;
 use crate::theme::{Theme, ThemePatch};
 
 type LaunchHook = Box<dyn FnOnce(&mut gpui::App, &CalmProvider) + 'static>;
 
+pub struct AppShellWindowRuntime {
+    config: AppShellWindowConfig,
+}
+
+impl AppShellWindowRuntime {
+    pub fn new(config: AppShellWindowConfig) -> Self {
+        Self { config }
+    }
+
+    pub fn config(&self) -> &AppShellWindowConfig {
+        &self.config
+    }
+
+    pub fn set_config(&mut self, config: AppShellWindowConfig) {
+        self.config = config;
+    }
+
+    pub fn configure_window_options(
+        &self,
+        configure: impl FnOnce(gpui::WindowOptions) -> gpui::WindowOptions,
+    ) -> gpui::WindowOptions {
+        let user_options = configure(gpui::WindowOptions::default());
+        self.config.apply_to_window_options(user_options)
+    }
+
+    pub fn open_window<V>(
+        &self,
+        cx: &mut gpui::App,
+        configure: impl FnOnce(gpui::WindowOptions) -> gpui::WindowOptions,
+        build_root_view: impl FnOnce(&mut gpui::Window, &mut gpui::App) -> gpui::Entity<V>,
+    ) -> Result<gpui::WindowHandle<V>, String>
+    where
+        V: 'static + gpui::Render,
+    {
+        cx.open_window(self.configure_window_options(configure), build_root_view)
+            .map_err(|err| err.to_string())
+    }
+
+    pub fn open_window_with_options<V>(
+        &self,
+        cx: &mut gpui::App,
+        options: gpui::WindowOptions,
+        build_root_view: impl FnOnce(&mut gpui::Window, &mut gpui::App) -> gpui::Entity<V>,
+    ) -> Result<gpui::WindowHandle<V>, String>
+    where
+        V: 'static + gpui::Render,
+    {
+        cx.open_window(
+            self.config.apply_to_window_options(options),
+            build_root_view,
+        )
+        .map_err(|err| err.to_string())
+    }
+}
+
 pub struct CalmApplication {
     application: gpui::Application,
     provider: CalmProvider,
+    app_shell_window_config: AppShellWindowConfig,
     launch_hooks: Vec<LaunchHook>,
 }
 
@@ -44,6 +100,7 @@ impl CalmApplication {
         Self {
             application: gpui::Application::new(),
             provider: Self::default_provider(),
+            app_shell_window_config: AppShellWindowConfig::default(),
             launch_hooks: Vec::new(),
         }
     }
@@ -52,6 +109,7 @@ impl CalmApplication {
         Self {
             application: gpui::Application::headless(),
             provider: Self::default_provider(),
+            app_shell_window_config: AppShellWindowConfig::default(),
             launch_hooks: Vec::new(),
         }
     }
@@ -60,6 +118,7 @@ impl CalmApplication {
         Self {
             application,
             provider: Self::default_provider(),
+            app_shell_window_config: AppShellWindowConfig::default(),
             launch_hooks: Vec::new(),
         }
     }
@@ -101,6 +160,11 @@ impl CalmApplication {
         self
     }
 
+    pub fn with_app_shell_window_config(mut self, config: AppShellWindowConfig) -> Self {
+        self.app_shell_window_config = config;
+        self
+    }
+
     pub fn set_theme(mut self, theme: Theme) -> Self {
         self.provider = self.provider.set_theme(theme);
         self
@@ -138,6 +202,25 @@ impl CalmApplication {
             }
 
             on_finish_launching(cx);
+        });
+    }
+
+    pub fn run_with_app_shell<F>(self, on_finish_launching: F)
+    where
+        F: 'static + FnOnce(&mut gpui::App, &mut AppShellWindowRuntime),
+    {
+        let provider = self.provider;
+        let launch_hooks = self.launch_hooks;
+        let app_shell_window_config = self.app_shell_window_config;
+        self.application.run(move |cx| {
+            provider.clone().install(cx);
+
+            for hook in launch_hooks {
+                hook(cx, &provider);
+            }
+
+            let mut runtime = AppShellWindowRuntime::new(app_shell_window_config);
+            on_finish_launching(cx, &mut runtime);
         });
     }
 }
