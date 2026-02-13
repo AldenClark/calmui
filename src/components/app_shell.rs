@@ -245,6 +245,10 @@ impl TitleBar {
             || !self.right_slots.is_empty()
     }
 
+    pub fn has_non_title_slot_content(&self) -> bool {
+        !self.left_slots.is_empty() || !self.center_slots.is_empty() || !self.right_slots.is_empty()
+    }
+
     fn render_window_controls_windows(&self, window: &mut Window) -> (AnyElement, f32) {
         let fg = resolve_hsla(&self.theme, &self.theme.components.title_bar.fg);
         let (neutral_hover_bg, neutral_active_bg) = match self.theme.color_scheme {
@@ -308,78 +312,6 @@ impl TitleBar {
                 ))
                 .into_any_element(),
             135.0,
-        )
-    }
-
-    fn render_window_controls_macos(&self) -> (AnyElement, f32) {
-        let circle =
-            |id: String,
-             color: gpui::Hsla,
-             area: WindowControlArea,
-             glyph: &'static str,
-             handler: Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)>| {
-                div()
-                    .id(id)
-                    .w(px(12.0))
-                    .h(px(12.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded_full()
-                    .bg(color)
-                    .border_1()
-                    .border_color(color.opacity(0.75))
-                    .text_size(px(8.0))
-                    .font_weight(gpui::FontWeight::BOLD)
-                    .text_color(gpui::transparent_black())
-                    .cursor_pointer()
-                    .hover(move |style| {
-                        style
-                            .bg(color.opacity(0.92))
-                            .text_color(gpui::rgb(0x2a2a2a))
-                    })
-                    .active(move |style| style.bg(color.opacity(0.84)))
-                    .window_control_area(area)
-                    .on_click(move |event, window, cx| (handler)(event, window, cx))
-                    .child(glyph)
-            };
-
-        let on_close: Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)> =
-            Rc::new(|_, window, _| window.remove_window());
-        let on_minimize: Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)> =
-            Rc::new(|_, window, _| window.minimize_window());
-        let on_zoom: Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)> =
-            Rc::new(|_, window, _| window.toggle_fullscreen());
-
-        (
-            div()
-                .id(format!("{}-controls-macos", self.id))
-                .flex()
-                .items_center()
-                .gap(px(8.0))
-                .child(circle(
-                    format!("{}-mac-close", self.id),
-                    rgb(0xff5f57).into(),
-                    WindowControlArea::Close,
-                    "×",
-                    on_close,
-                ))
-                .child(circle(
-                    format!("{}-mac-min", self.id),
-                    rgb(0xfebc2e).into(),
-                    WindowControlArea::Min,
-                    "−",
-                    on_minimize,
-                ))
-                .child(circle(
-                    format!("{}-mac-max", self.id),
-                    rgb(0x28c840).into(),
-                    WindowControlArea::Max,
-                    "+",
-                    on_zoom,
-                ))
-                .into_any_element(),
-            52.0,
         )
     }
 
@@ -448,9 +380,12 @@ impl TitleBar {
             return None;
         }
 
-        let (controls, width) = if cfg!(target_os = "macos") {
-            self.render_window_controls_macos()
-        } else if cfg!(target_os = "windows") {
+        if cfg!(target_os = "macos") {
+            // macOS uses native traffic lights; custom titlebar should only reserve spacing.
+            return None;
+        }
+
+        let (controls, width) = if cfg!(target_os = "windows") {
             self.render_window_controls_windows(window)
         } else {
             self.render_window_controls_linux()
@@ -511,8 +446,8 @@ impl RenderOnce for TitleBar {
             .items_center()
             .gap_2();
 
-        if cfg!(target_os = "macos") && !macos_fullscreen && !self.show_window_controls {
-            // Reserve native traffic-light area on macOS. Native controls are provided by system titlebar.
+        if cfg!(target_os = "macos") && !macos_fullscreen {
+            // Reserve native traffic-light area on macOS.
             left = left.child(
                 div()
                     .w(px(76.0))
@@ -926,7 +861,7 @@ impl RenderOnce for AppShell {
         let hide_titlebar_on_macos_fullscreen = macos_fullscreen
             && title_bar
                 .as_ref()
-                .is_some_and(|titlebar| !titlebar.has_any_slot_content());
+                .is_some_and(|titlebar| !titlebar.has_non_title_slot_content());
         let show_title_bar = title_bar.is_some() && !hide_titlebar_on_macos_fullscreen;
         let content_top_padding = if show_title_bar && !self.title_bar_immersive {
             titlebar_height_px
