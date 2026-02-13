@@ -426,8 +426,7 @@ impl RenderOnce for TitleBar {
             .id(format!("{}-left", self.id))
             .flex()
             .items_center()
-            .gap_2()
-            .window_control_area(WindowControlArea::Drag);
+            .gap_2();
         let mut center = div()
             .id(format!("{}-center", self.id))
             .flex_1()
@@ -440,8 +439,7 @@ impl RenderOnce for TitleBar {
             .id(format!("{}-right", self.id))
             .flex()
             .items_center()
-            .gap_2()
-            .window_control_area(WindowControlArea::Drag);
+            .gap_2();
 
         if cfg!(target_os = "macos") && !macos_fullscreen {
             // Reserve native traffic-light area on macOS. Native controls are provided by system titlebar.
@@ -511,8 +509,7 @@ impl RenderOnce for TitleBar {
             .text_color(fg)
             .child(left)
             .child(center)
-            .child(right)
-            .window_control_area(WindowControlArea::Drag);
+            .child(right);
 
         let press_state_id = self.id.clone();
         let press_state_id_for_timer = self.id.clone();
