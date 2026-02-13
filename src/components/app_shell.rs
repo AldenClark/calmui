@@ -311,6 +311,63 @@ impl TitleBar {
         )
     }
 
+    fn render_window_controls_macos(&self) -> (AnyElement, f32) {
+        let circle =
+            |id: String,
+             color: gpui::Hsla,
+             area: WindowControlArea,
+             handler: Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)>| {
+                div()
+                    .id(id)
+                    .w(px(12.0))
+                    .h(px(12.0))
+                    .rounded_full()
+                    .bg(color)
+                    .border_1()
+                    .border_color(color.opacity(0.75))
+                    .cursor_pointer()
+                    .hover(move |style| style.bg(color.opacity(0.92)))
+                    .active(move |style| style.bg(color.opacity(0.84)))
+                    .window_control_area(area)
+                    .on_click(move |event, window, cx| (handler)(event, window, cx))
+            };
+
+        let on_close: Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)> =
+            Rc::new(|_, window, _| window.remove_window());
+        let on_minimize: Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)> =
+            Rc::new(|_, window, _| window.minimize_window());
+        let on_zoom: Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)> =
+            Rc::new(|_, window, _| window.toggle_fullscreen());
+
+        (
+            div()
+                .id(format!("{}-controls-macos", self.id))
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .child(circle(
+                    format!("{}-mac-close", self.id),
+                    rgb(0xff5f57).into(),
+                    WindowControlArea::Close,
+                    on_close,
+                ))
+                .child(circle(
+                    format!("{}-mac-min", self.id),
+                    rgb(0xfebc2e).into(),
+                    WindowControlArea::Min,
+                    on_minimize,
+                ))
+                .child(circle(
+                    format!("{}-mac-max", self.id),
+                    rgb(0x28c840).into(),
+                    WindowControlArea::Max,
+                    on_zoom,
+                ))
+                .into_any_element(),
+            52.0,
+        )
+    }
+
     fn render_window_controls_linux(&self) -> (AnyElement, f32) {
         let tokens = &self.theme.components.title_bar;
         let fg = resolve_hsla(&self.theme, &tokens.fg);
@@ -376,11 +433,9 @@ impl TitleBar {
             return None;
         }
 
-        if cfg!(target_os = "macos") {
-            return None;
-        }
-
-        let (controls, width) = if cfg!(target_os = "windows") {
+        let (controls, width) = if cfg!(target_os = "macos") {
+            self.render_window_controls_macos()
+        } else if cfg!(target_os = "windows") {
             self.render_window_controls_windows(window)
         } else {
             self.render_window_controls_linux()
@@ -433,15 +488,15 @@ impl RenderOnce for TitleBar {
             .flex()
             .items_center()
             .justify_center()
-            .gap_2()
-            .window_control_area(WindowControlArea::Drag);
+            .gap_2();
+        //.window_control_area(WindowControlArea::Drag);
         let mut right = div()
             .id(format!("{}-right", self.id))
             .flex()
             .items_center()
             .gap_2();
 
-        if cfg!(target_os = "macos") && !macos_fullscreen {
+        if cfg!(target_os = "macos") && !macos_fullscreen && !self.show_window_controls {
             // Reserve native traffic-light area on macOS. Native controls are provided by system titlebar.
             left = left.child(
                 div()
