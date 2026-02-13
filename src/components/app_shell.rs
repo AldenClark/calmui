@@ -34,7 +34,7 @@ enum TitleBarControlPlacement {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TitleTextSlot {
+pub enum AppShellTitleSlot {
     Left,
     Center,
     Right,
@@ -142,11 +142,11 @@ fn install_titlebar_shortcuts_once(cx: &mut gpui::App) {
     std::mem::forget(subscription);
 }
 
-pub struct TitleBar {
+struct TitleBar {
     id: String,
     visible: bool,
     title: Option<SharedString>,
-    title_slot: TitleTextSlot,
+    title_slot: AppShellTitleSlot,
     height_px: f32,
     immersive: bool,
     background: Option<ColorValue>,
@@ -164,7 +164,7 @@ impl TitleBar {
             id: stable_auto_id("title-bar"),
             visible: true,
             title: None,
-            title_slot: TitleTextSlot::Center,
+            title_slot: AppShellTitleSlot::Center,
             height_px: default_title_bar_height(),
             immersive: false,
             background: None,
@@ -176,73 +176,8 @@ impl TitleBar {
         }
     }
 
-    pub fn visible(mut self, value: bool) -> Self {
-        self.visible = value;
-        self
-    }
-
-    pub fn title(mut self, value: impl Into<SharedString>) -> Self {
-        self.title = Some(value.into());
-        self
-    }
-
-    pub fn clear_title(mut self) -> Self {
-        self.title = None;
-        self
-    }
-
-    pub fn title_slot(mut self, value: TitleTextSlot) -> Self {
-        self.title_slot = value;
-        self
-    }
-
-    pub fn height(mut self, value: f32) -> Self {
-        self.height_px = value.max(20.0);
-        self
-    }
-
-    pub fn background(mut self, value: ColorValue) -> Self {
-        self.background = Some(value);
-        self
-    }
-
-    pub fn immersive(mut self, value: bool) -> Self {
-        self.immersive = value;
-        self
-    }
-
-    pub fn show_window_controls(mut self, value: bool) -> Self {
-        self.show_window_controls = value;
-        self
-    }
-
     pub fn height_px(&self) -> f32 {
         self.height_px
-    }
-
-    pub fn left_slot(mut self, content: impl IntoElement + 'static) -> Self {
-        self.left_slots
-            .push(Box::new(|| content.into_any_element()));
-        self
-    }
-
-    pub fn center_slot(mut self, content: impl IntoElement + 'static) -> Self {
-        self.center_slots
-            .push(Box::new(|| content.into_any_element()));
-        self
-    }
-
-    pub fn right_slot(mut self, content: impl IntoElement + 'static) -> Self {
-        self.right_slots
-            .push(Box::new(|| content.into_any_element()));
-        self
-    }
-
-    pub fn has_any_slot_content(&self) -> bool {
-        self.title.is_some()
-            || !self.left_slots.is_empty()
-            || !self.center_slots.is_empty()
-            || !self.right_slots.is_empty()
     }
 
     pub fn has_non_title_slot_content(&self) -> bool {
@@ -439,7 +374,6 @@ impl RenderOnce for TitleBar {
             .items_center()
             .justify_center()
             .gap_2();
-        //.window_control_area(WindowControlArea::Drag);
         let mut right = div()
             .id(format!("{}-right", self.id))
             .flex()
@@ -447,7 +381,6 @@ impl RenderOnce for TitleBar {
             .gap_2();
 
         if cfg!(target_os = "macos") && !macos_fullscreen {
-            // Reserve native traffic-light area on macOS.
             left = left.child(
                 div()
                     .w(px(76.0))
@@ -463,13 +396,13 @@ impl RenderOnce for TitleBar {
                 .text_color(fg)
                 .child(title);
             match self.title_slot {
-                TitleTextSlot::Left => {
+                AppShellTitleSlot::Left => {
                     left = left.child(title_element);
                 }
-                TitleTextSlot::Center => {
+                AppShellTitleSlot::Center => {
                     center = center.child(title_element);
                 }
-                TitleTextSlot::Right => {
+                AppShellTitleSlot::Right => {
                     right = right.child(title_element);
                 }
             }
@@ -584,12 +517,12 @@ impl IntoElement for TitleBar {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SidebarPosition {
+enum SidebarPosition {
     Left,
     Right,
 }
 
-pub struct Sidebar {
+struct Sidebar {
     id: String,
     width_px: f32,
     position: SidebarPosition,
@@ -615,33 +548,8 @@ impl Sidebar {
         }
     }
 
-    pub fn width(mut self, value: f32) -> Self {
-        self.width_px = value.max(140.0);
-        self
-    }
-
-    pub fn position(mut self, value: SidebarPosition) -> Self {
+    fn position(mut self, value: SidebarPosition) -> Self {
         self.position = value;
-        self
-    }
-
-    pub fn background(mut self, value: ColorValue) -> Self {
-        self.background = Some(value);
-        self
-    }
-
-    pub fn header(mut self, content: impl IntoElement + 'static) -> Self {
-        self.header = Some(Box::new(|| content.into_any_element()));
-        self
-    }
-
-    pub fn content(mut self, content: impl IntoElement + 'static) -> Self {
-        self.content = Some(Box::new(|| content.into_any_element()));
-        self
-    }
-
-    pub fn footer(mut self, content: impl IntoElement + 'static) -> Self {
-        self.footer = Some(Box::new(|| content.into_any_element()));
         self
     }
 }
@@ -775,23 +683,141 @@ impl AppShell {
         self
     }
 
-    pub fn title_bar(mut self, value: TitleBar) -> Self {
-        self.title_bar = Some(value);
-        self
-    }
-
     pub fn title_bar_immersive(mut self, value: bool) -> Self {
         self.title_bar_immersive = value;
         self
     }
 
-    pub fn sidebar(mut self, value: Sidebar) -> Self {
-        self.sidebar = Some(value);
+    pub fn show_title_bar(mut self, value: bool) -> Self {
+        if value {
+            self.ensure_title_bar();
+        } else {
+            self.title_bar = None;
+        }
         self
     }
 
-    pub fn secondary_sidebar(mut self, value: Sidebar) -> Self {
-        self.secondary_sidebar = Some(value);
+    pub fn title_bar_visible(mut self, value: bool) -> Self {
+        self.ensure_title_bar().visible = value;
+        self
+    }
+
+    pub fn title_bar_title(mut self, value: impl Into<SharedString>) -> Self {
+        self.ensure_title_bar().title = Some(value.into());
+        self
+    }
+
+    pub fn title_bar_clear_title(mut self) -> Self {
+        self.ensure_title_bar().title = None;
+        self
+    }
+
+    pub fn title_bar_title_slot(mut self, value: AppShellTitleSlot) -> Self {
+        self.ensure_title_bar().title_slot = value;
+        self
+    }
+
+    pub fn title_bar_height(mut self, value: f32) -> Self {
+        self.ensure_title_bar().height_px = value.max(20.0);
+        self
+    }
+
+    pub fn title_bar_background(mut self, value: ColorValue) -> Self {
+        self.ensure_title_bar().background = Some(value);
+        self
+    }
+
+    pub fn title_bar_show_window_controls(mut self, value: bool) -> Self {
+        self.ensure_title_bar().show_window_controls = value;
+        self
+    }
+
+    pub fn title_bar_left_slot(mut self, content: impl IntoElement + 'static) -> Self {
+        self.ensure_title_bar()
+            .left_slots
+            .push(Box::new(|| content.into_any_element()));
+        self
+    }
+
+    pub fn title_bar_center_slot(mut self, content: impl IntoElement + 'static) -> Self {
+        self.ensure_title_bar()
+            .center_slots
+            .push(Box::new(|| content.into_any_element()));
+        self
+    }
+
+    pub fn title_bar_right_slot(mut self, content: impl IntoElement + 'static) -> Self {
+        self.ensure_title_bar()
+            .right_slots
+            .push(Box::new(|| content.into_any_element()));
+        self
+    }
+
+    pub fn show_sidebar(mut self, value: bool) -> Self {
+        if value {
+            self.ensure_sidebar();
+        } else {
+            self.sidebar = None;
+        }
+        self
+    }
+
+    pub fn sidebar_width(mut self, value: f32) -> Self {
+        self.ensure_sidebar().width_px = value.max(140.0);
+        self
+    }
+
+    pub fn sidebar_background(mut self, value: ColorValue) -> Self {
+        self.ensure_sidebar().background = Some(value);
+        self
+    }
+
+    pub fn sidebar_header(mut self, content: impl IntoElement + 'static) -> Self {
+        self.ensure_sidebar().header = Some(Box::new(|| content.into_any_element()));
+        self
+    }
+
+    pub fn sidebar_content(mut self, content: impl IntoElement + 'static) -> Self {
+        self.ensure_sidebar().content = Some(Box::new(|| content.into_any_element()));
+        self
+    }
+
+    pub fn sidebar_footer(mut self, content: impl IntoElement + 'static) -> Self {
+        self.ensure_sidebar().footer = Some(Box::new(|| content.into_any_element()));
+        self
+    }
+
+    pub fn show_secondary_sidebar(mut self, value: bool) -> Self {
+        if value {
+            self.ensure_secondary_sidebar();
+        } else {
+            self.secondary_sidebar = None;
+        }
+        self
+    }
+
+    pub fn secondary_sidebar_width(mut self, value: f32) -> Self {
+        self.ensure_secondary_sidebar().width_px = value.max(140.0);
+        self
+    }
+
+    pub fn secondary_sidebar_background(mut self, value: ColorValue) -> Self {
+        self.ensure_secondary_sidebar().background = Some(value);
+        self
+    }
+
+    pub fn secondary_sidebar_header(mut self, content: impl IntoElement + 'static) -> Self {
+        self.ensure_secondary_sidebar().header = Some(Box::new(|| content.into_any_element()));
+        self
+    }
+
+    pub fn secondary_sidebar_content(mut self, content: impl IntoElement + 'static) -> Self {
+        self.ensure_secondary_sidebar().content = Some(Box::new(|| content.into_any_element()));
+        self
+    }
+
+    pub fn secondary_sidebar_footer(mut self, content: impl IntoElement + 'static) -> Self {
+        self.ensure_secondary_sidebar().footer = Some(Box::new(|| content.into_any_element()));
         self
     }
 
@@ -826,6 +852,18 @@ impl AppShell {
     ) -> Self {
         self.on_overlay_sidebar_change = Some(Rc::new(handler));
         self
+    }
+
+    fn ensure_title_bar(&mut self) -> &mut TitleBar {
+        self.title_bar.get_or_insert_with(TitleBar::new)
+    }
+
+    fn ensure_sidebar(&mut self) -> &mut Sidebar {
+        self.sidebar.get_or_insert_with(Sidebar::new)
+    }
+
+    fn ensure_secondary_sidebar(&mut self) -> &mut Sidebar {
+        self.secondary_sidebar.get_or_insert_with(Sidebar::new)
     }
 
     fn resolved_overlay_sidebar_opened(&self) -> bool {
