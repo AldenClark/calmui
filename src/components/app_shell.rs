@@ -316,20 +316,32 @@ impl TitleBar {
             |id: String,
              color: gpui::Hsla,
              area: WindowControlArea,
+             glyph: &'static str,
              handler: Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)>| {
                 div()
                     .id(id)
                     .w(px(12.0))
                     .h(px(12.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
                     .rounded_full()
                     .bg(color)
                     .border_1()
                     .border_color(color.opacity(0.75))
+                    .text_size(px(8.0))
+                    .font_weight(gpui::FontWeight::BOLD)
+                    .text_color(gpui::transparent_black())
                     .cursor_pointer()
-                    .hover(move |style| style.bg(color.opacity(0.92)))
+                    .hover(move |style| {
+                        style
+                            .bg(color.opacity(0.92))
+                            .text_color(gpui::rgb(0x2a2a2a))
+                    })
                     .active(move |style| style.bg(color.opacity(0.84)))
                     .window_control_area(area)
                     .on_click(move |event, window, cx| (handler)(event, window, cx))
+                    .child(glyph)
             };
 
         let on_close: Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)> =
@@ -349,18 +361,21 @@ impl TitleBar {
                     format!("{}-mac-close", self.id),
                     rgb(0xff5f57).into(),
                     WindowControlArea::Close,
+                    "×",
                     on_close,
                 ))
                 .child(circle(
                     format!("{}-mac-min", self.id),
                     rgb(0xfebc2e).into(),
                     WindowControlArea::Min,
+                    "−",
                     on_minimize,
                 ))
                 .child(circle(
                     format!("{}-mac-max", self.id),
                     rgb(0x28c840).into(),
                     WindowControlArea::Max,
+                    "+",
                     on_zoom,
                 ))
                 .into_any_element(),
@@ -507,7 +522,7 @@ impl RenderOnce for TitleBar {
             );
         }
 
-        if let Some(title) = self.title.clone() {
+        if !macos_fullscreen && let Some(title) = self.title.clone() {
             let title_element = div()
                 .font_weight(gpui::FontWeight::MEDIUM)
                 .text_color(fg)
@@ -525,7 +540,11 @@ impl RenderOnce for TitleBar {
             }
         }
 
-        let window_controls = self.render_window_controls(window);
+        let window_controls = if macos_fullscreen {
+            None
+        } else {
+            self.render_window_controls(window)
+        };
 
         for slot in self.left_slots {
             left = left.child(slot());
