@@ -3,7 +3,122 @@ use crate::motion::MotionConfig;
 use crate::provider::CalmProvider;
 use crate::theme::{Theme, ThemePatch};
 
+gpui::actions!(
+    calm_application_menu,
+    [
+        CalmMenuQuit,
+        CalmMenuCloseWindow,
+        CalmMenuMinimizeWindow,
+        CalmMenuToggleFullscreen,
+        CalmMenuAbout,
+        CalmMenuHelp,
+        CalmMenuUndo,
+        CalmMenuRedo,
+        CalmMenuCut,
+        CalmMenuCopy,
+        CalmMenuPaste,
+        CalmMenuSelectAll
+    ]
+);
+
 type LaunchHook = Box<dyn FnOnce(&mut gpui::App, &CalmProvider) + 'static>;
+
+#[cfg(target_os = "macos")]
+fn install_default_app_menus(cx: &mut gpui::App) {
+    cx.on_action(calm_menu_quit);
+    cx.on_action(calm_menu_close_window);
+    cx.on_action(calm_menu_minimize_window);
+    cx.on_action(calm_menu_toggle_fullscreen);
+    cx.on_action(calm_menu_about);
+    cx.on_action(calm_menu_help);
+    cx.on_action(calm_menu_undo);
+    cx.on_action(calm_menu_redo);
+    cx.on_action(calm_menu_cut);
+    cx.on_action(calm_menu_copy);
+    cx.on_action(calm_menu_paste);
+    cx.on_action(calm_menu_select_all);
+
+    cx.set_menus(vec![
+        gpui::Menu {
+            name: "File".into(),
+            items: vec![
+                gpui::MenuItem::action("Close Window", CalmMenuCloseWindow),
+                gpui::MenuItem::action("Minimize", CalmMenuMinimizeWindow),
+                gpui::MenuItem::separator(),
+                gpui::MenuItem::action("Toggle Full Screen", CalmMenuToggleFullscreen),
+                gpui::MenuItem::separator(),
+                gpui::MenuItem::action("Quit", CalmMenuQuit),
+            ],
+        },
+        gpui::Menu {
+            name: "Edit".into(),
+            items: vec![
+                gpui::MenuItem::os_action("Undo", CalmMenuUndo, gpui::OsAction::Undo),
+                gpui::MenuItem::os_action("Redo", CalmMenuRedo, gpui::OsAction::Redo),
+                gpui::MenuItem::separator(),
+                gpui::MenuItem::os_action("Cut", CalmMenuCut, gpui::OsAction::Cut),
+                gpui::MenuItem::os_action("Copy", CalmMenuCopy, gpui::OsAction::Copy),
+                gpui::MenuItem::os_action("Paste", CalmMenuPaste, gpui::OsAction::Paste),
+                gpui::MenuItem::separator(),
+                gpui::MenuItem::os_action(
+                    "Select All",
+                    CalmMenuSelectAll,
+                    gpui::OsAction::SelectAll,
+                ),
+            ],
+        },
+        gpui::Menu {
+            name: "Window".into(),
+            items: vec![
+                gpui::MenuItem::action("Minimize", CalmMenuMinimizeWindow),
+                gpui::MenuItem::action("Toggle Full Screen", CalmMenuToggleFullscreen),
+            ],
+        },
+        gpui::Menu {
+            name: "Help".into(),
+            items: vec![
+                gpui::MenuItem::os_submenu("Services", gpui::SystemMenuType::Services),
+                gpui::MenuItem::separator(),
+                gpui::MenuItem::action("About", CalmMenuAbout),
+                gpui::MenuItem::action("Help", CalmMenuHelp),
+            ],
+        },
+    ]);
+}
+
+#[cfg(not(target_os = "macos"))]
+fn install_default_app_menus(_: &mut gpui::App) {}
+
+fn calm_menu_quit(_: &CalmMenuQuit, cx: &mut gpui::App) {
+    cx.quit();
+}
+
+fn calm_menu_close_window(_: &CalmMenuCloseWindow, cx: &mut gpui::App) {
+    if let Some(handle) = cx.active_window() {
+        let _ = handle.update(cx, |_, window, _| window.remove_window());
+    }
+}
+
+fn calm_menu_minimize_window(_: &CalmMenuMinimizeWindow, cx: &mut gpui::App) {
+    if let Some(handle) = cx.active_window() {
+        let _ = handle.update(cx, |_, window, _| window.minimize_window());
+    }
+}
+
+fn calm_menu_toggle_fullscreen(_: &CalmMenuToggleFullscreen, cx: &mut gpui::App) {
+    if let Some(handle) = cx.active_window() {
+        let _ = handle.update(cx, |_, window, _| window.toggle_fullscreen());
+    }
+}
+
+fn calm_menu_about(_: &CalmMenuAbout, _: &mut gpui::App) {}
+fn calm_menu_help(_: &CalmMenuHelp, _: &mut gpui::App) {}
+fn calm_menu_undo(_: &CalmMenuUndo, _: &mut gpui::App) {}
+fn calm_menu_redo(_: &CalmMenuRedo, _: &mut gpui::App) {}
+fn calm_menu_cut(_: &CalmMenuCut, _: &mut gpui::App) {}
+fn calm_menu_copy(_: &CalmMenuCopy, _: &mut gpui::App) {}
+fn calm_menu_paste(_: &CalmMenuPaste, _: &mut gpui::App) {}
+fn calm_menu_select_all(_: &CalmMenuSelectAll, _: &mut gpui::App) {}
 
 pub struct AppShellWindowRuntime {
     config: AppShellWindowConfig,
@@ -196,6 +311,7 @@ impl CalmApplication {
         let launch_hooks = self.launch_hooks;
         self.application.run(move |cx| {
             provider.clone().install(cx);
+            install_default_app_menus(cx);
 
             for hook in launch_hooks {
                 hook(cx, &provider);
@@ -214,6 +330,7 @@ impl CalmApplication {
         let app_shell_window_config = self.app_shell_window_config;
         self.application.run(move |cx| {
             provider.clone().install(cx);
+            install_default_app_menus(cx);
 
             for hook in launch_hooks {
                 hook(cx, &provider);
