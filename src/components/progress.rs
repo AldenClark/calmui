@@ -1,15 +1,14 @@
 use std::time::Duration;
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, Component, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, Styled, div, px,
+    Animation, AnimationExt, AnyElement, Component, Hsla, InteractiveElement, IntoElement,
+    ParentElement, RenderOnce, SharedString, Styled, div, px,
 };
 
 use crate::contracts::{MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
-use crate::theme::ColorValue;
 
 use super::primitives::h_stack;
 use super::transition::TransitionExt;
@@ -18,7 +17,7 @@ use super::utils::{apply_radius, resolve_hsla};
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProgressSection {
     value: f32,
-    color: Option<ColorValue>,
+    color: Option<Hsla>,
 }
 
 impl ProgressSection {
@@ -26,8 +25,8 @@ impl ProgressSection {
         Self { value, color: None }
     }
 
-    pub fn color(mut self, color: ColorValue) -> Self {
-        self.color = Some(color);
+    pub fn color(mut self, color: impl Into<Hsla>) -> Self {
+        self.color = Some(color.into());
         self
     }
 }
@@ -365,7 +364,7 @@ impl RenderOnce for Progress {
             .h(px(bar_height))
             .overflow_hidden()
             .bg(track_bg);
-        track = apply_radius(track, self.radius);
+        track = apply_radius(&self.theme, track, self.radius);
 
         let mut left = 0.0_f32;
         for (index, section) in sections.into_iter().enumerate() {

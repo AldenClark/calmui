@@ -99,7 +99,7 @@ impl RenderOnce for Paper {
             .id(root_id)
             .bg(resolve_hsla(&self.theme, &tokens.bg))
             .w_full();
-        root = apply_radius(root, self.radius);
+        root = apply_radius(&self.theme, root, self.radius);
         root = Self::apply_padding(padding, root);
 
         if self.bordered {

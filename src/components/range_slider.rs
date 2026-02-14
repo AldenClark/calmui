@@ -334,7 +334,7 @@ impl RenderOnce for RangeSlider {
                 .border_1()
                 .border_color(resolve_hsla(&self.theme, &tokens.track_bg))
                 .bg(resolve_hsla(&self.theme, &tokens.track_bg));
-            track = apply_radius(track, self.radius);
+            track = apply_radius(&self.theme, track, self.radius);
 
             let mut fill = div()
                 .id(format!("{}-range-fill", self.id))
@@ -344,7 +344,7 @@ impl RenderOnce for RangeSlider {
                 .w(px(track_height))
                 .h(px(fill_height))
                 .bg(resolve_hsla(&self.theme, &tokens.range_bg));
-            fill = apply_radius(fill, self.radius);
+            fill = apply_radius(&self.theme, fill, self.radius);
 
             let mut left_thumb = div()
                 .id(format!("{}-thumb-left", self.id))
@@ -357,7 +357,7 @@ impl RenderOnce for RangeSlider {
                 .border_1()
                 .border_color(resolve_hsla(&self.theme, &tokens.thumb_border))
                 .bg(resolve_hsla(&self.theme, &tokens.thumb_bg));
-            left_thumb = apply_radius(left_thumb, Radius::Pill);
+            left_thumb = apply_radius(&self.theme, left_thumb, Radius::Pill);
 
             let mut right_thumb = div()
                 .id(format!("{}-thumb-right", self.id))
@@ -370,7 +370,7 @@ impl RenderOnce for RangeSlider {
                 .border_1()
                 .border_color(resolve_hsla(&self.theme, &tokens.thumb_border))
                 .bg(resolve_hsla(&self.theme, &tokens.thumb_bg));
-            right_thumb = apply_radius(right_thumb, Radius::Pill);
+            right_thumb = apply_radius(&self.theme, right_thumb, Radius::Pill);
 
             if !self.disabled {
                 let drag_common = |thumb: RangeThumb| RangeSliderDragState {
@@ -574,7 +574,7 @@ impl RenderOnce for RangeSlider {
             .border_1()
             .border_color(resolve_hsla(&self.theme, &tokens.track_bg))
             .bg(resolve_hsla(&self.theme, &tokens.track_bg));
-        track = apply_radius(track, self.radius);
+        track = apply_radius(&self.theme, track, self.radius);
 
         let fill_left = left_thumb_x + (thumb_size * 0.5);
         let fill_right = right_thumb_x + (thumb_size * 0.5);
@@ -599,7 +599,7 @@ impl RenderOnce for RangeSlider {
             .border_1()
             .border_color(resolve_hsla(&self.theme, &tokens.thumb_border))
             .bg(resolve_hsla(&self.theme, &tokens.thumb_bg));
-        left_thumb = apply_radius(left_thumb, Radius::Pill);
+        left_thumb = apply_radius(&self.theme, left_thumb, Radius::Pill);
 
         let mut right_thumb = div()
             .id(format!("{}-thumb-right", self.id))
@@ -612,7 +612,7 @@ impl RenderOnce for RangeSlider {
             .border_1()
             .border_color(resolve_hsla(&self.theme, &tokens.thumb_border))
             .bg(resolve_hsla(&self.theme, &tokens.thumb_bg));
-        right_thumb = apply_radius(right_thumb, Radius::Pill);
+        right_thumb = apply_radius(&self.theme, right_thumb, Radius::Pill);
 
         if !self.disabled {
             let drag_common = |thumb: RangeThumb| RangeSliderDragState {

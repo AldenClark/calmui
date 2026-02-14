@@ -335,10 +335,7 @@ impl TreeRenderCtx {
             .border_color(if is_selected {
                 resolve_hsla(&self.theme, &self.tokens.row_selected_fg)
             } else {
-                resolve_hsla(
-                    &self.theme,
-                    &crate::theme::ColorValue::Custom("#00000000".to_string()),
-                )
+                resolve_hsla(&self.theme, &gpui::transparent_black())
             })
             .text_color(if node.disabled {
                 resolve_hsla(&self.theme, &self.tokens.row_disabled_fg)
@@ -350,12 +347,9 @@ impl TreeRenderCtx {
             .bg(if is_selected {
                 self.selected_bg
             } else {
-                resolve_hsla(
-                    &self.theme,
-                    &crate::theme::ColorValue::Custom("#00000000".to_string()),
-                )
+                resolve_hsla(&self.theme, &gpui::transparent_black())
             });
-        row = apply_radius(row, self.radius);
+        row = apply_radius(&self.theme, row, self.radius);
 
         let mut toggle = div()
             .id(format!("{}-toggle-{path}", self.tree_id))

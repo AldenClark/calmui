@@ -310,7 +310,7 @@ impl TextInput {
             .border_1();
 
         input = apply_input_size(input, self.size);
-        input = apply_radius(input, self.radius);
+        input = apply_radius(&self.theme, input, self.radius);
 
         if self.error.is_some() {
             input = input.border_color(resolve_hsla(&self.theme, &tokens.border_error));
@@ -978,7 +978,7 @@ impl RenderOnce for PinInput {
                         ),
                 );
             }
-            cell = apply_radius(cell, self.radius);
+            cell = apply_radius(&self.theme, cell, self.radius);
             root = root.child(cell);
         }
 

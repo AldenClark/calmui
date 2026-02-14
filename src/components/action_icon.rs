@@ -1,15 +1,14 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    StatefulInteractiveElement, Styled, Window, div, px,
+    AnyElement, ClickEvent, Component, Hsla, InteractiveElement, IntoElement, ParentElement,
+    RenderOnce, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
 use crate::contracts::{MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
-use crate::theme::ColorValue;
 
 use super::icon::Icon;
 use super::transition::TransitionExt;
@@ -64,7 +63,7 @@ impl ActionIcon {
         self
     }
 
-    fn variant_tokens(&self) -> (ColorValue, ColorValue, Option<ColorValue>) {
+    fn variant_tokens(&self) -> (Hsla, Hsla, Option<Hsla>) {
         let tokens = &self.theme.components.action_icon;
         if self.disabled {
             return (
@@ -79,15 +78,11 @@ impl ActionIcon {
             Variant::Light => (tokens.light_bg.clone(), tokens.light_fg.clone(), None),
             Variant::Subtle => (tokens.subtle_bg.clone(), tokens.subtle_fg.clone(), None),
             Variant::Outline => (
-                ColorValue::Custom("#00000000".to_string()),
+                gpui::transparent_black(),
                 tokens.outline_fg.clone(),
                 Some(tokens.outline_border.clone()),
             ),
-            Variant::Ghost => (
-                ColorValue::Custom("#00000000".to_string()),
-                tokens.ghost_fg.clone(),
-                None,
-            ),
+            Variant::Ghost => (gpui::transparent_black(), tokens.ghost_fg.clone(), None),
             Variant::Default => (
                 tokens.default_bg.clone(),
                 tokens.default_fg.clone(),
@@ -179,7 +174,7 @@ impl RenderOnce for ActionIcon {
             .border_1()
             .child(content);
 
-        root = apply_radius(root, self.radius);
+        root = apply_radius(&self.theme, root, self.radius);
 
         if let Some(border) = border_token {
             root = root.border_color(resolve_hsla(&self.theme, &border));

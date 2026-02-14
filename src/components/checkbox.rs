@@ -163,7 +163,7 @@ impl RenderOnce for Checkbox {
             .flex()
             .items_center()
             .justify_center();
-        control = apply_radius(control, self.radius);
+        control = apply_radius(&self.theme, control, self.radius);
 
         if checked {
             control = control.child(

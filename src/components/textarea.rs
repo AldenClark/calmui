@@ -580,7 +580,7 @@ impl Textarea {
             .border_1();
 
         input = apply_input_size(input, self.size);
-        input = apply_radius(input, self.radius);
+        input = apply_radius(&self.theme, input, self.radius);
 
         let border = if self.error.is_some() {
             resolve_hsla(&self.theme, &tokens.border_error)

@@ -9,7 +9,6 @@ use crate::contracts::{MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
-use crate::theme::ColorValue;
 
 use super::control;
 use super::primitives::{h_stack, v_stack};
@@ -200,7 +199,7 @@ impl RenderOnce for Tabs {
         let size = self.size;
         let motion = self.motion;
         let panel_fallback_fg = resolve_hsla(&self.theme, &self.theme.semantic.text_muted);
-        let transparent = resolve_hsla(&theme, &ColorValue::Custom("#00000000".to_string()));
+        let transparent = resolve_hsla(&theme, &gpui::transparent_black());
 
         let mut selected_panel: Option<AnyElement> = None;
         let mut first_panel: Option<AnyElement> = None;
@@ -239,12 +238,12 @@ impl RenderOnce for Tabs {
                 .bg(if is_active {
                     active_bg
                 } else {
-                    resolve_hsla(&theme, &ColorValue::Custom("#00000000".to_string()))
+                    resolve_hsla(&theme, &gpui::transparent_black())
                 })
                 .child(item.label.clone());
 
             trigger = Self::apply_tab_size(size, trigger);
-            trigger = apply_radius(trigger, self.radius);
+            trigger = apply_radius(&self.theme, trigger, self.radius);
             if is_active {
                 trigger = trigger.shadow_sm();
             }
@@ -288,7 +287,7 @@ impl RenderOnce for Tabs {
             .bg(resolve_hsla(&theme, &tokens.list_bg))
             .border_color(resolve_hsla(&theme, &tokens.list_border))
             .children(triggers);
-        list = apply_radius(list, self.radius);
+        list = apply_radius(&self.theme, list, self.radius);
 
         let mut panel = div()
             .id(format!("{}-panel", self.id))
@@ -299,7 +298,7 @@ impl RenderOnce for Tabs {
             .text_color(resolve_hsla(&theme, &tokens.panel_fg))
             .p_4()
             .child(panel_content);
-        panel = apply_radius(panel, self.radius);
+        panel = apply_radius(&self.theme, panel, self.radius);
 
         v_stack()
             .id(self.id.clone())

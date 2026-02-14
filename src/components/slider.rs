@@ -283,7 +283,7 @@ impl RenderOnce for Slider {
                 .border_1()
                 .border_color(resolve_hsla(&self.theme, &tokens.track_bg))
                 .bg(resolve_hsla(&self.theme, &tokens.track_bg));
-            track = apply_radius(track, self.radius);
+            track = apply_radius(&self.theme, track, self.radius);
 
             let fill_top = (thumb_top + (thumb_size * 0.5)).clamp(0.0, track_len);
             let fill_height = (track_len - fill_top).max(0.0);
@@ -295,7 +295,7 @@ impl RenderOnce for Slider {
                 .w(px(track_height))
                 .h(px(fill_height))
                 .bg(self.filled_color());
-            fill = apply_radius(fill, self.radius);
+            fill = apply_radius(&self.theme, fill, self.radius);
 
             let mut thumb = div()
                 .id(format!("{}-thumb", self.id))
@@ -308,7 +308,7 @@ impl RenderOnce for Slider {
                 .border_1()
                 .border_color(resolve_hsla(&self.theme, &tokens.thumb_border))
                 .bg(resolve_hsla(&self.theme, &tokens.thumb_bg));
-            thumb = apply_radius(thumb, Radius::Pill);
+            thumb = apply_radius(&self.theme, thumb, Radius::Pill);
             if self.disabled {
                 thumb = thumb.opacity(0.65);
             }
@@ -409,7 +409,7 @@ impl RenderOnce for Slider {
             .overflow_hidden()
             .border_1()
             .border_color(resolve_hsla(&self.theme, &tokens.track_bg));
-        track = apply_radius(track, self.radius);
+        track = apply_radius(&self.theme, track, self.radius);
 
         let segment_span = (self.max - self.min) / segment_count as f32;
         let filled_color = self.filled_color();
@@ -455,7 +455,7 @@ impl RenderOnce for Slider {
             .border_1()
             .border_color(resolve_hsla(&self.theme, &tokens.thumb_border))
             .bg(resolve_hsla(&self.theme, &tokens.thumb_bg));
-        thumb = apply_radius(thumb, Radius::Pill);
+        thumb = apply_radius(&self.theme, thumb, Radius::Pill);
         if self.disabled {
             thumb = thumb.opacity(0.65);
         }

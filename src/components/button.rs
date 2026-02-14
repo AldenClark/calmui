@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window, div,
+    AnyElement, ClickEvent, Component, Hsla, InteractiveElement, IntoElement, ParentElement,
+    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div,
 };
 
 use crate::contracts::WithId;
@@ -10,7 +10,6 @@ use crate::contracts::{MotionAware, VariantSupport};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
-use crate::theme::ColorValue;
 
 use super::control;
 use super::loader::{Loader, LoaderElement, LoaderVariant};
@@ -20,7 +19,7 @@ use super::utils::{apply_button_size, apply_radius, resolve_hsla, variant_text_w
 
 type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)>;
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
-type LoaderRenderer = Box<dyn FnOnce(Size, ColorValue, String) -> AnyElement>;
+type LoaderRenderer = Box<dyn FnOnce(Size, Hsla, String) -> AnyElement>;
 
 pub struct Button {
     id: String,
@@ -107,22 +106,18 @@ impl Button {
         self
     }
 
-    fn variant_tokens(&self) -> (ColorValue, ColorValue, Option<ColorValue>) {
+    fn variant_tokens(&self) -> (Hsla, Hsla, Option<Hsla>) {
         let tokens = &self.theme.components.button;
         match self.variant {
             Variant::Filled => (tokens.filled_bg.clone(), tokens.filled_fg.clone(), None),
             Variant::Light => (tokens.light_bg.clone(), tokens.light_fg.clone(), None),
             Variant::Subtle => (tokens.subtle_bg.clone(), tokens.subtle_fg.clone(), None),
             Variant::Outline => (
-                ColorValue::Custom("#00000000".to_string()),
+                gpui::transparent_black(),
                 tokens.outline_fg.clone(),
                 Some(tokens.outline_border.clone()),
             ),
-            Variant::Ghost => (
-                ColorValue::Custom("#00000000".to_string()),
-                tokens.ghost_fg.clone(),
-                None,
-            ),
+            Variant::Ghost => (gpui::transparent_black(), tokens.ghost_fg.clone(), None),
             Variant::Default => (
                 self.theme.semantic.bg_surface.clone(),
                 self.theme.semantic.text_primary.clone(),
@@ -254,7 +249,7 @@ impl RenderOnce for Button {
             .border_1();
 
         root = apply_button_size(root, self.size);
-        root = apply_radius(root, self.radius);
+        root = apply_radius(&self.theme, root, self.radius);
 
         if let Some(border_token) = border_token {
             root = root.border_color(resolve_hsla(&self.theme, &border_token));

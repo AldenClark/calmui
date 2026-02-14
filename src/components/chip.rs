@@ -1,7 +1,7 @@
 use std::{collections::BTreeSet, rc::Rc};
 
 use gpui::{
-    Component, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
+    Component, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
     StatefulInteractiveElement, Styled, Window, div,
 };
 
@@ -9,7 +9,6 @@ use crate::contracts::{MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
-use crate::theme::ColorValue;
 
 use super::control;
 use super::primitives::{h_stack, v_stack};
@@ -88,7 +87,7 @@ impl Chip {
         self
     }
 
-    fn color_tokens(&self) -> (ColorValue, ColorValue, ColorValue) {
+    fn color_tokens(&self) -> (Hsla, Hsla, Hsla) {
         let tokens = &self.theme.components.chip;
         if self.resolved_checked() {
             match self.variant {
@@ -108,14 +107,14 @@ impl Chip {
                     tokens.subtle_bg.clone(),
                 ),
                 Variant::Outline => (
-                    ColorValue::Custom("#00000000".to_string()),
+                    gpui::transparent_black(),
                     tokens.outline_fg.clone(),
                     tokens.outline_border.clone(),
                 ),
                 Variant::Ghost => (
-                    ColorValue::Custom("#00000000".to_string()),
+                    gpui::transparent_black(),
                     tokens.ghost_fg.clone(),
-                    ColorValue::Custom("#00000000".to_string()),
+                    gpui::transparent_black(),
                 ),
                 Variant::Default => (
                     tokens.default_bg.clone(),
@@ -203,7 +202,7 @@ impl RenderOnce for Chip {
             });
 
         chip = apply_button_size(chip, self.size);
-        chip = apply_radius(chip, self.radius);
+        chip = apply_radius(&self.theme, chip, self.radius);
 
         if self.disabled {
             chip = chip.cursor_default().opacity(0.55);

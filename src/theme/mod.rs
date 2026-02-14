@@ -1,7 +1,11 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, OnceLock};
 
+use crate::style::Radius;
 use crate::tokens::{ColorScale, PaletteCatalog, PaletteKey};
+use gpui::{
+    Background, Corners, Fill, FontWeight, Hsla, Pixels, Rgba, black, px, transparent_black, white,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ColorScheme {
@@ -27,36 +31,412 @@ impl PrimaryShade {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ColorValue {
-    Palette { key: PaletteKey, shade: u8 },
-    White,
-    Black,
-    Custom(String),
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PaletteColor {
+    pub key: PaletteKey,
+    pub shade: u8,
 }
 
-impl ColorValue {
+impl PaletteColor {
+    pub const fn new(key: PaletteKey, shade: u8) -> Self {
+        Self { key, shade }
+    }
+
+    fn normalized_shade(self) -> usize {
+        self.shade.min(9) as usize
+    }
+
+    fn hex(self) -> &'static str {
+        PaletteCatalog::scale(self.key)[self.normalized_shade()]
+    }
+}
+
+impl From<PaletteColor> for Hsla {
+    fn from(value: PaletteColor) -> Self {
+        Rgba::try_from(value.hex())
+            .map(Into::into)
+            .unwrap_or_else(|_| black())
+    }
+}
+
+impl From<PaletteColor> for Background {
+    fn from(value: PaletteColor) -> Self {
+        Hsla::from(value).into()
+    }
+}
+
+impl From<PaletteColor> for Fill {
+    fn from(value: PaletteColor) -> Self {
+        Hsla::from(value).into()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BuiltinColor {
+    Transparent,
+    Black,
+    White,
+    Palette(PaletteColor),
+}
+
+impl BuiltinColor {
     pub const fn palette(key: PaletteKey, shade: u8) -> Self {
-        Self::Palette { key, shade }
+        Self::Palette(PaletteColor::new(key, shade))
+    }
+}
+
+impl From<BuiltinColor> for Hsla {
+    fn from(value: BuiltinColor) -> Self {
+        match value {
+            BuiltinColor::Transparent => transparent_black(),
+            BuiltinColor::Black => black(),
+            BuiltinColor::White => white(),
+            BuiltinColor::Palette(color) => color.into(),
+        }
+    }
+}
+
+impl From<BuiltinColor> for Background {
+    fn from(value: BuiltinColor) -> Self {
+        Hsla::from(value).into()
+    }
+}
+
+impl From<BuiltinColor> for Fill {
+    fn from(value: BuiltinColor) -> Self {
+        Hsla::from(value).into()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SemanticColorToken {
+    TextPrimary,
+    TextSecondary,
+    TextMuted,
+    BgCanvas,
+    BgSurface,
+    BgSoft,
+    BorderSubtle,
+    BorderStrong,
+    FocusRing,
+    StatusInfo,
+    StatusSuccess,
+    StatusWarning,
+    StatusError,
+    OverlayMask,
+}
+
+pub trait ResolveWithTheme<T> {
+    fn resolve(self, theme: &Theme) -> T;
+}
+
+impl ResolveWithTheme<Hsla> for Hsla {
+    fn resolve(self, _theme: &Theme) -> Hsla {
+        self
+    }
+}
+
+impl ResolveWithTheme<Hsla> for &Hsla {
+    fn resolve(self, _theme: &Theme) -> Hsla {
+        *self
+    }
+}
+
+impl ResolveWithTheme<Hsla> for SemanticColorToken {
+    fn resolve(self, theme: &Theme) -> Hsla {
+        match self {
+            SemanticColorToken::TextPrimary => theme.semantic.text_primary,
+            SemanticColorToken::TextSecondary => theme.semantic.text_secondary,
+            SemanticColorToken::TextMuted => theme.semantic.text_muted,
+            SemanticColorToken::BgCanvas => theme.semantic.bg_canvas,
+            SemanticColorToken::BgSurface => theme.semantic.bg_surface,
+            SemanticColorToken::BgSoft => theme.semantic.bg_soft,
+            SemanticColorToken::BorderSubtle => theme.semantic.border_subtle,
+            SemanticColorToken::BorderStrong => theme.semantic.border_strong,
+            SemanticColorToken::FocusRing => theme.semantic.focus_ring,
+            SemanticColorToken::StatusInfo => theme.semantic.status_info,
+            SemanticColorToken::StatusSuccess => theme.semantic.status_success,
+            SemanticColorToken::StatusWarning => theme.semantic.status_warning,
+            SemanticColorToken::StatusError => theme.semantic.status_error,
+            SemanticColorToken::OverlayMask => theme.semantic.overlay_mask,
+        }
+    }
+}
+
+impl ResolveWithTheme<Background> for SemanticColorToken {
+    fn resolve(self, theme: &Theme) -> Background {
+        ResolveWithTheme::<Hsla>::resolve(self, theme).into()
+    }
+}
+
+impl ResolveWithTheme<Fill> for SemanticColorToken {
+    fn resolve(self, theme: &Theme) -> Fill {
+        ResolveWithTheme::<Hsla>::resolve(self, theme).into()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ColorToken {
+    Raw(Hsla),
+    Builtin(BuiltinColor),
+    Semantic(SemanticColorToken),
+}
+
+impl ColorToken {
+    pub fn resolve(self, theme: &Theme) -> Hsla {
+        match self {
+            ColorToken::Raw(value) => value,
+            ColorToken::Builtin(value) => value.into(),
+            ColorToken::Semantic(value) => value.resolve(theme),
+        }
+    }
+}
+
+impl ResolveWithTheme<Hsla> for BuiltinColor {
+    fn resolve(self, _theme: &Theme) -> Hsla {
+        self.into()
+    }
+}
+
+impl ResolveWithTheme<Hsla> for &BuiltinColor {
+    fn resolve(self, _theme: &Theme) -> Hsla {
+        (*self).into()
+    }
+}
+
+impl ResolveWithTheme<Hsla> for ColorToken {
+    fn resolve(self, theme: &Theme) -> Hsla {
+        self.resolve(theme)
+    }
+}
+
+impl ResolveWithTheme<Hsla> for &ColorToken {
+    fn resolve(self, theme: &Theme) -> Hsla {
+        (*self).resolve(theme)
+    }
+}
+
+impl ResolveWithTheme<Background> for ColorToken {
+    fn resolve(self, theme: &Theme) -> Background {
+        ResolveWithTheme::<Hsla>::resolve(self, theme).into()
+    }
+}
+
+impl ResolveWithTheme<Background> for &ColorToken {
+    fn resolve(self, theme: &Theme) -> Background {
+        ResolveWithTheme::<Hsla>::resolve(*self, theme).into()
+    }
+}
+
+impl ResolveWithTheme<Fill> for ColorToken {
+    fn resolve(self, theme: &Theme) -> Fill {
+        ResolveWithTheme::<Hsla>::resolve(self, theme).into()
+    }
+}
+
+impl ResolveWithTheme<Fill> for &ColorToken {
+    fn resolve(self, theme: &Theme) -> Fill {
+        ResolveWithTheme::<Hsla>::resolve(*self, theme).into()
+    }
+}
+
+impl From<Hsla> for ColorToken {
+    fn from(value: Hsla) -> Self {
+        Self::Raw(value)
+    }
+}
+
+impl From<&Hsla> for ColorToken {
+    fn from(value: &Hsla) -> Self {
+        Self::Raw(*value)
+    }
+}
+
+impl From<BuiltinColor> for ColorToken {
+    fn from(value: BuiltinColor) -> Self {
+        Self::Builtin(value)
+    }
+}
+
+impl From<PaletteColor> for ColorToken {
+    fn from(value: PaletteColor) -> Self {
+        Self::Builtin(BuiltinColor::Palette(value))
+    }
+}
+
+impl From<SemanticColorToken> for ColorToken {
+    fn from(value: SemanticColorToken) -> Self {
+        Self::Semantic(value)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BuiltinRadius {
+    Xs,
+    Sm,
+    Md,
+    Lg,
+    Xl,
+    Pill,
+}
+
+impl BuiltinRadius {
+    pub const fn pixels(self) -> Pixels {
+        match self {
+            BuiltinRadius::Xs => px(2.0),
+            BuiltinRadius::Sm => px(4.0),
+            BuiltinRadius::Md => px(8.0),
+            BuiltinRadius::Lg => px(16.0),
+            BuiltinRadius::Xl => px(24.0),
+            BuiltinRadius::Pill => px(999.0),
+        }
+    }
+}
+
+impl From<BuiltinRadius> for Pixels {
+    fn from(value: BuiltinRadius) -> Self {
+        value.pixels()
+    }
+}
+
+impl From<BuiltinRadius> for Corners<Pixels> {
+    fn from(value: BuiltinRadius) -> Self {
+        Corners::all(value.pixels())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SemanticRadiusToken {
+    Default,
+    Xs,
+    Sm,
+    Md,
+    Lg,
+    Xl,
+    Pill,
+}
+
+impl From<Radius> for SemanticRadiusToken {
+    fn from(value: Radius) -> Self {
+        match value {
+            Radius::Xs => SemanticRadiusToken::Xs,
+            Radius::Sm => SemanticRadiusToken::Sm,
+            Radius::Md => SemanticRadiusToken::Md,
+            Radius::Lg => SemanticRadiusToken::Lg,
+            Radius::Xl => SemanticRadiusToken::Xl,
+            Radius::Pill => SemanticRadiusToken::Pill,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RadiusToken {
+    Raw(Pixels),
+    Builtin(BuiltinRadius),
+    Semantic(SemanticRadiusToken),
+}
+
+impl From<Pixels> for RadiusToken {
+    fn from(value: Pixels) -> Self {
+        Self::Raw(value)
+    }
+}
+
+impl From<BuiltinRadius> for RadiusToken {
+    fn from(value: BuiltinRadius) -> Self {
+        Self::Builtin(value)
+    }
+}
+
+impl From<SemanticRadiusToken> for RadiusToken {
+    fn from(value: SemanticRadiusToken) -> Self {
+        Self::Semantic(value)
+    }
+}
+
+impl ResolveWithTheme<Pixels> for SemanticRadiusToken {
+    fn resolve(self, theme: &Theme) -> Pixels {
+        match self {
+            SemanticRadiusToken::Default => theme.radii.default,
+            SemanticRadiusToken::Xs => theme.radii.xs,
+            SemanticRadiusToken::Sm => theme.radii.sm,
+            SemanticRadiusToken::Md => theme.radii.md,
+            SemanticRadiusToken::Lg => theme.radii.lg,
+            SemanticRadiusToken::Xl => theme.radii.xl,
+            SemanticRadiusToken::Pill => theme.radii.pill,
+        }
+    }
+}
+
+impl ResolveWithTheme<Pixels> for RadiusToken {
+    fn resolve(self, theme: &Theme) -> Pixels {
+        match self {
+            RadiusToken::Raw(value) => value,
+            RadiusToken::Builtin(value) => value.into(),
+            RadiusToken::Semantic(value) => value.resolve(theme),
+        }
+    }
+}
+
+impl ResolveWithTheme<Pixels> for &RadiusToken {
+    fn resolve(self, theme: &Theme) -> Pixels {
+        (*self).resolve(theme)
+    }
+}
+
+impl ResolveWithTheme<Corners<Pixels>> for RadiusToken {
+    fn resolve(self, theme: &Theme) -> Corners<Pixels> {
+        Corners::all(ResolveWithTheme::<Pixels>::resolve(self, theme))
+    }
+}
+
+impl ResolveWithTheme<Corners<Pixels>> for &RadiusToken {
+    fn resolve(self, theme: &Theme) -> Corners<Pixels> {
+        Corners::all(ResolveWithTheme::<Pixels>::resolve(*self, theme))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ThemeRadii {
+    pub default: Pixels,
+    pub xs: Pixels,
+    pub sm: Pixels,
+    pub md: Pixels,
+    pub lg: Pixels,
+    pub xl: Pixels,
+    pub pill: Pixels,
+}
+
+impl Default for ThemeRadii {
+    fn default() -> Self {
+        Self {
+            default: px(4.0),
+            xs: px(2.0),
+            sm: px(4.0),
+            md: px(8.0),
+            lg: px(16.0),
+            xl: px(24.0),
+            pill: px(999.0),
+        }
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SemanticColors {
-    pub text_primary: ColorValue,
-    pub text_secondary: ColorValue,
-    pub text_muted: ColorValue,
-    pub bg_canvas: ColorValue,
-    pub bg_surface: ColorValue,
-    pub bg_soft: ColorValue,
-    pub border_subtle: ColorValue,
-    pub border_strong: ColorValue,
-    pub focus_ring: ColorValue,
-    pub status_info: ColorValue,
-    pub status_success: ColorValue,
-    pub status_warning: ColorValue,
-    pub status_error: ColorValue,
-    pub overlay_mask: ColorValue,
+    pub text_primary: Hsla,
+    pub text_secondary: Hsla,
+    pub text_muted: Hsla,
+    pub bg_canvas: Hsla,
+    pub bg_surface: Hsla,
+    pub bg_soft: Hsla,
+    pub border_subtle: Hsla,
+    pub border_strong: Hsla,
+    pub focus_ring: Hsla,
+    pub status_info: Hsla,
+    pub status_success: Hsla,
+    pub status_warning: Hsla,
+    pub status_error: Hsla,
+    pub overlay_mask: Hsla,
 }
 
 impl SemanticColors {
@@ -67,36 +447,110 @@ impl SemanticColors {
     pub fn defaults_for(primary: PaletteKey, scheme: ColorScheme) -> Self {
         match scheme {
             ColorScheme::Light => Self {
-                text_primary: ColorValue::palette(PaletteKey::Dark, 9),
-                text_secondary: ColorValue::palette(PaletteKey::Gray, 7),
-                text_muted: ColorValue::palette(PaletteKey::Gray, 6),
-                bg_canvas: ColorValue::White,
-                bg_surface: ColorValue::palette(PaletteKey::Gray, 0),
-                bg_soft: ColorValue::palette(PaletteKey::Gray, 1),
-                border_subtle: ColorValue::palette(PaletteKey::Gray, 3),
-                border_strong: ColorValue::palette(PaletteKey::Gray, 5),
-                focus_ring: ColorValue::palette(primary, 6),
-                status_info: ColorValue::palette(PaletteKey::Blue, 6),
-                status_success: ColorValue::palette(PaletteKey::Green, 6),
-                status_warning: ColorValue::palette(PaletteKey::Yellow, 7),
-                status_error: ColorValue::palette(PaletteKey::Red, 6),
-                overlay_mask: ColorValue::Custom("#00000073".to_string()),
+                text_primary: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                text_secondary: (Rgba::try_from(
+                    PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
+                )
+                .map(Into::into)
+                .unwrap_or_else(|_| black())),
+                text_muted: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[6 as usize])
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                bg_canvas: white(),
+                bg_surface: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                bg_soft: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[1 as usize])
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                border_subtle: (Rgba::try_from(
+                    PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                )
+                .map(Into::into)
+                .unwrap_or_else(|_| black())),
+                border_strong: (Rgba::try_from(
+                    PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                )
+                .map(Into::into)
+                .unwrap_or_else(|_| black())),
+                focus_ring: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                status_info: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Blue)[6 as usize])
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                status_success: (Rgba::try_from(
+                    PaletteCatalog::scale(PaletteKey::Green)[6 as usize],
+                )
+                .map(Into::into)
+                .unwrap_or_else(|_| black())),
+                status_warning: (Rgba::try_from(
+                    PaletteCatalog::scale(PaletteKey::Yellow)[7 as usize],
+                )
+                .map(Into::into)
+                .unwrap_or_else(|_| black())),
+                status_error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[6 as usize])
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                overlay_mask: (Rgba::try_from("#00000073")
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
             },
             ColorScheme::Dark => Self {
-                text_primary: ColorValue::palette(PaletteKey::Gray, 0),
-                text_secondary: ColorValue::palette(PaletteKey::Gray, 3),
-                text_muted: ColorValue::palette(PaletteKey::Gray, 5),
-                bg_canvas: ColorValue::palette(PaletteKey::Dark, 9),
-                bg_surface: ColorValue::palette(PaletteKey::Dark, 8),
-                bg_soft: ColorValue::palette(PaletteKey::Dark, 7),
-                border_subtle: ColorValue::palette(PaletteKey::Dark, 5),
-                border_strong: ColorValue::palette(PaletteKey::Dark, 4),
-                focus_ring: ColorValue::palette(primary, 5),
-                status_info: ColorValue::palette(PaletteKey::Blue, 4),
-                status_success: ColorValue::palette(PaletteKey::Green, 4),
-                status_warning: ColorValue::palette(PaletteKey::Yellow, 4),
-                status_error: ColorValue::palette(PaletteKey::Red, 4),
-                overlay_mask: ColorValue::Custom("#000000CC".to_string()),
+                text_primary: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                text_secondary: (Rgba::try_from(
+                    PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                )
+                .map(Into::into)
+                .unwrap_or_else(|_| black())),
+                text_muted: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[5 as usize])
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                bg_canvas: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                bg_surface: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                bg_soft: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[7 as usize])
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                border_subtle: (Rgba::try_from(
+                    PaletteCatalog::scale(PaletteKey::Dark)[5 as usize],
+                )
+                .map(Into::into)
+                .unwrap_or_else(|_| black())),
+                border_strong: (Rgba::try_from(
+                    PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                )
+                .map(Into::into)
+                .unwrap_or_else(|_| black())),
+                focus_ring: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                status_info: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Blue)[4 as usize])
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                status_success: (Rgba::try_from(
+                    PaletteCatalog::scale(PaletteKey::Green)[4 as usize],
+                )
+                .map(Into::into)
+                .unwrap_or_else(|_| black())),
+                status_warning: (Rgba::try_from(
+                    PaletteCatalog::scale(PaletteKey::Yellow)[4 as usize],
+                )
+                .map(Into::into)
+                .unwrap_or_else(|_| black())),
+                status_error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[4 as usize])
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                overlay_mask: (Rgba::try_from("#000000CC")
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
             },
         }
     }
@@ -104,442 +558,472 @@ impl SemanticColors {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ButtonTokens {
-    pub filled_bg: ColorValue,
-    pub filled_fg: ColorValue,
-    pub light_bg: ColorValue,
-    pub light_fg: ColorValue,
-    pub subtle_bg: ColorValue,
-    pub subtle_fg: ColorValue,
-    pub outline_border: ColorValue,
-    pub outline_fg: ColorValue,
-    pub ghost_fg: ColorValue,
-    pub disabled_bg: ColorValue,
-    pub disabled_fg: ColorValue,
+    pub filled_bg: Hsla,
+    pub filled_fg: Hsla,
+    pub light_bg: Hsla,
+    pub light_fg: Hsla,
+    pub subtle_bg: Hsla,
+    pub subtle_fg: Hsla,
+    pub outline_border: Hsla,
+    pub outline_fg: Hsla,
+    pub ghost_fg: Hsla,
+    pub disabled_bg: Hsla,
+    pub disabled_fg: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InputTokens {
-    pub bg: ColorValue,
-    pub fg: ColorValue,
-    pub placeholder: ColorValue,
-    pub border: ColorValue,
-    pub border_focus: ColorValue,
-    pub border_error: ColorValue,
-    pub label: ColorValue,
-    pub description: ColorValue,
-    pub error: ColorValue,
+    pub bg: Hsla,
+    pub fg: Hsla,
+    pub placeholder: Hsla,
+    pub border: Hsla,
+    pub border_focus: Hsla,
+    pub border_error: Hsla,
+    pub label: Hsla,
+    pub description: Hsla,
+    pub error: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RadioTokens {
-    pub control_bg: ColorValue,
-    pub border: ColorValue,
-    pub border_checked: ColorValue,
-    pub indicator: ColorValue,
-    pub label: ColorValue,
-    pub description: ColorValue,
+    pub control_bg: Hsla,
+    pub border: Hsla,
+    pub border_checked: Hsla,
+    pub indicator: Hsla,
+    pub label: Hsla,
+    pub description: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CheckboxTokens {
-    pub control_bg: ColorValue,
-    pub control_bg_checked: ColorValue,
-    pub border: ColorValue,
-    pub border_checked: ColorValue,
-    pub indicator: ColorValue,
-    pub label: ColorValue,
-    pub description: ColorValue,
+    pub control_bg: Hsla,
+    pub control_bg_checked: Hsla,
+    pub border: Hsla,
+    pub border_checked: Hsla,
+    pub indicator: Hsla,
+    pub label: Hsla,
+    pub description: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SwitchTokens {
-    pub track_off_bg: ColorValue,
-    pub track_on_bg: ColorValue,
-    pub thumb_bg: ColorValue,
-    pub label: ColorValue,
-    pub description: ColorValue,
+    pub track_off_bg: Hsla,
+    pub track_on_bg: Hsla,
+    pub thumb_bg: Hsla,
+    pub label: Hsla,
+    pub description: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ChipTokens {
-    pub unchecked_bg: ColorValue,
-    pub unchecked_fg: ColorValue,
-    pub unchecked_border: ColorValue,
-    pub filled_bg: ColorValue,
-    pub filled_fg: ColorValue,
-    pub light_bg: ColorValue,
-    pub light_fg: ColorValue,
-    pub subtle_bg: ColorValue,
-    pub subtle_fg: ColorValue,
-    pub outline_border: ColorValue,
-    pub outline_fg: ColorValue,
-    pub ghost_fg: ColorValue,
-    pub default_bg: ColorValue,
-    pub default_fg: ColorValue,
-    pub default_border: ColorValue,
+    pub unchecked_bg: Hsla,
+    pub unchecked_fg: Hsla,
+    pub unchecked_border: Hsla,
+    pub filled_bg: Hsla,
+    pub filled_fg: Hsla,
+    pub light_bg: Hsla,
+    pub light_fg: Hsla,
+    pub subtle_bg: Hsla,
+    pub subtle_fg: Hsla,
+    pub outline_border: Hsla,
+    pub outline_fg: Hsla,
+    pub ghost_fg: Hsla,
+    pub default_bg: Hsla,
+    pub default_fg: Hsla,
+    pub default_border: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BadgeTokens {
-    pub filled_bg: ColorValue,
-    pub filled_fg: ColorValue,
-    pub light_bg: ColorValue,
-    pub light_fg: ColorValue,
-    pub subtle_bg: ColorValue,
-    pub subtle_fg: ColorValue,
-    pub outline_border: ColorValue,
-    pub outline_fg: ColorValue,
-    pub default_bg: ColorValue,
-    pub default_fg: ColorValue,
-    pub default_border: ColorValue,
+    pub filled_bg: Hsla,
+    pub filled_fg: Hsla,
+    pub light_bg: Hsla,
+    pub light_fg: Hsla,
+    pub subtle_bg: Hsla,
+    pub subtle_fg: Hsla,
+    pub outline_border: Hsla,
+    pub outline_fg: Hsla,
+    pub default_bg: Hsla,
+    pub default_fg: Hsla,
+    pub default_border: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AccordionTokens {
-    pub item_bg: ColorValue,
-    pub item_border: ColorValue,
-    pub label: ColorValue,
-    pub description: ColorValue,
-    pub content: ColorValue,
-    pub chevron: ColorValue,
+    pub item_bg: Hsla,
+    pub item_border: Hsla,
+    pub label: Hsla,
+    pub description: Hsla,
+    pub content: Hsla,
+    pub chevron: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MenuTokens {
-    pub dropdown_bg: ColorValue,
-    pub dropdown_border: ColorValue,
-    pub item_fg: ColorValue,
-    pub item_hover_bg: ColorValue,
-    pub item_disabled_fg: ColorValue,
-    pub icon: ColorValue,
+    pub dropdown_bg: Hsla,
+    pub dropdown_border: Hsla,
+    pub item_fg: Hsla,
+    pub item_hover_bg: Hsla,
+    pub item_disabled_fg: Hsla,
+    pub icon: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProgressTokens {
-    pub track_bg: ColorValue,
-    pub fill_bg: ColorValue,
-    pub label: ColorValue,
+    pub track_bg: Hsla,
+    pub fill_bg: Hsla,
+    pub label: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SliderTokens {
-    pub track_bg: ColorValue,
-    pub fill_bg: ColorValue,
-    pub thumb_bg: ColorValue,
-    pub thumb_border: ColorValue,
-    pub label: ColorValue,
-    pub value: ColorValue,
+    pub track_bg: Hsla,
+    pub fill_bg: Hsla,
+    pub thumb_bg: Hsla,
+    pub thumb_border: Hsla,
+    pub label: Hsla,
+    pub value: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OverlayTokens {
-    pub bg: ColorValue,
+    pub bg: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LoadingOverlayTokens {
-    pub bg: ColorValue,
-    pub loader_color: ColorValue,
-    pub label: ColorValue,
+    pub bg: Hsla,
+    pub loader_color: Hsla,
+    pub label: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PopoverTokens {
-    pub bg: ColorValue,
-    pub border: ColorValue,
-    pub title: ColorValue,
-    pub body: ColorValue,
+    pub bg: Hsla,
+    pub border: Hsla,
+    pub title: Hsla,
+    pub body: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TooltipTokens {
-    pub bg: ColorValue,
-    pub fg: ColorValue,
-    pub border: ColorValue,
+    pub bg: Hsla,
+    pub fg: Hsla,
+    pub border: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HoverCardTokens {
-    pub bg: ColorValue,
-    pub border: ColorValue,
-    pub title: ColorValue,
-    pub body: ColorValue,
+    pub bg: Hsla,
+    pub border: Hsla,
+    pub title: Hsla,
+    pub body: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SelectTokens {
-    pub bg: ColorValue,
-    pub fg: ColorValue,
-    pub placeholder: ColorValue,
-    pub border: ColorValue,
-    pub border_focus: ColorValue,
-    pub border_error: ColorValue,
-    pub dropdown_bg: ColorValue,
-    pub dropdown_border: ColorValue,
-    pub option_fg: ColorValue,
-    pub option_hover_bg: ColorValue,
-    pub option_selected_bg: ColorValue,
-    pub tag_bg: ColorValue,
-    pub tag_fg: ColorValue,
-    pub tag_border: ColorValue,
-    pub icon: ColorValue,
-    pub label: ColorValue,
-    pub description: ColorValue,
-    pub error: ColorValue,
+    pub bg: Hsla,
+    pub fg: Hsla,
+    pub placeholder: Hsla,
+    pub border: Hsla,
+    pub border_focus: Hsla,
+    pub border_error: Hsla,
+    pub dropdown_bg: Hsla,
+    pub dropdown_border: Hsla,
+    pub option_fg: Hsla,
+    pub option_hover_bg: Hsla,
+    pub option_selected_bg: Hsla,
+    pub tag_bg: Hsla,
+    pub tag_fg: Hsla,
+    pub tag_border: Hsla,
+    pub icon: Hsla,
+    pub label: Hsla,
+    pub description: Hsla,
+    pub error: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ModalTokens {
-    pub panel_bg: ColorValue,
-    pub panel_border: ColorValue,
-    pub overlay_bg: ColorValue,
-    pub title: ColorValue,
-    pub body: ColorValue,
+    pub panel_bg: Hsla,
+    pub panel_border: Hsla,
+    pub overlay_bg: Hsla,
+    pub title: Hsla,
+    pub body: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ToastTokens {
-    pub info_bg: ColorValue,
-    pub info_fg: ColorValue,
-    pub success_bg: ColorValue,
-    pub success_fg: ColorValue,
-    pub warning_bg: ColorValue,
-    pub warning_fg: ColorValue,
-    pub error_bg: ColorValue,
-    pub error_fg: ColorValue,
+    pub info_bg: Hsla,
+    pub info_fg: Hsla,
+    pub success_bg: Hsla,
+    pub success_fg: Hsla,
+    pub warning_bg: Hsla,
+    pub warning_fg: Hsla,
+    pub error_bg: Hsla,
+    pub error_fg: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DividerTokens {
-    pub line: ColorValue,
-    pub label: ColorValue,
+    pub line: Hsla,
+    pub label: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ScrollAreaTokens {
-    pub bg: ColorValue,
-    pub border: ColorValue,
+    pub bg: Hsla,
+    pub border: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DrawerTokens {
-    pub panel_bg: ColorValue,
-    pub panel_border: ColorValue,
-    pub overlay_bg: ColorValue,
-    pub title: ColorValue,
-    pub body: ColorValue,
+    pub panel_bg: Hsla,
+    pub panel_border: Hsla,
+    pub overlay_bg: Hsla,
+    pub title: Hsla,
+    pub body: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AppShellTokens {
-    pub bg: ColorValue,
+    pub bg: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TitleBarTokens {
-    pub bg: ColorValue,
-    pub border: ColorValue,
-    pub fg: ColorValue,
-    pub controls_bg: ColorValue,
+    pub bg: Hsla,
+    pub border: Hsla,
+    pub fg: Hsla,
+    pub controls_bg: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SidebarTokens {
-    pub bg: ColorValue,
-    pub border: ColorValue,
-    pub header_fg: ColorValue,
-    pub content_fg: ColorValue,
-    pub footer_fg: ColorValue,
+    pub bg: Hsla,
+    pub border: Hsla,
+    pub header_fg: Hsla,
+    pub content_fg: Hsla,
+    pub footer_fg: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TextTokens {
-    pub fg: ColorValue,
-    pub secondary: ColorValue,
-    pub muted: ColorValue,
-    pub accent: ColorValue,
-    pub success: ColorValue,
-    pub warning: ColorValue,
-    pub error: ColorValue,
+    pub fg: Hsla,
+    pub secondary: Hsla,
+    pub muted: Hsla,
+    pub accent: Hsla,
+    pub success: Hsla,
+    pub warning: Hsla,
+    pub error: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TitleTokens {
-    pub fg: ColorValue,
-    pub subtitle: ColorValue,
+    pub fg: Hsla,
+    pub subtitle: Hsla,
+    pub gap: Pixels,
+    pub subtitle_size: Pixels,
+    pub subtitle_line_height: Pixels,
+    pub subtitle_weight: FontWeight,
+    pub h1: TitleLevelTokens,
+    pub h2: TitleLevelTokens,
+    pub h3: TitleLevelTokens,
+    pub h4: TitleLevelTokens,
+    pub h5: TitleLevelTokens,
+    pub h6: TitleLevelTokens,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TitleLevelTokens {
+    pub font_size: Pixels,
+    pub line_height: Pixels,
+    pub weight: FontWeight,
+}
+
+impl TitleTokens {
+    pub fn level(&self, order: u8) -> TitleLevelTokens {
+        match order.clamp(1, 6) {
+            1 => self.h1,
+            2 => self.h2,
+            3 => self.h3,
+            4 => self.h4,
+            5 => self.h5,
+            _ => self.h6,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaperTokens {
-    pub bg: ColorValue,
-    pub border: ColorValue,
+    pub bg: Hsla,
+    pub border: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ActionIconTokens {
-    pub filled_bg: ColorValue,
-    pub filled_fg: ColorValue,
-    pub light_bg: ColorValue,
-    pub light_fg: ColorValue,
-    pub subtle_bg: ColorValue,
-    pub subtle_fg: ColorValue,
-    pub outline_border: ColorValue,
-    pub outline_fg: ColorValue,
-    pub ghost_fg: ColorValue,
-    pub default_bg: ColorValue,
-    pub default_fg: ColorValue,
-    pub default_border: ColorValue,
-    pub disabled_bg: ColorValue,
-    pub disabled_fg: ColorValue,
-    pub disabled_border: ColorValue,
+    pub filled_bg: Hsla,
+    pub filled_fg: Hsla,
+    pub light_bg: Hsla,
+    pub light_fg: Hsla,
+    pub subtle_bg: Hsla,
+    pub subtle_fg: Hsla,
+    pub outline_border: Hsla,
+    pub outline_fg: Hsla,
+    pub ghost_fg: Hsla,
+    pub default_bg: Hsla,
+    pub default_fg: Hsla,
+    pub default_border: Hsla,
+    pub disabled_bg: Hsla,
+    pub disabled_fg: Hsla,
+    pub disabled_border: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SegmentedControlTokens {
-    pub bg: ColorValue,
-    pub border: ColorValue,
-    pub item_fg: ColorValue,
-    pub item_active_bg: ColorValue,
-    pub item_active_fg: ColorValue,
-    pub item_hover_bg: ColorValue,
-    pub item_disabled_fg: ColorValue,
+    pub bg: Hsla,
+    pub border: Hsla,
+    pub item_fg: Hsla,
+    pub item_active_bg: Hsla,
+    pub item_active_fg: Hsla,
+    pub item_hover_bg: Hsla,
+    pub item_disabled_fg: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TextareaTokens {
-    pub bg: ColorValue,
-    pub fg: ColorValue,
-    pub placeholder: ColorValue,
-    pub border: ColorValue,
-    pub border_focus: ColorValue,
-    pub border_error: ColorValue,
-    pub label: ColorValue,
-    pub description: ColorValue,
-    pub error: ColorValue,
+    pub bg: Hsla,
+    pub fg: Hsla,
+    pub placeholder: Hsla,
+    pub border: Hsla,
+    pub border_focus: Hsla,
+    pub border_error: Hsla,
+    pub label: Hsla,
+    pub description: Hsla,
+    pub error: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NumberInputTokens {
-    pub bg: ColorValue,
-    pub fg: ColorValue,
-    pub placeholder: ColorValue,
-    pub border: ColorValue,
-    pub border_focus: ColorValue,
-    pub border_error: ColorValue,
-    pub controls_bg: ColorValue,
-    pub controls_fg: ColorValue,
-    pub controls_border: ColorValue,
-    pub label: ColorValue,
-    pub description: ColorValue,
-    pub error: ColorValue,
+    pub bg: Hsla,
+    pub fg: Hsla,
+    pub placeholder: Hsla,
+    pub border: Hsla,
+    pub border_focus: Hsla,
+    pub border_error: Hsla,
+    pub controls_bg: Hsla,
+    pub controls_fg: Hsla,
+    pub controls_border: Hsla,
+    pub label: Hsla,
+    pub description: Hsla,
+    pub error: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RangeSliderTokens {
-    pub track_bg: ColorValue,
-    pub range_bg: ColorValue,
-    pub thumb_bg: ColorValue,
-    pub thumb_border: ColorValue,
-    pub label: ColorValue,
-    pub value: ColorValue,
+    pub track_bg: Hsla,
+    pub range_bg: Hsla,
+    pub thumb_bg: Hsla,
+    pub thumb_border: Hsla,
+    pub label: Hsla,
+    pub value: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RatingTokens {
-    pub active: ColorValue,
-    pub inactive: ColorValue,
+    pub active: Hsla,
+    pub inactive: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TabsTokens {
-    pub list_bg: ColorValue,
-    pub list_border: ColorValue,
-    pub tab_fg: ColorValue,
-    pub tab_active_bg: ColorValue,
-    pub tab_active_fg: ColorValue,
-    pub tab_hover_bg: ColorValue,
-    pub tab_disabled_fg: ColorValue,
-    pub panel_bg: ColorValue,
-    pub panel_border: ColorValue,
-    pub panel_fg: ColorValue,
+    pub list_bg: Hsla,
+    pub list_border: Hsla,
+    pub tab_fg: Hsla,
+    pub tab_active_bg: Hsla,
+    pub tab_active_fg: Hsla,
+    pub tab_hover_bg: Hsla,
+    pub tab_disabled_fg: Hsla,
+    pub panel_bg: Hsla,
+    pub panel_border: Hsla,
+    pub panel_fg: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaginationTokens {
-    pub item_bg: ColorValue,
-    pub item_border: ColorValue,
-    pub item_fg: ColorValue,
-    pub item_active_bg: ColorValue,
-    pub item_active_fg: ColorValue,
-    pub item_hover_bg: ColorValue,
-    pub item_disabled_fg: ColorValue,
-    pub dots_fg: ColorValue,
+    pub item_bg: Hsla,
+    pub item_border: Hsla,
+    pub item_fg: Hsla,
+    pub item_active_bg: Hsla,
+    pub item_active_fg: Hsla,
+    pub item_hover_bg: Hsla,
+    pub item_disabled_fg: Hsla,
+    pub dots_fg: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BreadcrumbsTokens {
-    pub item_fg: ColorValue,
-    pub item_current_fg: ColorValue,
-    pub separator: ColorValue,
-    pub item_hover_bg: ColorValue,
+    pub item_fg: Hsla,
+    pub item_current_fg: Hsla,
+    pub separator: Hsla,
+    pub item_hover_bg: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TableTokens {
-    pub header_bg: ColorValue,
-    pub header_fg: ColorValue,
-    pub row_bg: ColorValue,
-    pub row_alt_bg: ColorValue,
-    pub row_hover_bg: ColorValue,
-    pub row_border: ColorValue,
-    pub cell_fg: ColorValue,
-    pub caption: ColorValue,
+    pub header_bg: Hsla,
+    pub header_fg: Hsla,
+    pub row_bg: Hsla,
+    pub row_alt_bg: Hsla,
+    pub row_hover_bg: Hsla,
+    pub row_border: Hsla,
+    pub cell_fg: Hsla,
+    pub caption: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StepperTokens {
-    pub step_bg: ColorValue,
-    pub step_border: ColorValue,
-    pub step_fg: ColorValue,
-    pub step_active_bg: ColorValue,
-    pub step_active_border: ColorValue,
-    pub step_active_fg: ColorValue,
-    pub step_completed_bg: ColorValue,
-    pub step_completed_border: ColorValue,
-    pub step_completed_fg: ColorValue,
-    pub connector: ColorValue,
-    pub label: ColorValue,
-    pub description: ColorValue,
-    pub panel_bg: ColorValue,
-    pub panel_border: ColorValue,
-    pub panel_fg: ColorValue,
+    pub step_bg: Hsla,
+    pub step_border: Hsla,
+    pub step_fg: Hsla,
+    pub step_active_bg: Hsla,
+    pub step_active_border: Hsla,
+    pub step_active_fg: Hsla,
+    pub step_completed_bg: Hsla,
+    pub step_completed_border: Hsla,
+    pub step_completed_fg: Hsla,
+    pub connector: Hsla,
+    pub label: Hsla,
+    pub description: Hsla,
+    pub panel_bg: Hsla,
+    pub panel_border: Hsla,
+    pub panel_fg: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TimelineTokens {
-    pub bullet_bg: ColorValue,
-    pub bullet_border: ColorValue,
-    pub bullet_fg: ColorValue,
-    pub bullet_active_bg: ColorValue,
-    pub bullet_active_border: ColorValue,
-    pub bullet_active_fg: ColorValue,
-    pub line: ColorValue,
-    pub line_active: ColorValue,
-    pub title: ColorValue,
-    pub title_active: ColorValue,
-    pub body: ColorValue,
-    pub card_bg: ColorValue,
-    pub card_border: ColorValue,
+    pub bullet_bg: Hsla,
+    pub bullet_border: Hsla,
+    pub bullet_fg: Hsla,
+    pub bullet_active_bg: Hsla,
+    pub bullet_active_border: Hsla,
+    pub bullet_active_fg: Hsla,
+    pub line: Hsla,
+    pub line_active: Hsla,
+    pub title: Hsla,
+    pub title_active: Hsla,
+    pub body: Hsla,
+    pub card_bg: Hsla,
+    pub card_border: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TreeTokens {
-    pub row_fg: ColorValue,
-    pub row_selected_fg: ColorValue,
-    pub row_selected_bg: ColorValue,
-    pub row_hover_bg: ColorValue,
-    pub row_disabled_fg: ColorValue,
-    pub line: ColorValue,
+    pub row_fg: Hsla,
+    pub row_selected_fg: Hsla,
+    pub row_selected_bg: Hsla,
+    pub row_hover_bg: Hsla,
+    pub row_disabled_fg: Hsla,
+    pub line: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -596,722 +1080,2218 @@ impl ComponentTokens {
         match scheme {
             ColorScheme::Light => Self {
                 button: ButtonTokens {
-                    filled_bg: ColorValue::palette(primary, 6),
-                    filled_fg: ColorValue::White,
-                    light_bg: ColorValue::palette(primary, 0),
-                    light_fg: ColorValue::palette(primary, 6),
-                    subtle_bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    subtle_fg: ColorValue::palette(PaletteKey::Gray, 8),
-                    outline_border: ColorValue::palette(primary, 4),
-                    outline_fg: ColorValue::palette(primary, 7),
-                    ghost_fg: ColorValue::palette(primary, 6),
-                    disabled_bg: ColorValue::palette(PaletteKey::Gray, 2),
-                    disabled_fg: ColorValue::palette(PaletteKey::Gray, 5),
+                    filled_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    filled_fg: white(),
+                    light_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    light_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    subtle_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    subtle_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    outline_border: (Rgba::try_from(PaletteCatalog::scale(primary)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    outline_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    ghost_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    disabled_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[2 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    disabled_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 input: InputTokens {
-                    bg: ColorValue::White,
-                    fg: ColorValue::palette(PaletteKey::Dark, 9),
-                    placeholder: ColorValue::palette(PaletteKey::Gray, 5),
-                    border: ColorValue::palette(PaletteKey::Gray, 4),
-                    border_focus: ColorValue::palette(primary, 6),
-                    border_error: ColorValue::palette(PaletteKey::Red, 6),
-                    label: ColorValue::palette(PaletteKey::Dark, 8),
-                    description: ColorValue::palette(PaletteKey::Gray, 7),
-                    error: ColorValue::palette(PaletteKey::Red, 6),
+                    bg: white(),
+                    fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    placeholder: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_focus: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_error: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Red)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 radio: RadioTokens {
-                    control_bg: ColorValue::White,
-                    border: ColorValue::palette(PaletteKey::Gray, 4),
-                    border_checked: ColorValue::palette(primary, 6),
-                    indicator: ColorValue::palette(primary, 6),
-                    label: ColorValue::palette(PaletteKey::Dark, 9),
-                    description: ColorValue::palette(PaletteKey::Gray, 7),
+                    control_bg: white(),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_checked: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    indicator: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 checkbox: CheckboxTokens {
-                    control_bg: ColorValue::White,
-                    control_bg_checked: ColorValue::palette(primary, 6),
-                    border: ColorValue::palette(PaletteKey::Gray, 4),
-                    border_checked: ColorValue::palette(primary, 6),
-                    indicator: ColorValue::White,
-                    label: ColorValue::palette(PaletteKey::Dark, 9),
-                    description: ColorValue::palette(PaletteKey::Gray, 7),
+                    control_bg: white(),
+                    control_bg_checked: (Rgba::try_from(
+                        PaletteCatalog::scale(primary)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_checked: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    indicator: white(),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 switch: SwitchTokens {
-                    track_off_bg: ColorValue::palette(PaletteKey::Gray, 4),
-                    track_on_bg: ColorValue::palette(primary, 6),
-                    thumb_bg: ColorValue::White,
-                    label: ColorValue::palette(PaletteKey::Dark, 9),
-                    description: ColorValue::palette(PaletteKey::Gray, 7),
+                    track_off_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    track_on_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    thumb_bg: white(),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 chip: ChipTokens {
-                    unchecked_bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    unchecked_fg: ColorValue::palette(PaletteKey::Gray, 8),
-                    unchecked_border: ColorValue::palette(PaletteKey::Gray, 3),
-                    filled_bg: ColorValue::palette(primary, 6),
-                    filled_fg: ColorValue::White,
-                    light_bg: ColorValue::palette(primary, 0),
-                    light_fg: ColorValue::palette(primary, 7),
-                    subtle_bg: ColorValue::palette(PaletteKey::Gray, 1),
-                    subtle_fg: ColorValue::palette(PaletteKey::Gray, 8),
-                    outline_border: ColorValue::palette(primary, 4),
-                    outline_fg: ColorValue::palette(primary, 7),
-                    ghost_fg: ColorValue::palette(primary, 6),
-                    default_bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    default_fg: ColorValue::palette(PaletteKey::Dark, 8),
-                    default_border: ColorValue::palette(PaletteKey::Gray, 3),
+                    unchecked_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    unchecked_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    unchecked_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    filled_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    filled_fg: white(),
+                    light_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    light_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    subtle_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    subtle_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    outline_border: (Rgba::try_from(PaletteCatalog::scale(primary)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    outline_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    ghost_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    default_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    default_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    default_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 badge: BadgeTokens {
-                    filled_bg: ColorValue::palette(primary, 6),
-                    filled_fg: ColorValue::White,
-                    light_bg: ColorValue::palette(primary, 0),
-                    light_fg: ColorValue::palette(primary, 7),
-                    subtle_bg: ColorValue::palette(PaletteKey::Gray, 1),
-                    subtle_fg: ColorValue::palette(PaletteKey::Gray, 8),
-                    outline_border: ColorValue::palette(primary, 4),
-                    outline_fg: ColorValue::palette(primary, 7),
-                    default_bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    default_fg: ColorValue::palette(PaletteKey::Dark, 8),
-                    default_border: ColorValue::palette(PaletteKey::Gray, 3),
+                    filled_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    filled_fg: white(),
+                    light_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    light_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    subtle_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    subtle_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    outline_border: (Rgba::try_from(PaletteCatalog::scale(primary)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    outline_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    default_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    default_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    default_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 accordion: AccordionTokens {
-                    item_bg: ColorValue::White,
-                    item_border: ColorValue::palette(PaletteKey::Gray, 3),
-                    label: ColorValue::palette(PaletteKey::Dark, 9),
-                    description: ColorValue::palette(PaletteKey::Gray, 7),
-                    content: ColorValue::palette(PaletteKey::Dark, 8),
-                    chevron: ColorValue::palette(PaletteKey::Gray, 7),
+                    item_bg: white(),
+                    item_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    content: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    chevron: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 menu: MenuTokens {
-                    dropdown_bg: ColorValue::White,
-                    dropdown_border: ColorValue::palette(PaletteKey::Gray, 3),
-                    item_fg: ColorValue::palette(PaletteKey::Dark, 9),
-                    item_hover_bg: ColorValue::palette(PaletteKey::Gray, 1),
-                    item_disabled_fg: ColorValue::palette(PaletteKey::Gray, 5),
-                    icon: ColorValue::palette(PaletteKey::Gray, 7),
+                    dropdown_bg: white(),
+                    dropdown_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    item_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    item_hover_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    item_disabled_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    icon: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 progress: ProgressTokens {
-                    track_bg: ColorValue::palette(PaletteKey::Gray, 2),
-                    fill_bg: ColorValue::palette(primary, 6),
-                    label: ColorValue::palette(PaletteKey::Dark, 8),
+                    track_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    fill_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 slider: SliderTokens {
-                    track_bg: ColorValue::palette(PaletteKey::Gray, 2),
-                    fill_bg: ColorValue::palette(primary, 6),
-                    thumb_bg: ColorValue::White,
-                    thumb_border: ColorValue::palette(primary, 6),
-                    label: ColorValue::palette(PaletteKey::Dark, 8),
-                    value: ColorValue::palette(PaletteKey::Gray, 7),
+                    track_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    fill_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    thumb_bg: white(),
+                    thumb_border: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    value: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 overlay: OverlayTokens {
-                    bg: ColorValue::Custom("#000000E6".to_string()),
+                    bg: (Rgba::try_from("#000000E6")
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 loading_overlay: LoadingOverlayTokens {
-                    bg: ColorValue::Custom("#000000E6".to_string()),
-                    loader_color: ColorValue::palette(primary, 6),
-                    label: ColorValue::White,
+                    bg: (Rgba::try_from("#000000E6")
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    loader_color: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    label: white(),
                 },
                 popover: PopoverTokens {
-                    bg: ColorValue::White,
-                    border: ColorValue::palette(PaletteKey::Gray, 3),
-                    title: ColorValue::palette(PaletteKey::Dark, 9),
-                    body: ColorValue::palette(PaletteKey::Gray, 8),
+                    bg: white(),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    title: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 tooltip: TooltipTokens {
-                    bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    fg: ColorValue::White,
-                    border: ColorValue::palette(PaletteKey::Dark, 6),
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    fg: white(),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 hover_card: HoverCardTokens {
-                    bg: ColorValue::White,
-                    border: ColorValue::palette(PaletteKey::Gray, 3),
-                    title: ColorValue::palette(PaletteKey::Dark, 9),
-                    body: ColorValue::palette(PaletteKey::Gray, 8),
+                    bg: white(),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    title: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 select: SelectTokens {
-                    bg: ColorValue::White,
-                    fg: ColorValue::palette(PaletteKey::Dark, 9),
-                    placeholder: ColorValue::palette(PaletteKey::Gray, 5),
-                    border: ColorValue::palette(PaletteKey::Gray, 4),
-                    border_focus: ColorValue::palette(primary, 6),
-                    border_error: ColorValue::palette(PaletteKey::Red, 6),
-                    dropdown_bg: ColorValue::White,
-                    dropdown_border: ColorValue::palette(PaletteKey::Gray, 3),
-                    option_fg: ColorValue::palette(PaletteKey::Dark, 9),
-                    option_hover_bg: ColorValue::palette(PaletteKey::Gray, 1),
-                    option_selected_bg: ColorValue::palette(primary, 0),
-                    tag_bg: ColorValue::palette(primary, 0),
-                    tag_fg: ColorValue::palette(primary, 7),
-                    tag_border: ColorValue::palette(primary, 3),
-                    icon: ColorValue::palette(PaletteKey::Gray, 7),
-                    label: ColorValue::palette(PaletteKey::Dark, 8),
-                    description: ColorValue::palette(PaletteKey::Gray, 7),
-                    error: ColorValue::palette(PaletteKey::Red, 6),
+                    bg: white(),
+                    fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    placeholder: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_focus: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_error: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Red)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    dropdown_bg: white(),
+                    dropdown_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    option_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[9 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    option_hover_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    option_selected_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(primary)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    tag_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    tag_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    tag_border: (Rgba::try_from(PaletteCatalog::scale(primary)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    icon: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 modal: ModalTokens {
-                    panel_bg: ColorValue::White,
-                    panel_border: ColorValue::palette(PaletteKey::Gray, 3),
-                    overlay_bg: ColorValue::Custom("#000000E6".to_string()),
-                    title: ColorValue::palette(PaletteKey::Dark, 9),
-                    body: ColorValue::palette(PaletteKey::Gray, 8),
+                    panel_bg: white(),
+                    panel_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    overlay_bg: (Rgba::try_from("#000000E6")
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    title: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 toast: ToastTokens {
-                    info_bg: ColorValue::palette(PaletteKey::Blue, 0),
-                    info_fg: ColorValue::palette(PaletteKey::Blue, 8),
-                    success_bg: ColorValue::palette(PaletteKey::Green, 0),
-                    success_fg: ColorValue::palette(PaletteKey::Green, 8),
-                    warning_bg: ColorValue::palette(PaletteKey::Yellow, 0),
-                    warning_fg: ColorValue::palette(PaletteKey::Yellow, 9),
-                    error_bg: ColorValue::palette(PaletteKey::Red, 0),
-                    error_fg: ColorValue::palette(PaletteKey::Red, 8),
+                    info_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Blue)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    info_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Blue)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    success_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Green)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    success_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Green)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    warning_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Yellow)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    warning_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Yellow)[9 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    error_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    error_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 divider: DividerTokens {
-                    line: ColorValue::palette(PaletteKey::Gray, 3),
-                    label: ColorValue::palette(PaletteKey::Gray, 6),
+                    line: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 scroll_area: ScrollAreaTokens {
-                    bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    border: ColorValue::palette(PaletteKey::Gray, 3),
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 drawer: DrawerTokens {
-                    panel_bg: ColorValue::White,
-                    panel_border: ColorValue::palette(PaletteKey::Gray, 3),
-                    overlay_bg: ColorValue::Custom("#000000E6".to_string()),
-                    title: ColorValue::palette(PaletteKey::Dark, 9),
-                    body: ColorValue::palette(PaletteKey::Gray, 8),
+                    panel_bg: white(),
+                    panel_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    overlay_bg: (Rgba::try_from("#000000E6")
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    title: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
-                app_shell: AppShellTokens {
-                    bg: ColorValue::White,
-                },
+                app_shell: AppShellTokens { bg: white() },
                 title_bar: TitleBarTokens {
-                    bg: ColorValue::Custom("#00000000".to_string()),
-                    border: ColorValue::palette(PaletteKey::Gray, 3),
-                    fg: ColorValue::palette(PaletteKey::Dark, 8),
-                    controls_bg: ColorValue::palette(PaletteKey::Gray, 1),
+                    bg: transparent_black(),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    controls_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 sidebar: SidebarTokens {
-                    bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    border: ColorValue::palette(PaletteKey::Gray, 3),
-                    header_fg: ColorValue::palette(PaletteKey::Dark, 8),
-                    content_fg: ColorValue::palette(PaletteKey::Dark, 8),
-                    footer_fg: ColorValue::palette(PaletteKey::Gray, 7),
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    header_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    content_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    footer_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 text: TextTokens {
-                    fg: ColorValue::palette(PaletteKey::Dark, 9),
-                    secondary: ColorValue::palette(PaletteKey::Gray, 7),
-                    muted: ColorValue::palette(PaletteKey::Gray, 6),
-                    accent: ColorValue::palette(primary, 6),
-                    success: ColorValue::palette(PaletteKey::Green, 7),
-                    warning: ColorValue::palette(PaletteKey::Yellow, 8),
-                    error: ColorValue::palette(PaletteKey::Red, 6),
+                    fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    secondary: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    muted: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    accent: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    success: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Green)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    warning: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Yellow)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 title: TitleTokens {
-                    fg: ColorValue::palette(PaletteKey::Dark, 9),
-                    subtitle: ColorValue::palette(PaletteKey::Gray, 6),
+                    fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    subtitle: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    gap: px(4.0),
+                    subtitle_size: px(15.0),
+                    subtitle_line_height: px(22.0),
+                    subtitle_weight: FontWeight::NORMAL,
+                    h1: TitleLevelTokens {
+                        font_size: px(34.0),
+                        line_height: px(44.0),
+                        weight: FontWeight::BOLD,
+                    },
+                    h2: TitleLevelTokens {
+                        font_size: px(28.0),
+                        line_height: px(38.0),
+                        weight: FontWeight::BOLD,
+                    },
+                    h3: TitleLevelTokens {
+                        font_size: px(24.0),
+                        line_height: px(34.0),
+                        weight: FontWeight::SEMIBOLD,
+                    },
+                    h4: TitleLevelTokens {
+                        font_size: px(20.0),
+                        line_height: px(30.0),
+                        weight: FontWeight::SEMIBOLD,
+                    },
+                    h5: TitleLevelTokens {
+                        font_size: px(17.0),
+                        line_height: px(26.0),
+                        weight: FontWeight::SEMIBOLD,
+                    },
+                    h6: TitleLevelTokens {
+                        font_size: px(15.0),
+                        line_height: px(23.0),
+                        weight: FontWeight::MEDIUM,
+                    },
                 },
                 paper: PaperTokens {
-                    bg: ColorValue::White,
-                    border: ColorValue::palette(PaletteKey::Gray, 3),
+                    bg: white(),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 action_icon: ActionIconTokens {
-                    filled_bg: ColorValue::palette(primary, 6),
-                    filled_fg: ColorValue::White,
-                    light_bg: ColorValue::palette(primary, 0),
-                    light_fg: ColorValue::palette(primary, 6),
-                    subtle_bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    subtle_fg: ColorValue::palette(PaletteKey::Gray, 8),
-                    outline_border: ColorValue::palette(primary, 4),
-                    outline_fg: ColorValue::palette(primary, 7),
-                    ghost_fg: ColorValue::palette(primary, 6),
-                    default_bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    default_fg: ColorValue::palette(PaletteKey::Dark, 8),
-                    default_border: ColorValue::palette(PaletteKey::Gray, 3),
-                    disabled_bg: ColorValue::palette(PaletteKey::Gray, 1),
-                    disabled_fg: ColorValue::palette(PaletteKey::Gray, 5),
-                    disabled_border: ColorValue::palette(PaletteKey::Gray, 3),
+                    filled_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    filled_fg: white(),
+                    light_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    light_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    subtle_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    subtle_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    outline_border: (Rgba::try_from(PaletteCatalog::scale(primary)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    outline_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    ghost_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    default_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    default_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    default_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    disabled_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    disabled_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    disabled_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 segmented_control: SegmentedControlTokens {
-                    bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    border: ColorValue::palette(PaletteKey::Gray, 3),
-                    item_fg: ColorValue::palette(PaletteKey::Gray, 8),
-                    item_active_bg: ColorValue::White,
-                    item_active_fg: ColorValue::palette(PaletteKey::Dark, 9),
-                    item_hover_bg: ColorValue::palette(PaletteKey::Gray, 1),
-                    item_disabled_fg: ColorValue::palette(PaletteKey::Gray, 5),
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    item_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    item_active_bg: white(),
+                    item_active_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[9 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    item_hover_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    item_disabled_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 textarea: TextareaTokens {
-                    bg: ColorValue::White,
-                    fg: ColorValue::palette(PaletteKey::Dark, 9),
-                    placeholder: ColorValue::palette(PaletteKey::Gray, 5),
-                    border: ColorValue::palette(PaletteKey::Gray, 4),
-                    border_focus: ColorValue::palette(primary, 6),
-                    border_error: ColorValue::palette(PaletteKey::Red, 6),
-                    label: ColorValue::palette(PaletteKey::Dark, 8),
-                    description: ColorValue::palette(PaletteKey::Gray, 7),
-                    error: ColorValue::palette(PaletteKey::Red, 6),
+                    bg: white(),
+                    fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    placeholder: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_focus: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_error: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Red)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 number_input: NumberInputTokens {
-                    bg: ColorValue::White,
-                    fg: ColorValue::palette(PaletteKey::Dark, 9),
-                    placeholder: ColorValue::palette(PaletteKey::Gray, 5),
-                    border: ColorValue::palette(PaletteKey::Gray, 4),
-                    border_focus: ColorValue::palette(primary, 6),
-                    border_error: ColorValue::palette(PaletteKey::Red, 6),
-                    controls_bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    controls_fg: ColorValue::palette(PaletteKey::Gray, 7),
-                    controls_border: ColorValue::palette(PaletteKey::Gray, 3),
-                    label: ColorValue::palette(PaletteKey::Dark, 8),
-                    description: ColorValue::palette(PaletteKey::Gray, 7),
-                    error: ColorValue::palette(PaletteKey::Red, 6),
+                    bg: white(),
+                    fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    placeholder: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_focus: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_error: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Red)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    controls_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    controls_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    controls_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 range_slider: RangeSliderTokens {
-                    track_bg: ColorValue::palette(PaletteKey::Gray, 2),
-                    range_bg: ColorValue::palette(primary, 6),
-                    thumb_bg: ColorValue::White,
-                    thumb_border: ColorValue::palette(primary, 6),
-                    label: ColorValue::palette(PaletteKey::Dark, 8),
-                    value: ColorValue::palette(PaletteKey::Gray, 7),
+                    track_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    range_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    thumb_bg: white(),
+                    thumb_border: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    value: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 rating: RatingTokens {
-                    active: ColorValue::palette(PaletteKey::Yellow, 6),
-                    inactive: ColorValue::palette(PaletteKey::Gray, 4),
+                    active: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Yellow)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    inactive: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 tabs: TabsTokens {
-                    list_bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    list_border: ColorValue::palette(PaletteKey::Gray, 3),
-                    tab_fg: ColorValue::palette(PaletteKey::Gray, 7),
-                    tab_active_bg: ColorValue::White,
-                    tab_active_fg: ColorValue::palette(PaletteKey::Dark, 9),
-                    tab_hover_bg: ColorValue::palette(PaletteKey::Gray, 1),
-                    tab_disabled_fg: ColorValue::palette(PaletteKey::Gray, 5),
-                    panel_bg: ColorValue::White,
-                    panel_border: ColorValue::palette(PaletteKey::Gray, 3),
-                    panel_fg: ColorValue::palette(PaletteKey::Dark, 8),
+                    list_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    list_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    tab_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    tab_active_bg: white(),
+                    tab_active_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[9 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    tab_hover_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    tab_disabled_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    panel_bg: white(),
+                    panel_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    panel_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 pagination: PaginationTokens {
-                    item_bg: ColorValue::White,
-                    item_border: ColorValue::palette(PaletteKey::Gray, 3),
-                    item_fg: ColorValue::palette(PaletteKey::Dark, 8),
-                    item_active_bg: ColorValue::palette(primary, 6),
-                    item_active_fg: ColorValue::White,
-                    item_hover_bg: ColorValue::palette(PaletteKey::Gray, 1),
-                    item_disabled_fg: ColorValue::palette(PaletteKey::Gray, 5),
-                    dots_fg: ColorValue::palette(PaletteKey::Gray, 6),
+                    item_bg: white(),
+                    item_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    item_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    item_active_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    item_active_fg: white(),
+                    item_hover_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    item_disabled_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    dots_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 breadcrumbs: BreadcrumbsTokens {
-                    item_fg: ColorValue::palette(PaletteKey::Gray, 7),
-                    item_current_fg: ColorValue::palette(PaletteKey::Dark, 9),
-                    separator: ColorValue::palette(PaletteKey::Gray, 5),
-                    item_hover_bg: ColorValue::palette(PaletteKey::Gray, 1),
+                    item_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    item_current_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[9 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    separator: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    item_hover_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 table: TableTokens {
-                    header_bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    header_fg: ColorValue::palette(PaletteKey::Dark, 8),
-                    row_bg: ColorValue::White,
-                    row_alt_bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    row_hover_bg: ColorValue::palette(PaletteKey::Gray, 1),
-                    row_border: ColorValue::palette(PaletteKey::Gray, 3),
-                    cell_fg: ColorValue::palette(PaletteKey::Dark, 8),
-                    caption: ColorValue::palette(PaletteKey::Gray, 6),
+                    header_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    header_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    row_bg: white(),
+                    row_alt_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    row_hover_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    row_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    cell_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    caption: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 stepper: StepperTokens {
-                    step_bg: ColorValue::White,
-                    step_border: ColorValue::palette(PaletteKey::Gray, 4),
-                    step_fg: ColorValue::palette(PaletteKey::Gray, 7),
-                    step_active_bg: ColorValue::palette(primary, 6),
-                    step_active_border: ColorValue::palette(primary, 6),
-                    step_active_fg: ColorValue::White,
-                    step_completed_bg: ColorValue::palette(primary, 5),
-                    step_completed_border: ColorValue::palette(primary, 5),
-                    step_completed_fg: ColorValue::White,
-                    connector: ColorValue::palette(PaletteKey::Gray, 3),
-                    label: ColorValue::palette(PaletteKey::Dark, 8),
-                    description: ColorValue::palette(PaletteKey::Gray, 6),
-                    panel_bg: ColorValue::White,
-                    panel_border: ColorValue::palette(PaletteKey::Gray, 3),
-                    panel_fg: ColorValue::palette(PaletteKey::Dark, 8),
+                    step_bg: white(),
+                    step_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    step_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    step_active_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    step_active_border: (Rgba::try_from(
+                        PaletteCatalog::scale(primary)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    step_active_fg: white(),
+                    step_completed_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    step_completed_border: (Rgba::try_from(
+                        PaletteCatalog::scale(primary)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    step_completed_fg: white(),
+                    connector: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    panel_bg: white(),
+                    panel_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    panel_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 timeline: TimelineTokens {
-                    bullet_bg: ColorValue::White,
-                    bullet_border: ColorValue::palette(PaletteKey::Gray, 4),
-                    bullet_fg: ColorValue::palette(PaletteKey::Gray, 7),
-                    bullet_active_bg: ColorValue::palette(primary, 6),
-                    bullet_active_border: ColorValue::palette(primary, 6),
-                    bullet_active_fg: ColorValue::White,
-                    line: ColorValue::palette(PaletteKey::Gray, 3),
-                    line_active: ColorValue::palette(primary, 5),
-                    title: ColorValue::palette(PaletteKey::Dark, 8),
-                    title_active: ColorValue::palette(PaletteKey::Dark, 9),
-                    body: ColorValue::palette(PaletteKey::Gray, 6),
-                    card_bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    card_border: ColorValue::palette(PaletteKey::Gray, 3),
+                    bullet_bg: white(),
+                    bullet_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    bullet_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    bullet_active_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    bullet_active_border: (Rgba::try_from(
+                        PaletteCatalog::scale(primary)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    bullet_active_fg: white(),
+                    line: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    line_active: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    title: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    title_active: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[9 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    card_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    card_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 tree: TreeTokens {
-                    row_fg: ColorValue::palette(PaletteKey::Dark, 8),
-                    row_selected_fg: ColorValue::palette(primary, 7),
-                    row_selected_bg: ColorValue::palette(primary, 0),
-                    row_hover_bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    row_disabled_fg: ColorValue::palette(PaletteKey::Gray, 5),
-                    line: ColorValue::palette(PaletteKey::Gray, 3),
+                    row_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    row_selected_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    row_selected_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    row_hover_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    row_disabled_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    line: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
             },
             ColorScheme::Dark => Self {
                 button: ButtonTokens {
-                    filled_bg: ColorValue::palette(primary, 5),
-                    filled_fg: ColorValue::White,
-                    light_bg: ColorValue::palette(PaletteKey::Dark, 6),
-                    light_fg: ColorValue::palette(primary, 2),
-                    subtle_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    subtle_fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    outline_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    outline_fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    ghost_fg: ColorValue::palette(PaletteKey::Gray, 2),
-                    disabled_bg: ColorValue::palette(PaletteKey::Dark, 6),
-                    disabled_fg: ColorValue::palette(PaletteKey::Dark, 3),
+                    filled_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    filled_fg: white(),
+                    light_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    light_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    subtle_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    subtle_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    outline_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    outline_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    ghost_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    disabled_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    disabled_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 input: InputTokens {
-                    bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    fg: ColorValue::palette(PaletteKey::Gray, 0),
-                    placeholder: ColorValue::palette(PaletteKey::Dark, 2),
-                    border: ColorValue::palette(PaletteKey::Dark, 4),
-                    border_focus: ColorValue::palette(primary, 5),
-                    border_error: ColorValue::palette(PaletteKey::Red, 5),
-                    label: ColorValue::palette(PaletteKey::Gray, 1),
-                    description: ColorValue::palette(PaletteKey::Gray, 4),
-                    error: ColorValue::palette(PaletteKey::Red, 4),
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    placeholder: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[2 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_focus: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_error: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Red)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[1 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 radio: RadioTokens {
-                    control_bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    border: ColorValue::palette(PaletteKey::Dark, 4),
-                    border_checked: ColorValue::palette(primary, 5),
-                    indicator: ColorValue::palette(primary, 4),
-                    label: ColorValue::palette(PaletteKey::Gray, 0),
-                    description: ColorValue::palette(PaletteKey::Gray, 4),
+                    control_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_checked: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    indicator: (Rgba::try_from(PaletteCatalog::scale(primary)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 checkbox: CheckboxTokens {
-                    control_bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    control_bg_checked: ColorValue::palette(primary, 5),
-                    border: ColorValue::palette(PaletteKey::Dark, 4),
-                    border_checked: ColorValue::palette(primary, 5),
-                    indicator: ColorValue::White,
-                    label: ColorValue::palette(PaletteKey::Gray, 0),
-                    description: ColorValue::palette(PaletteKey::Gray, 4),
+                    control_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    control_bg_checked: (Rgba::try_from(
+                        PaletteCatalog::scale(primary)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_checked: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    indicator: white(),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 switch: SwitchTokens {
-                    track_off_bg: ColorValue::palette(PaletteKey::Dark, 3),
-                    track_on_bg: ColorValue::palette(primary, 5),
-                    thumb_bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    label: ColorValue::palette(PaletteKey::Gray, 0),
-                    description: ColorValue::palette(PaletteKey::Gray, 4),
+                    track_off_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    track_on_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    thumb_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 chip: ChipTokens {
-                    unchecked_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    unchecked_fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    unchecked_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    filled_bg: ColorValue::palette(primary, 5),
-                    filled_fg: ColorValue::White,
-                    light_bg: ColorValue::palette(PaletteKey::Dark, 6),
-                    light_fg: ColorValue::palette(primary, 2),
-                    subtle_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    subtle_fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    outline_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    outline_fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    ghost_fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    default_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    default_fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    default_border: ColorValue::palette(PaletteKey::Dark, 4),
+                    unchecked_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    unchecked_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    unchecked_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    filled_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    filled_fg: white(),
+                    light_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    light_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    subtle_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    subtle_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    outline_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    outline_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    ghost_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[1 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    default_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    default_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    default_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 badge: BadgeTokens {
-                    filled_bg: ColorValue::palette(primary, 5),
-                    filled_fg: ColorValue::White,
-                    light_bg: ColorValue::palette(PaletteKey::Dark, 6),
-                    light_fg: ColorValue::palette(primary, 2),
-                    subtle_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    subtle_fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    outline_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    outline_fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    default_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    default_fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    default_border: ColorValue::palette(PaletteKey::Dark, 4),
+                    filled_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    filled_fg: white(),
+                    light_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    light_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    subtle_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    subtle_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    outline_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    outline_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    default_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    default_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    default_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 accordion: AccordionTokens {
-                    item_bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    item_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    label: ColorValue::palette(PaletteKey::Gray, 0),
-                    description: ColorValue::palette(PaletteKey::Gray, 4),
-                    content: ColorValue::palette(PaletteKey::Gray, 2),
-                    chevron: ColorValue::palette(PaletteKey::Gray, 4),
+                    item_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    item_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    content: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    chevron: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 menu: MenuTokens {
-                    dropdown_bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    dropdown_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    item_fg: ColorValue::palette(PaletteKey::Gray, 0),
-                    item_hover_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    item_disabled_fg: ColorValue::palette(PaletteKey::Dark, 2),
-                    icon: ColorValue::palette(PaletteKey::Gray, 4),
+                    dropdown_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    dropdown_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    item_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    item_hover_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    item_disabled_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[2 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    icon: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 progress: ProgressTokens {
-                    track_bg: ColorValue::palette(PaletteKey::Dark, 5),
-                    fill_bg: ColorValue::palette(primary, 5),
-                    label: ColorValue::palette(PaletteKey::Gray, 2),
+                    track_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    fill_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 slider: SliderTokens {
-                    track_bg: ColorValue::palette(PaletteKey::Dark, 5),
-                    fill_bg: ColorValue::palette(primary, 5),
-                    thumb_bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    thumb_border: ColorValue::palette(primary, 5),
-                    label: ColorValue::palette(PaletteKey::Gray, 2),
-                    value: ColorValue::palette(PaletteKey::Gray, 4),
+                    track_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    fill_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    thumb_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    thumb_border: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    value: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 overlay: OverlayTokens {
-                    bg: ColorValue::Custom("#000000E6".to_string()),
+                    bg: (Rgba::try_from("#000000E6")
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 loading_overlay: LoadingOverlayTokens {
-                    bg: ColorValue::Custom("#000000E6".to_string()),
-                    loader_color: ColorValue::palette(primary, 4),
-                    label: ColorValue::palette(PaletteKey::Gray, 0),
+                    bg: (Rgba::try_from("#000000E6")
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    loader_color: (Rgba::try_from(PaletteCatalog::scale(primary)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 popover: PopoverTokens {
-                    bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    border: ColorValue::palette(PaletteKey::Dark, 4),
-                    title: ColorValue::palette(PaletteKey::Gray, 0),
-                    body: ColorValue::palette(PaletteKey::Gray, 3),
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    title: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 tooltip: TooltipTokens {
-                    bg: ColorValue::palette(PaletteKey::Dark, 9),
-                    fg: ColorValue::palette(PaletteKey::Gray, 0),
-                    border: ColorValue::palette(PaletteKey::Dark, 4),
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 hover_card: HoverCardTokens {
-                    bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    border: ColorValue::palette(PaletteKey::Dark, 4),
-                    title: ColorValue::palette(PaletteKey::Gray, 0),
-                    body: ColorValue::palette(PaletteKey::Gray, 3),
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    title: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 select: SelectTokens {
-                    bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    fg: ColorValue::palette(PaletteKey::Gray, 0),
-                    placeholder: ColorValue::palette(PaletteKey::Dark, 2),
-                    border: ColorValue::palette(PaletteKey::Dark, 4),
-                    border_focus: ColorValue::palette(primary, 5),
-                    border_error: ColorValue::palette(PaletteKey::Red, 5),
-                    dropdown_bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    dropdown_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    option_fg: ColorValue::palette(PaletteKey::Gray, 0),
-                    option_hover_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    option_selected_bg: ColorValue::palette(primary, 9),
-                    tag_bg: ColorValue::palette(primary, 9),
-                    tag_fg: ColorValue::palette(primary, 2),
-                    tag_border: ColorValue::palette(primary, 7),
-                    icon: ColorValue::palette(PaletteKey::Gray, 4),
-                    label: ColorValue::palette(PaletteKey::Gray, 1),
-                    description: ColorValue::palette(PaletteKey::Gray, 4),
-                    error: ColorValue::palette(PaletteKey::Red, 4),
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    placeholder: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[2 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_focus: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_error: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Red)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    dropdown_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    dropdown_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    option_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    option_hover_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    option_selected_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(primary)[9 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    tag_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    tag_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    tag_border: (Rgba::try_from(PaletteCatalog::scale(primary)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    icon: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[1 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 modal: ModalTokens {
-                    panel_bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    panel_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    overlay_bg: ColorValue::Custom("#000000E6".to_string()),
-                    title: ColorValue::palette(PaletteKey::Gray, 0),
-                    body: ColorValue::palette(PaletteKey::Gray, 3),
+                    panel_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    panel_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    overlay_bg: (Rgba::try_from("#000000E6")
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    title: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 toast: ToastTokens {
-                    info_bg: ColorValue::palette(PaletteKey::Blue, 9),
-                    info_fg: ColorValue::palette(PaletteKey::Blue, 2),
-                    success_bg: ColorValue::palette(PaletteKey::Green, 9),
-                    success_fg: ColorValue::palette(PaletteKey::Green, 2),
-                    warning_bg: ColorValue::palette(PaletteKey::Yellow, 9),
-                    warning_fg: ColorValue::palette(PaletteKey::Yellow, 3),
-                    error_bg: ColorValue::palette(PaletteKey::Red, 9),
-                    error_fg: ColorValue::palette(PaletteKey::Red, 2),
+                    info_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Blue)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    info_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Blue)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    success_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Green)[9 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    success_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Green)[2 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    warning_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Yellow)[9 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    warning_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Yellow)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    error_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    error_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 divider: DividerTokens {
-                    line: ColorValue::palette(PaletteKey::Dark, 4),
-                    label: ColorValue::palette(PaletteKey::Gray, 5),
+                    line: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 scroll_area: ScrollAreaTokens {
-                    bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    border: ColorValue::palette(PaletteKey::Dark, 5),
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 drawer: DrawerTokens {
-                    panel_bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    panel_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    overlay_bg: ColorValue::Custom("#000000E6".to_string()),
-                    title: ColorValue::palette(PaletteKey::Gray, 0),
-                    body: ColorValue::palette(PaletteKey::Gray, 3),
+                    panel_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    panel_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    overlay_bg: (Rgba::try_from("#000000E6")
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    title: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 app_shell: AppShellTokens {
-                    bg: ColorValue::palette(PaletteKey::Dark, 9),
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 title_bar: TitleBarTokens {
-                    bg: ColorValue::Custom("#00000000".to_string()),
-                    border: ColorValue::palette(PaletteKey::Dark, 4),
-                    fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    controls_bg: ColorValue::palette(PaletteKey::Dark, 6),
+                    bg: transparent_black(),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[1 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    controls_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 sidebar: SidebarTokens {
-                    bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    border: ColorValue::palette(PaletteKey::Dark, 4),
-                    header_fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    content_fg: ColorValue::palette(PaletteKey::Gray, 2),
-                    footer_fg: ColorValue::palette(PaletteKey::Gray, 4),
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    header_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    content_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[2 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    footer_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 text: TextTokens {
-                    fg: ColorValue::palette(PaletteKey::Gray, 0),
-                    secondary: ColorValue::palette(PaletteKey::Gray, 3),
-                    muted: ColorValue::palette(PaletteKey::Gray, 5),
-                    accent: ColorValue::palette(primary, 3),
-                    success: ColorValue::palette(PaletteKey::Green, 4),
-                    warning: ColorValue::palette(PaletteKey::Yellow, 4),
-                    error: ColorValue::palette(PaletteKey::Red, 4),
+                    fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    secondary: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    muted: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    accent: (Rgba::try_from(PaletteCatalog::scale(primary)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    success: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Green)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    warning: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Yellow)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 title: TitleTokens {
-                    fg: ColorValue::palette(PaletteKey::Gray, 0),
-                    subtitle: ColorValue::palette(PaletteKey::Gray, 4),
+                    fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    subtitle: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    gap: px(4.0),
+                    subtitle_size: px(15.0),
+                    subtitle_line_height: px(22.0),
+                    subtitle_weight: FontWeight::NORMAL,
+                    h1: TitleLevelTokens {
+                        font_size: px(34.0),
+                        line_height: px(44.0),
+                        weight: FontWeight::BOLD,
+                    },
+                    h2: TitleLevelTokens {
+                        font_size: px(28.0),
+                        line_height: px(38.0),
+                        weight: FontWeight::BOLD,
+                    },
+                    h3: TitleLevelTokens {
+                        font_size: px(24.0),
+                        line_height: px(34.0),
+                        weight: FontWeight::SEMIBOLD,
+                    },
+                    h4: TitleLevelTokens {
+                        font_size: px(20.0),
+                        line_height: px(30.0),
+                        weight: FontWeight::SEMIBOLD,
+                    },
+                    h5: TitleLevelTokens {
+                        font_size: px(17.0),
+                        line_height: px(26.0),
+                        weight: FontWeight::SEMIBOLD,
+                    },
+                    h6: TitleLevelTokens {
+                        font_size: px(15.0),
+                        line_height: px(23.0),
+                        weight: FontWeight::MEDIUM,
+                    },
                 },
                 paper: PaperTokens {
-                    bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    border: ColorValue::palette(PaletteKey::Dark, 4),
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 action_icon: ActionIconTokens {
-                    filled_bg: ColorValue::palette(primary, 5),
-                    filled_fg: ColorValue::White,
-                    light_bg: ColorValue::palette(PaletteKey::Dark, 6),
-                    light_fg: ColorValue::palette(primary, 2),
-                    subtle_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    subtle_fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    outline_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    outline_fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    ghost_fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    default_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    default_fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    default_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    disabled_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    disabled_fg: ColorValue::palette(PaletteKey::Dark, 3),
-                    disabled_border: ColorValue::palette(PaletteKey::Dark, 5),
+                    filled_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    filled_fg: white(),
+                    light_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    light_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    subtle_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    subtle_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    outline_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    outline_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    ghost_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[1 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    default_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    default_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    default_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    disabled_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    disabled_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    disabled_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 segmented_control: SegmentedControlTokens {
-                    bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    border: ColorValue::palette(PaletteKey::Dark, 4),
-                    item_fg: ColorValue::palette(PaletteKey::Gray, 2),
-                    item_active_bg: ColorValue::palette(PaletteKey::Dark, 6),
-                    item_active_fg: ColorValue::palette(PaletteKey::Gray, 0),
-                    item_hover_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    item_disabled_fg: ColorValue::palette(PaletteKey::Dark, 3),
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    item_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    item_active_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    item_active_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    item_hover_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    item_disabled_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 textarea: TextareaTokens {
-                    bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    fg: ColorValue::palette(PaletteKey::Gray, 0),
-                    placeholder: ColorValue::palette(PaletteKey::Dark, 2),
-                    border: ColorValue::palette(PaletteKey::Dark, 4),
-                    border_focus: ColorValue::palette(primary, 5),
-                    border_error: ColorValue::palette(PaletteKey::Red, 5),
-                    label: ColorValue::palette(PaletteKey::Gray, 1),
-                    description: ColorValue::palette(PaletteKey::Gray, 4),
-                    error: ColorValue::palette(PaletteKey::Red, 4),
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    placeholder: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[2 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_focus: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_error: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Red)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[1 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 number_input: NumberInputTokens {
-                    bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    fg: ColorValue::palette(PaletteKey::Gray, 0),
-                    placeholder: ColorValue::palette(PaletteKey::Dark, 2),
-                    border: ColorValue::palette(PaletteKey::Dark, 4),
-                    border_focus: ColorValue::palette(primary, 5),
-                    border_error: ColorValue::palette(PaletteKey::Red, 5),
-                    controls_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    controls_fg: ColorValue::palette(PaletteKey::Gray, 3),
-                    controls_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    label: ColorValue::palette(PaletteKey::Gray, 1),
-                    description: ColorValue::palette(PaletteKey::Gray, 4),
-                    error: ColorValue::palette(PaletteKey::Red, 4),
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    placeholder: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[2 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_focus: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    border_error: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Red)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    controls_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    controls_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    controls_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[1 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 range_slider: RangeSliderTokens {
-                    track_bg: ColorValue::palette(PaletteKey::Dark, 5),
-                    range_bg: ColorValue::palette(primary, 5),
-                    thumb_bg: ColorValue::palette(PaletteKey::Gray, 0),
-                    thumb_border: ColorValue::palette(primary, 5),
-                    label: ColorValue::palette(PaletteKey::Gray, 2),
-                    value: ColorValue::palette(PaletteKey::Gray, 4),
+                    track_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    range_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    thumb_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    thumb_border: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    value: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 rating: RatingTokens {
-                    active: ColorValue::palette(PaletteKey::Yellow, 4),
-                    inactive: ColorValue::palette(PaletteKey::Dark, 3),
+                    active: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Yellow)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    inactive: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 tabs: TabsTokens {
-                    list_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    list_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    tab_fg: ColorValue::palette(PaletteKey::Gray, 2),
-                    tab_active_bg: ColorValue::palette(PaletteKey::Dark, 5),
-                    tab_active_fg: ColorValue::palette(PaletteKey::Gray, 0),
-                    tab_hover_bg: ColorValue::palette(PaletteKey::Dark, 6),
-                    tab_disabled_fg: ColorValue::palette(PaletteKey::Dark, 3),
-                    panel_bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    panel_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    panel_fg: ColorValue::palette(PaletteKey::Gray, 2),
+                    list_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    list_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    tab_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    tab_active_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    tab_active_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    tab_hover_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    tab_disabled_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    panel_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    panel_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    panel_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 pagination: PaginationTokens {
-                    item_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    item_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    item_fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    item_active_bg: ColorValue::palette(primary, 5),
-                    item_active_fg: ColorValue::White,
-                    item_hover_bg: ColorValue::palette(PaletteKey::Dark, 6),
-                    item_disabled_fg: ColorValue::palette(PaletteKey::Dark, 3),
-                    dots_fg: ColorValue::palette(PaletteKey::Gray, 5),
+                    item_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    item_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    item_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[1 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    item_active_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    item_active_fg: white(),
+                    item_hover_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    item_disabled_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    dots_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 breadcrumbs: BreadcrumbsTokens {
-                    item_fg: ColorValue::palette(PaletteKey::Gray, 3),
-                    item_current_fg: ColorValue::palette(PaletteKey::Gray, 0),
-                    separator: ColorValue::palette(PaletteKey::Dark, 2),
-                    item_hover_bg: ColorValue::palette(PaletteKey::Dark, 6),
+                    item_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    item_current_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    separator: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[2 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    item_hover_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 table: TableTokens {
-                    header_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    header_fg: ColorValue::palette(PaletteKey::Gray, 1),
-                    row_bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    row_alt_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    row_hover_bg: ColorValue::palette(PaletteKey::Dark, 6),
-                    row_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    cell_fg: ColorValue::palette(PaletteKey::Gray, 2),
-                    caption: ColorValue::palette(PaletteKey::Gray, 5),
+                    header_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    header_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    row_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    row_alt_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    row_hover_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    row_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    cell_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    caption: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 stepper: StepperTokens {
-                    step_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    step_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    step_fg: ColorValue::palette(PaletteKey::Gray, 3),
-                    step_active_bg: ColorValue::palette(primary, 5),
-                    step_active_border: ColorValue::palette(primary, 5),
-                    step_active_fg: ColorValue::White,
-                    step_completed_bg: ColorValue::palette(primary, 4),
-                    step_completed_border: ColorValue::palette(primary, 4),
-                    step_completed_fg: ColorValue::White,
-                    connector: ColorValue::palette(PaletteKey::Dark, 4),
-                    label: ColorValue::palette(PaletteKey::Gray, 1),
-                    description: ColorValue::palette(PaletteKey::Gray, 5),
-                    panel_bg: ColorValue::palette(PaletteKey::Dark, 8),
-                    panel_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    panel_fg: ColorValue::palette(PaletteKey::Gray, 2),
+                    step_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    step_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    step_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    step_active_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    step_active_border: (Rgba::try_from(
+                        PaletteCatalog::scale(primary)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    step_active_fg: white(),
+                    step_completed_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    step_completed_border: (Rgba::try_from(
+                        PaletteCatalog::scale(primary)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    step_completed_fg: white(),
+                    connector: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[1 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    description: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    panel_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    panel_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    panel_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 timeline: TimelineTokens {
-                    bullet_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    bullet_border: ColorValue::palette(PaletteKey::Dark, 4),
-                    bullet_fg: ColorValue::palette(PaletteKey::Gray, 4),
-                    bullet_active_bg: ColorValue::palette(primary, 5),
-                    bullet_active_border: ColorValue::palette(primary, 5),
-                    bullet_active_fg: ColorValue::White,
-                    line: ColorValue::palette(PaletteKey::Dark, 4),
-                    line_active: ColorValue::palette(primary, 4),
-                    title: ColorValue::palette(PaletteKey::Gray, 2),
-                    title_active: ColorValue::palette(PaletteKey::Gray, 0),
-                    body: ColorValue::palette(PaletteKey::Gray, 5),
-                    card_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    card_border: ColorValue::palette(PaletteKey::Dark, 4),
+                    bullet_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    bullet_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    bullet_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    bullet_active_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    bullet_active_border: (Rgba::try_from(
+                        PaletteCatalog::scale(primary)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    bullet_active_fg: white(),
+                    line: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    line_active: (Rgba::try_from(PaletteCatalog::scale(primary)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    title: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    title_active: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    card_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    card_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                 },
                 tree: TreeTokens {
-                    row_fg: ColorValue::palette(PaletteKey::Gray, 2),
-                    row_selected_fg: ColorValue::palette(primary, 1),
-                    row_selected_bg: ColorValue::palette(primary, 9),
-                    row_hover_bg: ColorValue::palette(PaletteKey::Dark, 7),
-                    row_disabled_fg: ColorValue::palette(PaletteKey::Dark, 3),
-                    line: ColorValue::palette(PaletteKey::Dark, 4),
+                    row_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    row_selected_fg: (Rgba::try_from(PaletteCatalog::scale(primary)[1 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    row_selected_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    row_hover_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    row_disabled_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    line: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
             },
         }
@@ -1320,9 +3300,7 @@ impl ComponentTokens {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Theme {
-    pub white: &'static str,
-    pub black: &'static str,
-    pub radius_default: &'static str,
+    pub radii: ThemeRadii,
     pub primary_color: PaletteKey,
     pub primary_shade: PrimaryShade,
     pub color_scheme: ColorScheme,
@@ -1335,9 +3313,7 @@ impl Default for Theme {
     fn default() -> Self {
         let primary = PaletteKey::Blue;
         Self {
-            white: "#fff",
-            black: "#000",
-            radius_default: "0.25rem",
+            radii: ThemeRadii::default(),
             primary_color: primary,
             primary_shade: PrimaryShade::Split { light: 6, dark: 8 },
             color_scheme: ColorScheme::Light,
@@ -1377,25 +3353,30 @@ impl Theme {
         self.with_primary_color(accent)
     }
 
-    pub fn resolve_color(&self, token: &ColorValue) -> String {
-        match token {
-            ColorValue::Palette { key, shade } => self
-                .palette
-                .get(key)
-                .and_then(|scale| scale.get(*shade as usize))
-                .unwrap_or(&self.black)
-                .to_string(),
-            ColorValue::White => self.white.to_string(),
-            ColorValue::Black => self.black.to_string(),
-            ColorValue::Custom(value) => value.clone(),
-        }
+    pub fn with_radii(mut self, radii: ThemeRadii) -> Self {
+        self.radii = radii;
+        self
     }
 
-    pub fn resolve_hsla(&self, token: &ColorValue) -> gpui::Hsla {
-        let raw = self.resolve_color(token);
-        gpui::Rgba::try_from(raw.as_str())
-            .map(Into::into)
-            .unwrap_or_else(|_| gpui::black())
+    pub fn resolve_color<T>(&self, token: T) -> String
+    where
+        T: ResolveWithTheme<Hsla>,
+    {
+        format!("{:?}", Rgba::from(token.resolve(self)))
+    }
+
+    pub fn resolve_hsla<T>(&self, token: T) -> Hsla
+    where
+        T: ResolveWithTheme<Hsla>,
+    {
+        token.resolve(self)
+    }
+
+    pub fn resolve_radius<T>(&self, token: T) -> Pixels
+    where
+        T: ResolveWithTheme<Pixels>,
+    {
+        token.resolve(self)
     }
 
     pub fn merged(&self, patch: &ThemePatch) -> Self {
@@ -1412,6 +3393,7 @@ impl Theme {
         for (key, value) in &patch.palette_overrides {
             next.palette.insert(*key, *value);
         }
+        next.radii = patch.radii.apply(next.radii);
         next.semantic = patch.semantic.apply(next.semantic);
         next.components = patch.components.apply(next.components);
         next
@@ -1420,20 +3402,20 @@ impl Theme {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SemanticPatch {
-    pub text_primary: Option<ColorValue>,
-    pub text_secondary: Option<ColorValue>,
-    pub text_muted: Option<ColorValue>,
-    pub bg_canvas: Option<ColorValue>,
-    pub bg_surface: Option<ColorValue>,
-    pub bg_soft: Option<ColorValue>,
-    pub border_subtle: Option<ColorValue>,
-    pub border_strong: Option<ColorValue>,
-    pub focus_ring: Option<ColorValue>,
-    pub status_info: Option<ColorValue>,
-    pub status_success: Option<ColorValue>,
-    pub status_warning: Option<ColorValue>,
-    pub status_error: Option<ColorValue>,
-    pub overlay_mask: Option<ColorValue>,
+    pub text_primary: Option<Hsla>,
+    pub text_secondary: Option<Hsla>,
+    pub text_muted: Option<Hsla>,
+    pub bg_canvas: Option<Hsla>,
+    pub bg_surface: Option<Hsla>,
+    pub bg_soft: Option<Hsla>,
+    pub border_subtle: Option<Hsla>,
+    pub border_strong: Option<Hsla>,
+    pub focus_ring: Option<Hsla>,
+    pub status_info: Option<Hsla>,
+    pub status_success: Option<Hsla>,
+    pub status_warning: Option<Hsla>,
+    pub status_error: Option<Hsla>,
+    pub overlay_mask: Option<Hsla>,
 }
 
 impl SemanticPatch {
@@ -1485,18 +3467,56 @@ impl SemanticPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct RadiiPatch {
+    pub default: Option<Pixels>,
+    pub xs: Option<Pixels>,
+    pub sm: Option<Pixels>,
+    pub md: Option<Pixels>,
+    pub lg: Option<Pixels>,
+    pub xl: Option<Pixels>,
+    pub pill: Option<Pixels>,
+}
+
+impl RadiiPatch {
+    fn apply(&self, mut current: ThemeRadii) -> ThemeRadii {
+        if let Some(value) = self.default {
+            current.default = value;
+        }
+        if let Some(value) = self.xs {
+            current.xs = value;
+        }
+        if let Some(value) = self.sm {
+            current.sm = value;
+        }
+        if let Some(value) = self.md {
+            current.md = value;
+        }
+        if let Some(value) = self.lg {
+            current.lg = value;
+        }
+        if let Some(value) = self.xl {
+            current.xl = value;
+        }
+        if let Some(value) = self.pill {
+            current.pill = value;
+        }
+        current
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ButtonPatch {
-    pub filled_bg: Option<ColorValue>,
-    pub filled_fg: Option<ColorValue>,
-    pub light_bg: Option<ColorValue>,
-    pub light_fg: Option<ColorValue>,
-    pub subtle_bg: Option<ColorValue>,
-    pub subtle_fg: Option<ColorValue>,
-    pub outline_border: Option<ColorValue>,
-    pub outline_fg: Option<ColorValue>,
-    pub ghost_fg: Option<ColorValue>,
-    pub disabled_bg: Option<ColorValue>,
-    pub disabled_fg: Option<ColorValue>,
+    pub filled_bg: Option<Hsla>,
+    pub filled_fg: Option<Hsla>,
+    pub light_bg: Option<Hsla>,
+    pub light_fg: Option<Hsla>,
+    pub subtle_bg: Option<Hsla>,
+    pub subtle_fg: Option<Hsla>,
+    pub outline_border: Option<Hsla>,
+    pub outline_fg: Option<Hsla>,
+    pub ghost_fg: Option<Hsla>,
+    pub disabled_bg: Option<Hsla>,
+    pub disabled_fg: Option<Hsla>,
 }
 
 impl ButtonPatch {
@@ -1540,15 +3560,15 @@ impl ButtonPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct InputPatch {
-    pub bg: Option<ColorValue>,
-    pub fg: Option<ColorValue>,
-    pub placeholder: Option<ColorValue>,
-    pub border: Option<ColorValue>,
-    pub border_focus: Option<ColorValue>,
-    pub border_error: Option<ColorValue>,
-    pub label: Option<ColorValue>,
-    pub description: Option<ColorValue>,
-    pub error: Option<ColorValue>,
+    pub bg: Option<Hsla>,
+    pub fg: Option<Hsla>,
+    pub placeholder: Option<Hsla>,
+    pub border: Option<Hsla>,
+    pub border_focus: Option<Hsla>,
+    pub border_error: Option<Hsla>,
+    pub label: Option<Hsla>,
+    pub description: Option<Hsla>,
+    pub error: Option<Hsla>,
 }
 
 impl InputPatch {
@@ -1586,12 +3606,12 @@ impl InputPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct RadioPatch {
-    pub control_bg: Option<ColorValue>,
-    pub border: Option<ColorValue>,
-    pub border_checked: Option<ColorValue>,
-    pub indicator: Option<ColorValue>,
-    pub label: Option<ColorValue>,
-    pub description: Option<ColorValue>,
+    pub control_bg: Option<Hsla>,
+    pub border: Option<Hsla>,
+    pub border_checked: Option<Hsla>,
+    pub indicator: Option<Hsla>,
+    pub label: Option<Hsla>,
+    pub description: Option<Hsla>,
 }
 
 impl RadioPatch {
@@ -1620,13 +3640,13 @@ impl RadioPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CheckboxPatch {
-    pub control_bg: Option<ColorValue>,
-    pub control_bg_checked: Option<ColorValue>,
-    pub border: Option<ColorValue>,
-    pub border_checked: Option<ColorValue>,
-    pub indicator: Option<ColorValue>,
-    pub label: Option<ColorValue>,
-    pub description: Option<ColorValue>,
+    pub control_bg: Option<Hsla>,
+    pub control_bg_checked: Option<Hsla>,
+    pub border: Option<Hsla>,
+    pub border_checked: Option<Hsla>,
+    pub indicator: Option<Hsla>,
+    pub label: Option<Hsla>,
+    pub description: Option<Hsla>,
 }
 
 impl CheckboxPatch {
@@ -1658,11 +3678,11 @@ impl CheckboxPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SwitchPatch {
-    pub track_off_bg: Option<ColorValue>,
-    pub track_on_bg: Option<ColorValue>,
-    pub thumb_bg: Option<ColorValue>,
-    pub label: Option<ColorValue>,
-    pub description: Option<ColorValue>,
+    pub track_off_bg: Option<Hsla>,
+    pub track_on_bg: Option<Hsla>,
+    pub thumb_bg: Option<Hsla>,
+    pub label: Option<Hsla>,
+    pub description: Option<Hsla>,
 }
 
 impl SwitchPatch {
@@ -1688,21 +3708,21 @@ impl SwitchPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ChipPatch {
-    pub unchecked_bg: Option<ColorValue>,
-    pub unchecked_fg: Option<ColorValue>,
-    pub unchecked_border: Option<ColorValue>,
-    pub filled_bg: Option<ColorValue>,
-    pub filled_fg: Option<ColorValue>,
-    pub light_bg: Option<ColorValue>,
-    pub light_fg: Option<ColorValue>,
-    pub subtle_bg: Option<ColorValue>,
-    pub subtle_fg: Option<ColorValue>,
-    pub outline_border: Option<ColorValue>,
-    pub outline_fg: Option<ColorValue>,
-    pub ghost_fg: Option<ColorValue>,
-    pub default_bg: Option<ColorValue>,
-    pub default_fg: Option<ColorValue>,
-    pub default_border: Option<ColorValue>,
+    pub unchecked_bg: Option<Hsla>,
+    pub unchecked_fg: Option<Hsla>,
+    pub unchecked_border: Option<Hsla>,
+    pub filled_bg: Option<Hsla>,
+    pub filled_fg: Option<Hsla>,
+    pub light_bg: Option<Hsla>,
+    pub light_fg: Option<Hsla>,
+    pub subtle_bg: Option<Hsla>,
+    pub subtle_fg: Option<Hsla>,
+    pub outline_border: Option<Hsla>,
+    pub outline_fg: Option<Hsla>,
+    pub ghost_fg: Option<Hsla>,
+    pub default_bg: Option<Hsla>,
+    pub default_fg: Option<Hsla>,
+    pub default_border: Option<Hsla>,
 }
 
 impl ChipPatch {
@@ -1758,17 +3778,17 @@ impl ChipPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct BadgePatch {
-    pub filled_bg: Option<ColorValue>,
-    pub filled_fg: Option<ColorValue>,
-    pub light_bg: Option<ColorValue>,
-    pub light_fg: Option<ColorValue>,
-    pub subtle_bg: Option<ColorValue>,
-    pub subtle_fg: Option<ColorValue>,
-    pub outline_border: Option<ColorValue>,
-    pub outline_fg: Option<ColorValue>,
-    pub default_bg: Option<ColorValue>,
-    pub default_fg: Option<ColorValue>,
-    pub default_border: Option<ColorValue>,
+    pub filled_bg: Option<Hsla>,
+    pub filled_fg: Option<Hsla>,
+    pub light_bg: Option<Hsla>,
+    pub light_fg: Option<Hsla>,
+    pub subtle_bg: Option<Hsla>,
+    pub subtle_fg: Option<Hsla>,
+    pub outline_border: Option<Hsla>,
+    pub outline_fg: Option<Hsla>,
+    pub default_bg: Option<Hsla>,
+    pub default_fg: Option<Hsla>,
+    pub default_border: Option<Hsla>,
 }
 
 impl BadgePatch {
@@ -1812,12 +3832,12 @@ impl BadgePatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct AccordionPatch {
-    pub item_bg: Option<ColorValue>,
-    pub item_border: Option<ColorValue>,
-    pub label: Option<ColorValue>,
-    pub description: Option<ColorValue>,
-    pub content: Option<ColorValue>,
-    pub chevron: Option<ColorValue>,
+    pub item_bg: Option<Hsla>,
+    pub item_border: Option<Hsla>,
+    pub label: Option<Hsla>,
+    pub description: Option<Hsla>,
+    pub content: Option<Hsla>,
+    pub chevron: Option<Hsla>,
 }
 
 impl AccordionPatch {
@@ -1846,12 +3866,12 @@ impl AccordionPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct MenuPatch {
-    pub dropdown_bg: Option<ColorValue>,
-    pub dropdown_border: Option<ColorValue>,
-    pub item_fg: Option<ColorValue>,
-    pub item_hover_bg: Option<ColorValue>,
-    pub item_disabled_fg: Option<ColorValue>,
-    pub icon: Option<ColorValue>,
+    pub dropdown_bg: Option<Hsla>,
+    pub dropdown_border: Option<Hsla>,
+    pub item_fg: Option<Hsla>,
+    pub item_hover_bg: Option<Hsla>,
+    pub item_disabled_fg: Option<Hsla>,
+    pub icon: Option<Hsla>,
 }
 
 impl MenuPatch {
@@ -1880,9 +3900,9 @@ impl MenuPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ProgressPatch {
-    pub track_bg: Option<ColorValue>,
-    pub fill_bg: Option<ColorValue>,
-    pub label: Option<ColorValue>,
+    pub track_bg: Option<Hsla>,
+    pub fill_bg: Option<Hsla>,
+    pub label: Option<Hsla>,
 }
 
 impl ProgressPatch {
@@ -1902,12 +3922,12 @@ impl ProgressPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SliderPatch {
-    pub track_bg: Option<ColorValue>,
-    pub fill_bg: Option<ColorValue>,
-    pub thumb_bg: Option<ColorValue>,
-    pub thumb_border: Option<ColorValue>,
-    pub label: Option<ColorValue>,
-    pub value: Option<ColorValue>,
+    pub track_bg: Option<Hsla>,
+    pub fill_bg: Option<Hsla>,
+    pub thumb_bg: Option<Hsla>,
+    pub thumb_border: Option<Hsla>,
+    pub label: Option<Hsla>,
+    pub value: Option<Hsla>,
 }
 
 impl SliderPatch {
@@ -1936,7 +3956,7 @@ impl SliderPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct OverlayPatch {
-    pub bg: Option<ColorValue>,
+    pub bg: Option<Hsla>,
 }
 
 impl OverlayPatch {
@@ -1950,9 +3970,9 @@ impl OverlayPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct LoadingOverlayPatch {
-    pub bg: Option<ColorValue>,
-    pub loader_color: Option<ColorValue>,
-    pub label: Option<ColorValue>,
+    pub bg: Option<Hsla>,
+    pub loader_color: Option<Hsla>,
+    pub label: Option<Hsla>,
 }
 
 impl LoadingOverlayPatch {
@@ -1972,10 +3992,10 @@ impl LoadingOverlayPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PopoverPatch {
-    pub bg: Option<ColorValue>,
-    pub border: Option<ColorValue>,
-    pub title: Option<ColorValue>,
-    pub body: Option<ColorValue>,
+    pub bg: Option<Hsla>,
+    pub border: Option<Hsla>,
+    pub title: Option<Hsla>,
+    pub body: Option<Hsla>,
 }
 
 impl PopoverPatch {
@@ -1998,9 +4018,9 @@ impl PopoverPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TooltipPatch {
-    pub bg: Option<ColorValue>,
-    pub fg: Option<ColorValue>,
-    pub border: Option<ColorValue>,
+    pub bg: Option<Hsla>,
+    pub fg: Option<Hsla>,
+    pub border: Option<Hsla>,
 }
 
 impl TooltipPatch {
@@ -2020,10 +4040,10 @@ impl TooltipPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct HoverCardPatch {
-    pub bg: Option<ColorValue>,
-    pub border: Option<ColorValue>,
-    pub title: Option<ColorValue>,
-    pub body: Option<ColorValue>,
+    pub bg: Option<Hsla>,
+    pub border: Option<Hsla>,
+    pub title: Option<Hsla>,
+    pub body: Option<Hsla>,
 }
 
 impl HoverCardPatch {
@@ -2046,24 +4066,24 @@ impl HoverCardPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SelectPatch {
-    pub bg: Option<ColorValue>,
-    pub fg: Option<ColorValue>,
-    pub placeholder: Option<ColorValue>,
-    pub border: Option<ColorValue>,
-    pub border_focus: Option<ColorValue>,
-    pub border_error: Option<ColorValue>,
-    pub dropdown_bg: Option<ColorValue>,
-    pub dropdown_border: Option<ColorValue>,
-    pub option_fg: Option<ColorValue>,
-    pub option_hover_bg: Option<ColorValue>,
-    pub option_selected_bg: Option<ColorValue>,
-    pub tag_bg: Option<ColorValue>,
-    pub tag_fg: Option<ColorValue>,
-    pub tag_border: Option<ColorValue>,
-    pub icon: Option<ColorValue>,
-    pub label: Option<ColorValue>,
-    pub description: Option<ColorValue>,
-    pub error: Option<ColorValue>,
+    pub bg: Option<Hsla>,
+    pub fg: Option<Hsla>,
+    pub placeholder: Option<Hsla>,
+    pub border: Option<Hsla>,
+    pub border_focus: Option<Hsla>,
+    pub border_error: Option<Hsla>,
+    pub dropdown_bg: Option<Hsla>,
+    pub dropdown_border: Option<Hsla>,
+    pub option_fg: Option<Hsla>,
+    pub option_hover_bg: Option<Hsla>,
+    pub option_selected_bg: Option<Hsla>,
+    pub tag_bg: Option<Hsla>,
+    pub tag_fg: Option<Hsla>,
+    pub tag_border: Option<Hsla>,
+    pub icon: Option<Hsla>,
+    pub label: Option<Hsla>,
+    pub description: Option<Hsla>,
+    pub error: Option<Hsla>,
 }
 
 impl SelectPatch {
@@ -2128,11 +4148,11 @@ impl SelectPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ModalPatch {
-    pub panel_bg: Option<ColorValue>,
-    pub panel_border: Option<ColorValue>,
-    pub overlay_bg: Option<ColorValue>,
-    pub title: Option<ColorValue>,
-    pub body: Option<ColorValue>,
+    pub panel_bg: Option<Hsla>,
+    pub panel_border: Option<Hsla>,
+    pub overlay_bg: Option<Hsla>,
+    pub title: Option<Hsla>,
+    pub body: Option<Hsla>,
 }
 
 impl ModalPatch {
@@ -2158,14 +4178,14 @@ impl ModalPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ToastPatch {
-    pub info_bg: Option<ColorValue>,
-    pub info_fg: Option<ColorValue>,
-    pub success_bg: Option<ColorValue>,
-    pub success_fg: Option<ColorValue>,
-    pub warning_bg: Option<ColorValue>,
-    pub warning_fg: Option<ColorValue>,
-    pub error_bg: Option<ColorValue>,
-    pub error_fg: Option<ColorValue>,
+    pub info_bg: Option<Hsla>,
+    pub info_fg: Option<Hsla>,
+    pub success_bg: Option<Hsla>,
+    pub success_fg: Option<Hsla>,
+    pub warning_bg: Option<Hsla>,
+    pub warning_fg: Option<Hsla>,
+    pub error_bg: Option<Hsla>,
+    pub error_fg: Option<Hsla>,
 }
 
 impl ToastPatch {
@@ -2200,8 +4220,8 @@ impl ToastPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DividerPatch {
-    pub line: Option<ColorValue>,
-    pub label: Option<ColorValue>,
+    pub line: Option<Hsla>,
+    pub label: Option<Hsla>,
 }
 
 impl DividerPatch {
@@ -2218,8 +4238,8 @@ impl DividerPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ScrollAreaPatch {
-    pub bg: Option<ColorValue>,
-    pub border: Option<ColorValue>,
+    pub bg: Option<Hsla>,
+    pub border: Option<Hsla>,
 }
 
 impl ScrollAreaPatch {
@@ -2236,11 +4256,11 @@ impl ScrollAreaPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DrawerPatch {
-    pub panel_bg: Option<ColorValue>,
-    pub panel_border: Option<ColorValue>,
-    pub overlay_bg: Option<ColorValue>,
-    pub title: Option<ColorValue>,
-    pub body: Option<ColorValue>,
+    pub panel_bg: Option<Hsla>,
+    pub panel_border: Option<Hsla>,
+    pub overlay_bg: Option<Hsla>,
+    pub title: Option<Hsla>,
+    pub body: Option<Hsla>,
 }
 
 impl DrawerPatch {
@@ -2266,7 +4286,7 @@ impl DrawerPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct AppShellPatch {
-    pub bg: Option<ColorValue>,
+    pub bg: Option<Hsla>,
 }
 
 impl AppShellPatch {
@@ -2280,10 +4300,10 @@ impl AppShellPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TitleBarPatch {
-    pub bg: Option<ColorValue>,
-    pub border: Option<ColorValue>,
-    pub fg: Option<ColorValue>,
-    pub controls_bg: Option<ColorValue>,
+    pub bg: Option<Hsla>,
+    pub border: Option<Hsla>,
+    pub fg: Option<Hsla>,
+    pub controls_bg: Option<Hsla>,
 }
 
 impl TitleBarPatch {
@@ -2306,11 +4326,11 @@ impl TitleBarPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SidebarPatch {
-    pub bg: Option<ColorValue>,
-    pub border: Option<ColorValue>,
-    pub header_fg: Option<ColorValue>,
-    pub content_fg: Option<ColorValue>,
-    pub footer_fg: Option<ColorValue>,
+    pub bg: Option<Hsla>,
+    pub border: Option<Hsla>,
+    pub header_fg: Option<Hsla>,
+    pub content_fg: Option<Hsla>,
+    pub footer_fg: Option<Hsla>,
 }
 
 impl SidebarPatch {
@@ -2336,13 +4356,13 @@ impl SidebarPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TextPatch {
-    pub fg: Option<ColorValue>,
-    pub secondary: Option<ColorValue>,
-    pub muted: Option<ColorValue>,
-    pub accent: Option<ColorValue>,
-    pub success: Option<ColorValue>,
-    pub warning: Option<ColorValue>,
-    pub error: Option<ColorValue>,
+    pub fg: Option<Hsla>,
+    pub secondary: Option<Hsla>,
+    pub muted: Option<Hsla>,
+    pub accent: Option<Hsla>,
+    pub success: Option<Hsla>,
+    pub warning: Option<Hsla>,
+    pub error: Option<Hsla>,
 }
 
 impl TextPatch {
@@ -2374,8 +4394,40 @@ impl TextPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TitlePatch {
-    pub fg: Option<ColorValue>,
-    pub subtitle: Option<ColorValue>,
+    pub fg: Option<Hsla>,
+    pub subtitle: Option<Hsla>,
+    pub gap: Option<Pixels>,
+    pub subtitle_size: Option<Pixels>,
+    pub subtitle_line_height: Option<Pixels>,
+    pub subtitle_weight: Option<FontWeight>,
+    pub h1: TitleLevelPatch,
+    pub h2: TitleLevelPatch,
+    pub h3: TitleLevelPatch,
+    pub h4: TitleLevelPatch,
+    pub h5: TitleLevelPatch,
+    pub h6: TitleLevelPatch,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct TitleLevelPatch {
+    pub font_size: Option<Pixels>,
+    pub line_height: Option<Pixels>,
+    pub weight: Option<FontWeight>,
+}
+
+impl TitleLevelPatch {
+    fn apply(&self, mut current: TitleLevelTokens) -> TitleLevelTokens {
+        if let Some(value) = &self.font_size {
+            current.font_size = *value;
+        }
+        if let Some(value) = &self.line_height {
+            current.line_height = *value;
+        }
+        if let Some(value) = &self.weight {
+            current.weight = *value;
+        }
+        current
+    }
 }
 
 impl TitlePatch {
@@ -2386,14 +4438,32 @@ impl TitlePatch {
         if let Some(value) = &self.subtitle {
             current.subtitle = value.clone();
         }
+        if let Some(value) = &self.gap {
+            current.gap = *value;
+        }
+        if let Some(value) = &self.subtitle_size {
+            current.subtitle_size = *value;
+        }
+        if let Some(value) = &self.subtitle_line_height {
+            current.subtitle_line_height = *value;
+        }
+        if let Some(value) = &self.subtitle_weight {
+            current.subtitle_weight = *value;
+        }
+        current.h1 = self.h1.apply(current.h1);
+        current.h2 = self.h2.apply(current.h2);
+        current.h3 = self.h3.apply(current.h3);
+        current.h4 = self.h4.apply(current.h4);
+        current.h5 = self.h5.apply(current.h5);
+        current.h6 = self.h6.apply(current.h6);
         current
     }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PaperPatch {
-    pub bg: Option<ColorValue>,
-    pub border: Option<ColorValue>,
+    pub bg: Option<Hsla>,
+    pub border: Option<Hsla>,
 }
 
 impl PaperPatch {
@@ -2410,21 +4480,21 @@ impl PaperPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ActionIconPatch {
-    pub filled_bg: Option<ColorValue>,
-    pub filled_fg: Option<ColorValue>,
-    pub light_bg: Option<ColorValue>,
-    pub light_fg: Option<ColorValue>,
-    pub subtle_bg: Option<ColorValue>,
-    pub subtle_fg: Option<ColorValue>,
-    pub outline_border: Option<ColorValue>,
-    pub outline_fg: Option<ColorValue>,
-    pub ghost_fg: Option<ColorValue>,
-    pub default_bg: Option<ColorValue>,
-    pub default_fg: Option<ColorValue>,
-    pub default_border: Option<ColorValue>,
-    pub disabled_bg: Option<ColorValue>,
-    pub disabled_fg: Option<ColorValue>,
-    pub disabled_border: Option<ColorValue>,
+    pub filled_bg: Option<Hsla>,
+    pub filled_fg: Option<Hsla>,
+    pub light_bg: Option<Hsla>,
+    pub light_fg: Option<Hsla>,
+    pub subtle_bg: Option<Hsla>,
+    pub subtle_fg: Option<Hsla>,
+    pub outline_border: Option<Hsla>,
+    pub outline_fg: Option<Hsla>,
+    pub ghost_fg: Option<Hsla>,
+    pub default_bg: Option<Hsla>,
+    pub default_fg: Option<Hsla>,
+    pub default_border: Option<Hsla>,
+    pub disabled_bg: Option<Hsla>,
+    pub disabled_fg: Option<Hsla>,
+    pub disabled_border: Option<Hsla>,
 }
 
 impl ActionIconPatch {
@@ -2480,13 +4550,13 @@ impl ActionIconPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SegmentedControlPatch {
-    pub bg: Option<ColorValue>,
-    pub border: Option<ColorValue>,
-    pub item_fg: Option<ColorValue>,
-    pub item_active_bg: Option<ColorValue>,
-    pub item_active_fg: Option<ColorValue>,
-    pub item_hover_bg: Option<ColorValue>,
-    pub item_disabled_fg: Option<ColorValue>,
+    pub bg: Option<Hsla>,
+    pub border: Option<Hsla>,
+    pub item_fg: Option<Hsla>,
+    pub item_active_bg: Option<Hsla>,
+    pub item_active_fg: Option<Hsla>,
+    pub item_hover_bg: Option<Hsla>,
+    pub item_disabled_fg: Option<Hsla>,
 }
 
 impl SegmentedControlPatch {
@@ -2518,15 +4588,15 @@ impl SegmentedControlPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TextareaPatch {
-    pub bg: Option<ColorValue>,
-    pub fg: Option<ColorValue>,
-    pub placeholder: Option<ColorValue>,
-    pub border: Option<ColorValue>,
-    pub border_focus: Option<ColorValue>,
-    pub border_error: Option<ColorValue>,
-    pub label: Option<ColorValue>,
-    pub description: Option<ColorValue>,
-    pub error: Option<ColorValue>,
+    pub bg: Option<Hsla>,
+    pub fg: Option<Hsla>,
+    pub placeholder: Option<Hsla>,
+    pub border: Option<Hsla>,
+    pub border_focus: Option<Hsla>,
+    pub border_error: Option<Hsla>,
+    pub label: Option<Hsla>,
+    pub description: Option<Hsla>,
+    pub error: Option<Hsla>,
 }
 
 impl TextareaPatch {
@@ -2564,18 +4634,18 @@ impl TextareaPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct NumberInputPatch {
-    pub bg: Option<ColorValue>,
-    pub fg: Option<ColorValue>,
-    pub placeholder: Option<ColorValue>,
-    pub border: Option<ColorValue>,
-    pub border_focus: Option<ColorValue>,
-    pub border_error: Option<ColorValue>,
-    pub controls_bg: Option<ColorValue>,
-    pub controls_fg: Option<ColorValue>,
-    pub controls_border: Option<ColorValue>,
-    pub label: Option<ColorValue>,
-    pub description: Option<ColorValue>,
-    pub error: Option<ColorValue>,
+    pub bg: Option<Hsla>,
+    pub fg: Option<Hsla>,
+    pub placeholder: Option<Hsla>,
+    pub border: Option<Hsla>,
+    pub border_focus: Option<Hsla>,
+    pub border_error: Option<Hsla>,
+    pub controls_bg: Option<Hsla>,
+    pub controls_fg: Option<Hsla>,
+    pub controls_border: Option<Hsla>,
+    pub label: Option<Hsla>,
+    pub description: Option<Hsla>,
+    pub error: Option<Hsla>,
 }
 
 impl NumberInputPatch {
@@ -2622,12 +4692,12 @@ impl NumberInputPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct RangeSliderPatch {
-    pub track_bg: Option<ColorValue>,
-    pub range_bg: Option<ColorValue>,
-    pub thumb_bg: Option<ColorValue>,
-    pub thumb_border: Option<ColorValue>,
-    pub label: Option<ColorValue>,
-    pub value: Option<ColorValue>,
+    pub track_bg: Option<Hsla>,
+    pub range_bg: Option<Hsla>,
+    pub thumb_bg: Option<Hsla>,
+    pub thumb_border: Option<Hsla>,
+    pub label: Option<Hsla>,
+    pub value: Option<Hsla>,
 }
 
 impl RangeSliderPatch {
@@ -2656,8 +4726,8 @@ impl RangeSliderPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct RatingPatch {
-    pub active: Option<ColorValue>,
-    pub inactive: Option<ColorValue>,
+    pub active: Option<Hsla>,
+    pub inactive: Option<Hsla>,
 }
 
 impl RatingPatch {
@@ -2674,16 +4744,16 @@ impl RatingPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TabsPatch {
-    pub list_bg: Option<ColorValue>,
-    pub list_border: Option<ColorValue>,
-    pub tab_fg: Option<ColorValue>,
-    pub tab_active_bg: Option<ColorValue>,
-    pub tab_active_fg: Option<ColorValue>,
-    pub tab_hover_bg: Option<ColorValue>,
-    pub tab_disabled_fg: Option<ColorValue>,
-    pub panel_bg: Option<ColorValue>,
-    pub panel_border: Option<ColorValue>,
-    pub panel_fg: Option<ColorValue>,
+    pub list_bg: Option<Hsla>,
+    pub list_border: Option<Hsla>,
+    pub tab_fg: Option<Hsla>,
+    pub tab_active_bg: Option<Hsla>,
+    pub tab_active_fg: Option<Hsla>,
+    pub tab_hover_bg: Option<Hsla>,
+    pub tab_disabled_fg: Option<Hsla>,
+    pub panel_bg: Option<Hsla>,
+    pub panel_border: Option<Hsla>,
+    pub panel_fg: Option<Hsla>,
 }
 
 impl TabsPatch {
@@ -2724,14 +4794,14 @@ impl TabsPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PaginationPatch {
-    pub item_bg: Option<ColorValue>,
-    pub item_border: Option<ColorValue>,
-    pub item_fg: Option<ColorValue>,
-    pub item_active_bg: Option<ColorValue>,
-    pub item_active_fg: Option<ColorValue>,
-    pub item_hover_bg: Option<ColorValue>,
-    pub item_disabled_fg: Option<ColorValue>,
-    pub dots_fg: Option<ColorValue>,
+    pub item_bg: Option<Hsla>,
+    pub item_border: Option<Hsla>,
+    pub item_fg: Option<Hsla>,
+    pub item_active_bg: Option<Hsla>,
+    pub item_active_fg: Option<Hsla>,
+    pub item_hover_bg: Option<Hsla>,
+    pub item_disabled_fg: Option<Hsla>,
+    pub dots_fg: Option<Hsla>,
 }
 
 impl PaginationPatch {
@@ -2766,10 +4836,10 @@ impl PaginationPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct BreadcrumbsPatch {
-    pub item_fg: Option<ColorValue>,
-    pub item_current_fg: Option<ColorValue>,
-    pub separator: Option<ColorValue>,
-    pub item_hover_bg: Option<ColorValue>,
+    pub item_fg: Option<Hsla>,
+    pub item_current_fg: Option<Hsla>,
+    pub separator: Option<Hsla>,
+    pub item_hover_bg: Option<Hsla>,
 }
 
 impl BreadcrumbsPatch {
@@ -2792,14 +4862,14 @@ impl BreadcrumbsPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TablePatch {
-    pub header_bg: Option<ColorValue>,
-    pub header_fg: Option<ColorValue>,
-    pub row_bg: Option<ColorValue>,
-    pub row_alt_bg: Option<ColorValue>,
-    pub row_hover_bg: Option<ColorValue>,
-    pub row_border: Option<ColorValue>,
-    pub cell_fg: Option<ColorValue>,
-    pub caption: Option<ColorValue>,
+    pub header_bg: Option<Hsla>,
+    pub header_fg: Option<Hsla>,
+    pub row_bg: Option<Hsla>,
+    pub row_alt_bg: Option<Hsla>,
+    pub row_hover_bg: Option<Hsla>,
+    pub row_border: Option<Hsla>,
+    pub cell_fg: Option<Hsla>,
+    pub caption: Option<Hsla>,
 }
 
 impl TablePatch {
@@ -2834,21 +4904,21 @@ impl TablePatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct StepperPatch {
-    pub step_bg: Option<ColorValue>,
-    pub step_border: Option<ColorValue>,
-    pub step_fg: Option<ColorValue>,
-    pub step_active_bg: Option<ColorValue>,
-    pub step_active_border: Option<ColorValue>,
-    pub step_active_fg: Option<ColorValue>,
-    pub step_completed_bg: Option<ColorValue>,
-    pub step_completed_border: Option<ColorValue>,
-    pub step_completed_fg: Option<ColorValue>,
-    pub connector: Option<ColorValue>,
-    pub label: Option<ColorValue>,
-    pub description: Option<ColorValue>,
-    pub panel_bg: Option<ColorValue>,
-    pub panel_border: Option<ColorValue>,
-    pub panel_fg: Option<ColorValue>,
+    pub step_bg: Option<Hsla>,
+    pub step_border: Option<Hsla>,
+    pub step_fg: Option<Hsla>,
+    pub step_active_bg: Option<Hsla>,
+    pub step_active_border: Option<Hsla>,
+    pub step_active_fg: Option<Hsla>,
+    pub step_completed_bg: Option<Hsla>,
+    pub step_completed_border: Option<Hsla>,
+    pub step_completed_fg: Option<Hsla>,
+    pub connector: Option<Hsla>,
+    pub label: Option<Hsla>,
+    pub description: Option<Hsla>,
+    pub panel_bg: Option<Hsla>,
+    pub panel_border: Option<Hsla>,
+    pub panel_fg: Option<Hsla>,
 }
 
 impl StepperPatch {
@@ -2904,19 +4974,19 @@ impl StepperPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TimelinePatch {
-    pub bullet_bg: Option<ColorValue>,
-    pub bullet_border: Option<ColorValue>,
-    pub bullet_fg: Option<ColorValue>,
-    pub bullet_active_bg: Option<ColorValue>,
-    pub bullet_active_border: Option<ColorValue>,
-    pub bullet_active_fg: Option<ColorValue>,
-    pub line: Option<ColorValue>,
-    pub line_active: Option<ColorValue>,
-    pub title: Option<ColorValue>,
-    pub title_active: Option<ColorValue>,
-    pub body: Option<ColorValue>,
-    pub card_bg: Option<ColorValue>,
-    pub card_border: Option<ColorValue>,
+    pub bullet_bg: Option<Hsla>,
+    pub bullet_border: Option<Hsla>,
+    pub bullet_fg: Option<Hsla>,
+    pub bullet_active_bg: Option<Hsla>,
+    pub bullet_active_border: Option<Hsla>,
+    pub bullet_active_fg: Option<Hsla>,
+    pub line: Option<Hsla>,
+    pub line_active: Option<Hsla>,
+    pub title: Option<Hsla>,
+    pub title_active: Option<Hsla>,
+    pub body: Option<Hsla>,
+    pub card_bg: Option<Hsla>,
+    pub card_border: Option<Hsla>,
 }
 
 impl TimelinePatch {
@@ -2966,12 +5036,12 @@ impl TimelinePatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TreePatch {
-    pub row_fg: Option<ColorValue>,
-    pub row_selected_fg: Option<ColorValue>,
-    pub row_selected_bg: Option<ColorValue>,
-    pub row_hover_bg: Option<ColorValue>,
-    pub row_disabled_fg: Option<ColorValue>,
-    pub line: Option<ColorValue>,
+    pub row_fg: Option<Hsla>,
+    pub row_selected_fg: Option<Hsla>,
+    pub row_selected_bg: Option<Hsla>,
+    pub row_hover_bg: Option<Hsla>,
+    pub row_disabled_fg: Option<Hsla>,
+    pub line: Option<Hsla>,
 }
 
 impl TreePatch {
@@ -3097,6 +5167,7 @@ pub struct ThemePatch {
     pub primary_shade: Option<PrimaryShade>,
     pub color_scheme: Option<ColorScheme>,
     pub palette_overrides: BTreeMap<PaletteKey, ColorScale>,
+    pub radii: RadiiPatch,
     pub semantic: SemanticPatch,
     pub components: ComponentPatch,
 }
@@ -3174,20 +5245,23 @@ mod tests {
         let base = Theme::default();
         let patch = ThemePatch {
             semantic: SemanticPatch {
-                text_primary: Some(ColorValue::palette(PaletteKey::Orange, 8)),
+                text_primary: Some(
+                    Rgba::try_from(PaletteCatalog::scale(PaletteKey::Orange)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black()),
+                ),
                 ..SemanticPatch::default()
             },
             ..ThemePatch::default()
         };
         let next = base.merged(&patch);
         assert_eq!(
-            next.resolve_color(&next.semantic.text_primary),
-            base.palette[&PaletteKey::Orange][8]
+            next.semantic.text_primary,
+            (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Orange)[8 as usize])
+                .map(Into::into)
+                .unwrap_or_else(|_| black()))
         );
-        assert_eq!(
-            next.resolve_color(&next.semantic.text_secondary),
-            base.resolve_color(&base.semantic.text_secondary)
-        );
+        assert_eq!(next.semantic.text_secondary, base.semantic.text_secondary);
     }
 
     #[test]
@@ -3212,12 +5286,12 @@ mod tests {
         let dark = Theme::default().with_color_scheme(ColorScheme::Dark);
         let light = Theme::default().with_color_scheme(ColorScheme::Light);
 
-        let dark_checkbox = dark.resolve_color(&dark.components.checkbox.label);
-        let light_checkbox = light.resolve_color(&light.components.checkbox.label);
-        let dark_radio = dark.resolve_color(&dark.components.radio.label);
-        let light_radio = light.resolve_color(&light.components.radio.label);
-        let dark_switch = dark.resolve_color(&dark.components.switch.label);
-        let light_switch = light.resolve_color(&light.components.switch.label);
+        let dark_checkbox = dark.components.checkbox.label;
+        let light_checkbox = light.components.checkbox.label;
+        let dark_radio = dark.components.radio.label;
+        let light_radio = light.components.radio.label;
+        let dark_switch = dark.components.switch.label;
+        let light_switch = light.components.switch.label;
 
         assert_ne!(dark_checkbox, light_checkbox);
         assert_ne!(dark_radio, light_radio);

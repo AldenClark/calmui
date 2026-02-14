@@ -1,13 +1,12 @@
 use std::{f32::consts::TAU, time::Duration};
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, Component, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, Styled, div, px,
+    Animation, AnimationExt, AnyElement, Component, Hsla, InteractiveElement, IntoElement,
+    ParentElement, RenderOnce, SharedString, Styled, div, px,
 };
 
 use crate::motion::{MotionConfig, MotionTransition, TransitionPreset};
 use crate::style::Size;
-use crate::theme::ColorValue;
 use crate::{contracts::WithId, id::stable_auto_id};
 
 use super::primitives::h_stack;
@@ -25,7 +24,7 @@ pub enum LoaderVariant {
 
 pub trait LoaderElement: IntoElement + WithId + Sized + 'static {
     fn size(self, size: Size) -> Self;
-    fn color(self, color: ColorValue) -> Self;
+    fn color(self, color: impl Into<Hsla>) -> Self;
 }
 
 pub struct Loader {
@@ -33,7 +32,7 @@ pub struct Loader {
     label: Option<SharedString>,
     variant: LoaderVariant,
     size: Size,
-    color: Option<ColorValue>,
+    color: Option<Hsla>,
     theme: crate::theme::LocalTheme,
     motion: MotionConfig,
 }
@@ -72,8 +71,8 @@ impl Loader {
         self
     }
 
-    pub fn color(mut self, color: ColorValue) -> Self {
-        self.color = Some(color);
+    pub fn color(mut self, color: impl Into<Hsla>) -> Self {
+        self.color = Some(color.into());
         self
     }
 
@@ -102,7 +101,7 @@ impl Loader {
         }
     }
 
-    fn color_token(&self) -> ColorValue {
+    fn color_token(&self) -> Hsla {
         self.color
             .clone()
             .unwrap_or_else(|| self.theme.components.button.filled_bg.clone())
@@ -353,7 +352,7 @@ impl LoaderElement for Loader {
         Loader::size(self, size)
     }
 
-    fn color(self, color: ColorValue) -> Self {
+    fn color(self, color: impl Into<Hsla>) -> Self {
         Loader::color(self, color)
     }
 }

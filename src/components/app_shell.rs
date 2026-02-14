@@ -3,14 +3,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, WindowControlArea,
-    WindowOptions, div, px, rgb,
+    AnyElement, ClickEvent, Component, Hsla, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window,
+    WindowControlArea, WindowOptions, div, px, rgb,
 };
 
 use crate::contracts::WithId;
 use crate::id::stable_auto_id;
-use crate::theme::{ColorScheme, ColorValue};
+use crate::theme::ColorScheme;
 
 use super::control;
 use super::overlay::{Overlay, OverlayMaterialMode};
@@ -138,7 +138,6 @@ fn install_titlebar_shortcuts_once(cx: &mut gpui::App) {
         }
     });
 
-    // Keep this global observer for app lifetime.
     std::mem::forget(subscription);
 }
 
@@ -149,7 +148,7 @@ struct TitleBar {
     title_slot: AppShellTitleSlot,
     height_px: f32,
     immersive: bool,
-    background: Option<ColorValue>,
+    background: Option<Hsla>,
     show_window_controls: bool,
     left_slots: Vec<SlotRenderer>,
     center_slots: Vec<SlotRenderer>,
@@ -351,7 +350,7 @@ impl RenderOnce for TitleBar {
 
         let tokens = &self.theme.components.title_bar;
         let bg_token = if self.immersive && self.background.is_none() {
-            ColorValue::Custom("#00000000".to_string())
+            gpui::transparent_black()
         } else {
             self.background.clone().unwrap_or_else(|| tokens.bg.clone())
         };
@@ -526,7 +525,7 @@ struct Sidebar {
     id: String,
     width_px: f32,
     position: SidebarPosition,
-    background: Option<ColorValue>,
+    background: Option<Hsla>,
     header: Option<SlotRenderer>,
     content: Option<SlotRenderer>,
     footer: Option<SlotRenderer>,
@@ -722,8 +721,8 @@ impl AppShell {
         self
     }
 
-    pub fn title_bar_background(mut self, value: ColorValue) -> Self {
-        self.ensure_title_bar().background = Some(value);
+    pub fn title_bar_background(mut self, value: impl Into<Hsla>) -> Self {
+        self.ensure_title_bar().background = Some(value.into());
         self
     }
 
@@ -767,8 +766,8 @@ impl AppShell {
         self
     }
 
-    pub fn sidebar_background(mut self, value: ColorValue) -> Self {
-        self.ensure_sidebar().background = Some(value);
+    pub fn sidebar_background(mut self, value: impl Into<Hsla>) -> Self {
+        self.ensure_sidebar().background = Some(value.into());
         self
     }
 
@@ -801,8 +800,8 @@ impl AppShell {
         self
     }
 
-    pub fn secondary_sidebar_background(mut self, value: ColorValue) -> Self {
-        self.ensure_secondary_sidebar().background = Some(value);
+    pub fn secondary_sidebar_background(mut self, value: impl Into<Hsla>) -> Self {
+        self.ensure_secondary_sidebar().background = Some(value.into());
         self
     }
 

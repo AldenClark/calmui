@@ -154,7 +154,7 @@ impl RenderOnce for Switch {
             .w(px(thumb_size))
             .h(px(thumb_size))
             .bg(resolve_hsla(&self.theme, &tokens.thumb_bg));
-        thumb = apply_radius(thumb, Radius::Pill);
+        thumb = apply_radius(&self.theme, thumb, Radius::Pill);
 
         let mut track = div()
             .relative()
@@ -164,7 +164,7 @@ impl RenderOnce for Switch {
             .border_color(track_bg)
             .bg(track_bg)
             .child(thumb);
-        track = apply_radius(track, self.radius);
+        track = apply_radius(&self.theme, track, self.radius);
 
         let mut row = h_stack().id(self.id.clone()).cursor_pointer().child(
             v_stack()

@@ -219,10 +219,7 @@ impl RenderOnce for SegmentedControl {
                     .bg(if is_active {
                         active_bg
                     } else {
-                        resolve_hsla(
-                            &theme,
-                            &crate::theme::ColorValue::Custom("#00000000".to_string()),
-                        )
+                        resolve_hsla(&theme, &gpui::transparent_black())
                     })
                     .child(item.label.clone());
 
@@ -272,7 +269,7 @@ impl RenderOnce for SegmentedControl {
             .border_color(resolve_hsla(&theme, &tokens.border))
             .children(items);
 
-        root = apply_radius(root, self.radius);
+        root = apply_radius(&self.theme, root, self.radius);
 
         root.with_enter_transition(format!("{}-enter", enter_id), motion)
     }

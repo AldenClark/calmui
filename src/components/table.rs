@@ -680,7 +680,7 @@ impl RenderOnce for Table {
             root = root
                 .border_1()
                 .border_color(resolve_hsla(&self.theme, &tokens.row_border));
-            root = apply_radius(root, self.radius);
+            root = apply_radius(&self.theme, root, self.radius);
         }
 
         if let Some(caption) = caption {

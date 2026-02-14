@@ -252,7 +252,7 @@ impl RenderOnce for Pagination {
                 .child(label);
 
             item = Self::apply_item_size(self.size, item);
-            item = apply_radius(item, self.radius)
+            item = apply_radius(&self.theme, item, self.radius)
                 .min_w(gpui::px(Self::item_min_width_px(self.size)))
                 .text_center();
 
@@ -312,7 +312,7 @@ impl RenderOnce for Pagination {
                         .child(page.to_string());
 
                     page_item = Self::apply_item_size(self.size, page_item);
-                    page_item = apply_radius(page_item, self.radius)
+                    page_item = apply_radius(&self.theme, page_item, self.radius)
                         .min_w(gpui::px(Self::item_min_width_px(self.size)))
                         .text_center();
 

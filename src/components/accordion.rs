@@ -204,7 +204,7 @@ impl RenderOnce for Accordion {
                     .bg(resolve_hsla(&self.theme, &tokens.item_bg))
                     .border_1()
                     .border_color(resolve_hsla(&self.theme, &tokens.item_border));
-                root = apply_radius(root, self.radius);
+                root = apply_radius(&self.theme, root, self.radius);
 
                 let size_text = match self.size {
                     Size::Xs | Size::Sm => div().text_sm(),

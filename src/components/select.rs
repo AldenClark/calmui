@@ -10,7 +10,7 @@ use crate::contracts::{FieldLike, MotionAware, VariantSupport, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
-use crate::theme::{ColorValue, SelectTokens, Theme};
+use crate::theme::{SelectTokens, Theme};
 
 use super::control;
 use super::icon::Icon;
@@ -344,7 +344,7 @@ impl Select {
             .border_1();
 
         control = apply_input_size(control, self.size);
-        control = apply_radius(control, self.radius);
+        control = apply_radius(&self.theme, control, self.radius);
 
         let border = control_border_for_variant(
             &self.theme,
@@ -471,7 +471,7 @@ impl Select {
                 let row_bg = if selected {
                     resolve_hsla(&self.theme, &tokens.option_selected_bg)
                 } else {
-                    resolve_hsla(&self.theme, &ColorValue::Custom("#00000000".to_string()))
+                    resolve_hsla(&self.theme, &gpui::transparent_black())
                 };
                 let hover_bg = resolve_hsla(&self.theme, &tokens.option_hover_bg);
 
@@ -991,7 +991,7 @@ impl MultiSelect {
             .border_1();
 
         control = apply_input_size(control, self.size);
-        control = apply_radius(control, self.radius);
+        control = apply_radius(&self.theme, control, self.radius);
 
         let border = control_border_for_variant(
             &self.theme,
@@ -1131,7 +1131,7 @@ impl MultiSelect {
                 let row_bg = if checked {
                     resolve_hsla(&self.theme, &tokens.option_selected_bg)
                 } else {
-                    resolve_hsla(&self.theme, &ColorValue::Custom("#00000000".to_string()))
+                    resolve_hsla(&self.theme, &gpui::transparent_black())
                 };
                 let hover_bg = resolve_hsla(&self.theme, &tokens.option_hover_bg);
 

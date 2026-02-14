@@ -1,13 +1,12 @@
 use std::time::Duration;
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, Component, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, Styled, Window, div, px,
+    Animation, AnimationExt, AnyElement, Component, Hsla, InteractiveElement, IntoElement,
+    ParentElement, RenderOnce, SharedString, Styled, Window, div, px,
 };
 
 use crate::contracts::WithId;
 use crate::id::stable_auto_id;
-use crate::theme::ColorValue;
 
 use super::utils::resolve_hsla;
 
@@ -34,7 +33,7 @@ pub struct Indicator {
     position: IndicatorPosition,
     size_px: f32,
     offset_px: f32,
-    color: Option<ColorValue>,
+    color: Option<Hsla>,
     with_border: bool,
     theme: crate::theme::LocalTheme,
     child: Option<SlotRenderer>,
@@ -95,8 +94,8 @@ impl Indicator {
         self
     }
 
-    pub fn color(mut self, value: ColorValue) -> Self {
-        self.color = Some(value);
+    pub fn color(mut self, value: impl Into<Hsla>) -> Self {
+        self.color = Some(value.into());
         self
     }
 

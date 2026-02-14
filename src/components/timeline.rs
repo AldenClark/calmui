@@ -210,7 +210,7 @@ impl RenderOnce for Timeline {
                 } else {
                     resolve_hsla(&theme, &tokens.bullet_fg)
                 });
-            bullet = apply_radius(bullet, self.radius);
+            bullet = apply_radius(&self.theme, bullet, self.radius);
 
             if let Some(icon) = item.marker_icon.take() {
                 bullet = bullet.child(
@@ -282,7 +282,7 @@ impl RenderOnce for Timeline {
                     .border_color(resolve_hsla(&theme, &tokens.card_border))
                     .bg(resolve_hsla(&theme, &tokens.card_bg))
                     .child(content());
-                content_wrap = apply_radius(content_wrap, Radius::Sm);
+                content_wrap = apply_radius(&self.theme, content_wrap, Radius::Sm);
                 right_col = right_col.child(content_wrap);
             }
 

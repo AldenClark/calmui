@@ -1,16 +1,15 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    StatefulInteractiveElement, Styled, Window, WindowBackgroundAppearance, backdrop, canvas, div,
-    px,
+    AnyElement, ClickEvent, Component, Hsla, InteractiveElement, IntoElement, ParentElement,
+    RenderOnce, StatefulInteractiveElement, Styled, Window, WindowBackgroundAppearance, backdrop,
+    canvas, div, px,
 };
 
 use crate::contracts::{MotionAware, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::provider::CalmProvider;
-use crate::theme::ColorValue;
 
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
@@ -158,7 +157,7 @@ pub struct Overlay {
     system_material: OverlaySystemMaterial,
     restore_window_background: bool,
     material_capabilities: Option<OverlayMaterialCapabilities>,
-    color: Option<ColorValue>,
+    color: Option<Hsla>,
     opacity: f32,
     frosted: bool,
     blur_strength: f32,
@@ -278,8 +277,8 @@ impl Overlay {
         }
     }
 
-    pub fn color(mut self, value: ColorValue) -> Self {
-        self.color = Some(value);
+    pub fn color(mut self, value: impl Into<Hsla>) -> Self {
+        self.color = Some(value.into());
         self
     }
 

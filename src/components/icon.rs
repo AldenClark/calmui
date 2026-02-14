@@ -1,17 +1,17 @@
 use gpui::{
-    Component, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, div, px, svg,
+    Component, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, div, px,
+    svg,
 };
 
 use crate::icon::{IconRegistry, IconSource};
 use crate::provider::CalmProvider;
-use crate::theme::ColorValue;
 use crate::{contracts::WithId, id::stable_auto_id};
 
 use super::utils::resolve_hsla;
 
 #[derive(Clone)]
 enum IconColor {
-    Token(ColorValue),
+    Token(Hsla),
     Raw(gpui::Hsla),
 }
 
@@ -62,8 +62,8 @@ impl Icon {
         self
     }
 
-    pub fn color_token(mut self, token: ColorValue) -> Self {
-        self.color = Some(IconColor::Token(token));
+    pub fn color_token(mut self, token: impl Into<Hsla>) -> Self {
+        self.color = Some(IconColor::Token(token.into()));
         self
     }
 

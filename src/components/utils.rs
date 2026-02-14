@@ -1,26 +1,24 @@
-use gpui::{FontWeight, Hsla, Rgba, Styled, black, px};
+use gpui::{FontWeight, Hsla, Pixels, Styled, px};
 
 use crate::style::{Radius, Size, Variant};
-use crate::theme::{ColorValue, Theme};
+use crate::theme::{ResolveWithTheme, SemanticRadiusToken, Theme};
 
-pub fn resolve_hsla(theme: &Theme, token: &ColorValue) -> Hsla {
-    let raw = theme.resolve_color(token);
-    if let Ok(rgba) = Rgba::try_from(raw.as_str()) {
-        rgba.into()
-    } else {
-        black()
-    }
+pub fn resolve_hsla<T>(theme: &Theme, token: T) -> Hsla
+where
+    T: ResolveWithTheme<Hsla>,
+{
+    theme.resolve_hsla(token)
 }
 
-pub fn apply_radius<T: Styled>(div: T, radius: Radius) -> T {
-    match radius {
-        Radius::Xs => div.rounded_xs(),
-        Radius::Sm => div.rounded_sm(),
-        Radius::Md => div.rounded_md(),
-        Radius::Lg => div.rounded_lg(),
-        Radius::Xl => div.rounded_xl(),
-        Radius::Pill => div.rounded_full(),
-    }
+pub fn resolve_radius<T>(theme: &Theme, token: T) -> Pixels
+where
+    T: ResolveWithTheme<Pixels>,
+{
+    theme.resolve_radius(token)
+}
+
+pub fn apply_radius<T: Styled>(theme: &Theme, div: T, radius: Radius) -> T {
+    div.rounded(resolve_radius(theme, SemanticRadiusToken::from(radius)))
 }
 
 pub fn apply_button_size<T: Styled>(div: T, size: Size) -> T {

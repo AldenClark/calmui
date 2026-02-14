@@ -301,7 +301,7 @@ impl RenderOnce for Stepper {
                         gpui::FontWeight::SEMIBOLD
                     })
                     .child(indicator_text);
-                indicator = apply_radius(indicator, Radius::Pill);
+                indicator = apply_radius(&self.theme, indicator, Radius::Pill);
 
                 let mut text_block = v_stack().gap_0p5().child(
                     div()
@@ -352,7 +352,7 @@ impl RenderOnce for Stepper {
                         .child(indicator)
                         .child(text_block),
                 };
-                item = apply_radius(item, self.radius);
+                item = apply_radius(&self.theme, item, self.radius);
 
                 if step.disabled {
                     item = item.opacity(0.55).cursor_default();
@@ -447,7 +447,7 @@ impl RenderOnce for Stepper {
             .border_color(resolve_hsla(&theme, &tokens.panel_border))
             .bg(resolve_hsla(&theme, &tokens.panel_bg))
             .text_color(resolve_hsla(&theme, &tokens.panel_fg));
-        panel = apply_radius(panel, self.radius);
+        panel = apply_radius(&self.theme, panel, self.radius);
         panel = panel.child(panel_content.unwrap_or_else(|| {
             if let Some((label, description)) = active_step_meta.clone() {
                 let mut fallback = v_stack()

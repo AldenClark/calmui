@@ -1,5 +1,5 @@
 use gpui::{
-    AnyElement, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    AnyElement, Component, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     SharedString, Styled, div,
 };
 
@@ -7,7 +7,6 @@ use crate::contracts::{MotionAware, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::Size;
-use crate::theme::ColorValue;
 
 use super::loader::{Loader, LoaderElement, LoaderVariant};
 use super::overlay::{Overlay, OverlayMaterialMode};
@@ -15,7 +14,7 @@ use super::primitives::v_stack;
 use super::utils::resolve_hsla;
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
-type LoaderRenderer = Box<dyn FnOnce(Size, ColorValue, String) -> AnyElement>;
+type LoaderRenderer = Box<dyn FnOnce(Size, Hsla, String) -> AnyElement>;
 
 pub struct LoadingOverlay {
     id: String,
