@@ -21,6 +21,7 @@ pub struct ToastLayer {
     manager: ToastManager,
     icons: IconRegistry,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
 }
 
@@ -32,6 +33,7 @@ impl ToastLayer {
             manager,
             icons: IconRegistry::new(),
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::new().enter(
                 MotionTransition::new()
                     .preset(TransitionPreset::FadeRight)
@@ -317,6 +319,7 @@ pub struct ModalLayer {
     manager: ModalManager,
     icons: IconRegistry,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
 }
 
@@ -328,6 +331,7 @@ impl ModalLayer {
             manager,
             icons: IconRegistry::new(),
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::new().enter(
                 MotionTransition::new()
                     .preset(TransitionPreset::Pop)
@@ -495,5 +499,17 @@ impl crate::contracts::ComponentThemePatchable for ToastLayer {
 impl crate::contracts::ComponentThemePatchable for ModalLayer {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+impl gpui::Styled for ModalLayer {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
+    }
+}
+
+impl gpui::Styled for ToastLayer {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

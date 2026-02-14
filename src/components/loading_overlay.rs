@@ -23,6 +23,7 @@ pub struct LoadingOverlay {
     variant: LoaderVariant,
     size: Size,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     content: Option<SlotRenderer>,
     loader: Option<LoaderRenderer>,
@@ -38,6 +39,7 @@ impl LoadingOverlay {
             variant: LoaderVariant::Dots,
             size: Size::Md,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             content: None,
             loader: None,
@@ -170,5 +172,13 @@ impl IntoElement for LoadingOverlay {
 impl crate::contracts::ComponentThemePatchable for LoadingOverlay {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_visible!(LoadingOverlay);
+
+impl gpui::Styled for LoadingOverlay {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

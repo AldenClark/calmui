@@ -162,6 +162,7 @@ pub struct Overlay {
     frosted: bool,
     blur_strength: f32,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     content: Option<OverlayContent>,
     on_click: Option<OverlayClickHandler>,
@@ -185,6 +186,7 @@ impl Overlay {
             frosted: true,
             blur_strength: 1.3,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             content: None,
             on_click: None,
@@ -564,5 +566,13 @@ impl IntoElement for Overlay {
 impl crate::contracts::ComponentThemePatchable for Overlay {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_visible!(Overlay);
+
+impl gpui::Styled for Overlay {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

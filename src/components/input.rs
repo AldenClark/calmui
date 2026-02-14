@@ -60,6 +60,7 @@ pub struct TextInput {
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     focus_handle: Option<FocusHandle>,
     on_change: Option<ChangeHandler>,
@@ -91,6 +92,7 @@ impl TextInput {
             size: Size::Md,
             radius: Radius::Sm,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             focus_handle: None,
             on_change: None,
@@ -614,6 +616,7 @@ impl IntoElement for TextInput {
 
 pub struct PasswordInput {
     inner: TextInput,
+    style: gpui::StyleRefinement,
 }
 
 impl PasswordInput {
@@ -621,6 +624,7 @@ impl PasswordInput {
     pub fn new() -> Self {
         Self {
             inner: TextInput::new().masked(true).mask_reveal_ms(700),
+            style: gpui::StyleRefinement::default(),
         }
     }
 
@@ -646,6 +650,11 @@ impl PasswordInput {
 
     pub fn right_slot(mut self, content: impl IntoElement + 'static) -> Self {
         self.inner = self.inner.right_slot(content);
+        self
+    }
+
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.inner = self.inner.disabled(disabled);
         self
     }
 
@@ -725,7 +734,7 @@ impl VariantSupport for PasswordInput {
     }
 
     fn size(mut self, value: Size) -> Self {
-        self.inner = self.inner.size(value);
+        self.inner = VariantSupport::size(self.inner, value);
         self
     }
 
@@ -744,7 +753,9 @@ impl MotionAware for PasswordInput {
 
 impl RenderOnce for PasswordInput {
     fn render(self, window: &mut gpui::Window, cx: &mut gpui::App) -> impl IntoElement {
-        self.inner.render(window, cx)
+        let mut inner = self.inner;
+        gpui::Refineable::refine(gpui::Styled::style(&mut inner), &self.style);
+        inner.render(window, cx)
     }
 }
 
@@ -765,6 +776,7 @@ pub struct PinInput {
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     focus_handle: Option<FocusHandle>,
     on_change: Option<ChangeHandler>,
@@ -782,6 +794,7 @@ impl PinInput {
             size: Size::Md,
             radius: Radius::Sm,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             focus_handle: None,
             on_change: None,
@@ -1004,5 +1017,26 @@ impl crate::contracts::ComponentThemePatchable for TextInput {
 impl crate::contracts::ComponentThemePatchable for PinInput {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(TextInput);
+crate::impl_disableable!(PasswordInput);
+
+impl gpui::Styled for PinInput {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
+    }
+}
+
+impl gpui::Styled for TextInput {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
+    }
+}
+
+impl gpui::Styled for PasswordInput {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

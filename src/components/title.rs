@@ -1,6 +1,6 @@
 use gpui::{
     Component, FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels, Refineable,
-    RenderOnce, SharedString, StyleRefinement, Styled, Window, div,
+    RenderOnce, SharedString, Styled, Window, div,
 };
 
 use crate::contracts::WithId;
@@ -18,7 +18,7 @@ pub struct Title {
     font_size: Option<Pixels>,
     line_height: Option<Pixels>,
     font_weight: Option<FontWeight>,
-    style: StyleRefinement,
+    style: gpui::StyleRefinement,
 }
 
 impl Title {
@@ -32,7 +32,7 @@ impl Title {
             font_size: None,
             line_height: None,
             font_weight: None,
-            style: StyleRefinement::default(),
+            style: gpui::StyleRefinement::default(),
         }
     }
 
@@ -116,7 +116,7 @@ impl IntoElement for Title {
 }
 
 impl Styled for Title {
-    fn style(&mut self) -> &mut StyleRefinement {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
         &mut self.style
     }
 }

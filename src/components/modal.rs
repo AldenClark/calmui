@@ -28,6 +28,7 @@ pub struct Modal {
     close_button: bool,
     close_on_click_outside: bool,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     content: Option<SlotRenderer>,
     on_close: Option<CloseHandler>,
@@ -46,6 +47,7 @@ impl Modal {
             close_button: true,
             close_on_click_outside: true,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             content: None,
             on_close: None,
@@ -260,5 +262,13 @@ impl IntoElement for Modal {
 impl crate::contracts::ComponentThemePatchable for Modal {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_openable!(Modal);
+
+impl gpui::Styled for Modal {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

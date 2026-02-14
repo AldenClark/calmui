@@ -24,6 +24,7 @@ pub struct ActionIcon {
     radius: Radius,
     disabled: bool,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     content: Option<SlotRenderer>,
     on_click: Option<ClickHandler>,
@@ -39,6 +40,7 @@ impl ActionIcon {
             radius: Radius::Sm,
             disabled: false,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             content: None,
             on_click: None,
@@ -208,5 +210,13 @@ impl IntoElement for ActionIcon {
 impl crate::contracts::ComponentThemePatchable for ActionIcon {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(ActionIcon);
+
+impl gpui::Styled for ActionIcon {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

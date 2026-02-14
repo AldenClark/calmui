@@ -65,6 +65,7 @@ pub struct Stepper {
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_change: Option<ChangeHandler>,
 }
@@ -84,6 +85,7 @@ impl Stepper {
             size: Size::Md,
             radius: Radius::Pill,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -491,5 +493,13 @@ impl IntoElement for Stepper {
 impl crate::contracts::ComponentThemePatchable for Stepper {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(StepperStep);
+
+impl gpui::Styled for Stepper {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

@@ -36,6 +36,7 @@ pub struct Indicator {
     color: Option<Hsla>,
     with_border: bool,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     child: Option<SlotRenderer>,
 }
 
@@ -54,6 +55,7 @@ impl Indicator {
             color: None,
             with_border: true,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             child: None,
         }
     }
@@ -238,5 +240,13 @@ impl IntoElement for Indicator {
 impl crate::contracts::ComponentThemePatchable for Indicator {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(Indicator);
+
+impl gpui::Styled for Indicator {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

@@ -29,6 +29,7 @@ pub struct Text {
     line_clamp: Option<usize>,
     with_ellipsis: bool,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
 }
 
 impl Text {
@@ -43,6 +44,7 @@ impl Text {
             line_clamp: None,
             with_ellipsis: true,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
         }
     }
 
@@ -81,7 +83,7 @@ impl Text {
         }
     }
 
-    fn text_color(&self) -> gpui::Hsla {
+    fn resolved_text_color(&self) -> gpui::Hsla {
         let tokens = &self.theme.components.text;
         let token = match self.tone {
             TextTone::Default => &tokens.fg,
@@ -110,7 +112,7 @@ impl RenderOnce for Text {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let id = self.id.clone();
-        let color = self.text_color();
+        let color = self.resolved_text_color();
         let mut node = div().id(id).text_color(color);
 
         node = match self.size {
@@ -139,6 +141,7 @@ impl RenderOnce for Text {
             }
         }
 
+        gpui::Refineable::refine(gpui::Styled::style(&mut node), &self.style);
         node.child(self.content)
     }
 }
@@ -154,5 +157,11 @@ impl IntoElement for Text {
 impl crate::contracts::ComponentThemePatchable for Text {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+impl gpui::Styled for Text {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

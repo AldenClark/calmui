@@ -13,99 +13,25 @@ pub enum ColorScheme {
     Dark,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PrimaryShade {
-    Uniform(u8),
-    Split { light: u8, dark: u8 },
+pub const PRIMARY_SHADE_LIGHT_DEFAULT: u8 = 6;
+pub const PRIMARY_SHADE_DARK_DEFAULT: u8 = 8;
+pub const BUILTIN_TRANSPARENT_HEX: &str = "#00000000";
+pub const BUILTIN_BLACK_HEX: &str = "#000000";
+pub const BUILTIN_WHITE_HEX: &str = "#FFFFFF";
+pub const COLOR_TOKEN_TRANSPARENT: ColorToken = ColorToken::Hex(BUILTIN_TRANSPARENT_HEX);
+pub const COLOR_TOKEN_BLACK: ColorToken = ColorToken::Hex(BUILTIN_BLACK_HEX);
+pub const COLOR_TOKEN_WHITE: ColorToken = ColorToken::Hex(BUILTIN_WHITE_HEX);
+
+fn resolve_palette_hsla(key: PaletteKey, shade: u8) -> Hsla {
+    Rgba::try_from(PaletteCatalog::scale(key)[shade.min(9) as usize])
+        .map(Into::into)
+        .unwrap_or_else(|_| black())
 }
 
-impl PrimaryShade {
-    pub const fn shade_for(self, scheme: ColorScheme) -> u8 {
-        match self {
-            Self::Uniform(shade) => shade,
-            Self::Split { light, dark } => match scheme {
-                ColorScheme::Light => light,
-                ColorScheme::Dark => dark,
-            },
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PaletteColor {
-    pub key: PaletteKey,
-    pub shade: u8,
-}
-
-impl PaletteColor {
-    pub const fn new(key: PaletteKey, shade: u8) -> Self {
-        Self { key, shade }
-    }
-
-    fn normalized_shade(self) -> usize {
-        self.shade.min(9) as usize
-    }
-
-    fn hex(self) -> &'static str {
-        PaletteCatalog::scale(self.key)[self.normalized_shade()]
-    }
-}
-
-impl From<PaletteColor> for Hsla {
-    fn from(value: PaletteColor) -> Self {
-        Rgba::try_from(value.hex())
-            .map(Into::into)
-            .unwrap_or_else(|_| black())
-    }
-}
-
-impl From<PaletteColor> for Background {
-    fn from(value: PaletteColor) -> Self {
-        Hsla::from(value).into()
-    }
-}
-
-impl From<PaletteColor> for Fill {
-    fn from(value: PaletteColor) -> Self {
-        Hsla::from(value).into()
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum BuiltinColor {
-    Transparent,
-    Black,
-    White,
-    Palette(PaletteColor),
-}
-
-impl BuiltinColor {
-    pub const fn palette(key: PaletteKey, shade: u8) -> Self {
-        Self::Palette(PaletteColor::new(key, shade))
-    }
-}
-
-impl From<BuiltinColor> for Hsla {
-    fn from(value: BuiltinColor) -> Self {
-        match value {
-            BuiltinColor::Transparent => transparent_black(),
-            BuiltinColor::Black => black(),
-            BuiltinColor::White => white(),
-            BuiltinColor::Palette(color) => color.into(),
-        }
-    }
-}
-
-impl From<BuiltinColor> for Background {
-    fn from(value: BuiltinColor) -> Self {
-        Hsla::from(value).into()
-    }
-}
-
-impl From<BuiltinColor> for Fill {
-    fn from(value: BuiltinColor) -> Self {
-        Hsla::from(value).into()
-    }
+fn resolve_hex_hsla(hex: &'static str) -> Hsla {
+    Rgba::try_from(hex)
+        .map(Into::into)
+        .unwrap_or_else(|_| black())
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -178,29 +104,35 @@ impl ResolveWithTheme<Fill> for SemanticColorToken {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ColorToken {
     Raw(Hsla),
-    Builtin(BuiltinColor),
+    Hex(&'static str),
+    Palette { key: PaletteKey, shade: u8 },
     Semantic(SemanticColorToken),
 }
 
 impl ColorToken {
+    pub const fn builtin_transparent() -> Self {
+        Self::Hex(BUILTIN_TRANSPARENT_HEX)
+    }
+
+    pub const fn builtin_black() -> Self {
+        Self::Hex(BUILTIN_BLACK_HEX)
+    }
+
+    pub const fn builtin_white() -> Self {
+        Self::Hex(BUILTIN_WHITE_HEX)
+    }
+
+    pub const fn palette(key: PaletteKey, shade: u8) -> Self {
+        Self::Palette { key, shade }
+    }
+
     pub fn resolve(self, theme: &Theme) -> Hsla {
         match self {
             ColorToken::Raw(value) => value,
-            ColorToken::Builtin(value) => value.into(),
+            ColorToken::Hex(hex) => resolve_hex_hsla(hex),
+            ColorToken::Palette { key, shade } => resolve_palette_hsla(key, shade),
             ColorToken::Semantic(value) => value.resolve(theme),
         }
-    }
-}
-
-impl ResolveWithTheme<Hsla> for BuiltinColor {
-    fn resolve(self, _theme: &Theme) -> Hsla {
-        self.into()
-    }
-}
-
-impl ResolveWithTheme<Hsla> for &BuiltinColor {
-    fn resolve(self, _theme: &Theme) -> Hsla {
-        (*self).into()
     }
 }
 
@@ -249,18 +181,6 @@ impl From<Hsla> for ColorToken {
 impl From<&Hsla> for ColorToken {
     fn from(value: &Hsla) -> Self {
         Self::Raw(*value)
-    }
-}
-
-impl From<BuiltinColor> for ColorToken {
-    fn from(value: BuiltinColor) -> Self {
-        Self::Builtin(value)
-    }
-}
-
-impl From<PaletteColor> for ColorToken {
-    fn from(value: PaletteColor) -> Self {
-        Self::Builtin(BuiltinColor::Palette(value))
     }
 }
 
@@ -3302,7 +3222,8 @@ impl ComponentTokens {
 pub struct Theme {
     pub radii: ThemeRadii,
     pub primary_color: PaletteKey,
-    pub primary_shade: PrimaryShade,
+    pub primary_shade_light: u8,
+    pub primary_shade_dark: u8,
     pub color_scheme: ColorScheme,
     pub palette: BTreeMap<PaletteKey, ColorScale>,
     pub semantic: SemanticColors,
@@ -3315,7 +3236,8 @@ impl Default for Theme {
         Self {
             radii: ThemeRadii::default(),
             primary_color: primary,
-            primary_shade: PrimaryShade::Split { light: 6, dark: 8 },
+            primary_shade_light: PRIMARY_SHADE_LIGHT_DEFAULT,
+            primary_shade_dark: PRIMARY_SHADE_DARK_DEFAULT,
             color_scheme: ColorScheme::Light,
             palette: PaletteCatalog::store(),
             semantic: SemanticColors::defaults_for(primary, ColorScheme::Light),
@@ -3332,8 +3254,16 @@ impl Theme {
         self
     }
 
-    pub fn with_primary_shade(mut self, primary_shade: PrimaryShade) -> Self {
-        self.primary_shade = primary_shade;
+    pub fn with_primary_shades(mut self, light: u8, dark: u8) -> Self {
+        self.primary_shade_light = light.min(9);
+        self.primary_shade_dark = dark.min(9);
+        self
+    }
+
+    pub fn with_primary_shade(mut self, shade: u8) -> Self {
+        let clamped = shade.min(9);
+        self.primary_shade_light = clamped;
+        self.primary_shade_dark = clamped;
         self
     }
 
@@ -3384,8 +3314,11 @@ impl Theme {
         if let Some(primary) = patch.primary_color {
             next = next.with_primary_color(primary);
         }
-        if let Some(primary_shade) = patch.primary_shade {
-            next.primary_shade = primary_shade;
+        if let Some(primary_shade_light) = patch.primary_shade_light {
+            next.primary_shade_light = primary_shade_light.min(9);
+        }
+        if let Some(primary_shade_dark) = patch.primary_shade_dark {
+            next.primary_shade_dark = primary_shade_dark.min(9);
         }
         if let Some(color_scheme) = patch.color_scheme {
             next.color_scheme = color_scheme;
@@ -5164,7 +5097,8 @@ impl ComponentPatch {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ThemePatch {
     pub primary_color: Option<PaletteKey>,
-    pub primary_shade: Option<PrimaryShade>,
+    pub primary_shade_light: Option<u8>,
+    pub primary_shade_dark: Option<u8>,
     pub color_scheme: Option<ColorScheme>,
     pub palette_overrides: BTreeMap<PaletteKey, ColorScale>,
     pub radii: RadiiPatch,
@@ -5227,10 +5161,8 @@ mod tests {
     fn default_theme_uses_blue_as_primary_color() {
         let theme = Theme::default();
         assert_eq!(theme.primary_color, PaletteKey::Blue);
-        assert_eq!(
-            theme.primary_shade,
-            PrimaryShade::Split { light: 6, dark: 8 }
-        );
+        assert_eq!(theme.primary_shade_light, PRIMARY_SHADE_LIGHT_DEFAULT);
+        assert_eq!(theme.primary_shade_dark, PRIMARY_SHADE_DARK_DEFAULT);
     }
 
     #[test]

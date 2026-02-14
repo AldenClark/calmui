@@ -32,6 +32,7 @@ pub struct Popover {
     offset_px: f32,
     close_on_click_outside: bool,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     trigger: Option<SlotRenderer>,
     content: Option<SlotRenderer>,
@@ -50,6 +51,7 @@ impl Popover {
             offset_px: 3.0,
             close_on_click_outside: true,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             trigger: None,
             content: None,
@@ -286,5 +288,15 @@ impl IntoElement for Popover {
 impl crate::contracts::ComponentThemePatchable for Popover {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(Popover);
+crate::impl_openable!(Popover);
+crate::impl_placeable!(Popover, PopoverPlacement);
+
+impl gpui::Styled for Popover {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

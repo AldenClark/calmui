@@ -49,6 +49,7 @@ pub struct Slider {
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_change: Option<ChangeHandler>,
 }
@@ -73,6 +74,7 @@ impl Slider {
             size: Size::Md,
             radius: Radius::Pill,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -539,5 +541,13 @@ impl IntoElement for Slider {
 impl crate::contracts::ComponentThemePatchable for Slider {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(Slider);
+
+impl gpui::Styled for Slider {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

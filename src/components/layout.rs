@@ -26,16 +26,6 @@ pub enum FlexAlign {
     Center,
 }
 
-fn apply_gap<T: Styled>(node: T, gap: Size) -> T {
-    match gap {
-        Size::Xs => node.gap_1(),
-        Size::Sm => node.gap_1p5(),
-        Size::Md => node.gap_2(),
-        Size::Lg => node.gap_3(),
-        Size::Xl => node.gap_4(),
-    }
-}
-
 pub struct Flex {
     id: String,
     direction: FlexDirection,
@@ -44,6 +34,7 @@ pub struct Flex {
     wrap: bool,
     gap: Size,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     children: Vec<AnyElement>,
 }
 
@@ -58,6 +49,7 @@ impl Flex {
             wrap: false,
             gap: Size::Md,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             children: Vec::new(),
         }
     }
@@ -101,6 +93,22 @@ impl Flex {
             .extend(children.into_iter().map(IntoElement::into_any_element));
         self
     }
+
+    fn apply_gap<T: Styled>(node: T, gap: Size) -> T {
+        match gap {
+            Size::Xs => node.gap_1(),
+            Size::Sm => node.gap_1p5(),
+            Size::Md => node.gap_2(),
+            Size::Lg => node.gap_3(),
+            Size::Xl => node.gap_4(),
+        }
+    }
+}
+
+impl ParentElement for Flex {
+    fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
+        self.children.extend(elements);
+    }
 }
 
 impl WithId for Flex {
@@ -127,7 +135,7 @@ impl RenderOnce for Flex {
             root = root.flex_wrap();
         }
 
-        root = apply_gap(root, self.gap);
+        root = Self::apply_gap(root, self.gap);
 
         root = match self.justify {
             FlexJustify::Start => root,
@@ -161,6 +169,7 @@ pub enum StackDirection {
 
 pub struct Stack {
     inner: Flex,
+    style: gpui::StyleRefinement,
 }
 
 impl Stack {
@@ -168,6 +177,7 @@ impl Stack {
     pub fn new() -> Self {
         Self {
             inner: Flex::new().direction(FlexDirection::Column),
+            style: gpui::StyleRefinement::default(),
         }
     }
 
@@ -226,7 +236,9 @@ impl WithId for Stack {
 
 impl RenderOnce for Stack {
     fn render(self, window: &mut Window, cx: &mut gpui::App) -> impl IntoElement {
-        self.inner.render(window, cx)
+        let mut inner = self.inner;
+        gpui::Refineable::refine(gpui::Styled::style(&mut inner), &self.style);
+        inner.render(window, cx)
     }
 }
 
@@ -238,12 +250,19 @@ impl IntoElement for Stack {
     }
 }
 
+impl ParentElement for Stack {
+    fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
+        self.inner.extend(elements);
+    }
+}
+
 pub struct Grid {
     id: String,
     columns: usize,
     gap_x: Size,
     gap_y: Size,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     children: Vec<AnyElement>,
 }
 
@@ -256,6 +275,7 @@ impl Grid {
             gap_x: Size::Md,
             gap_y: Size::Md,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             children: Vec::new(),
         }
     }
@@ -295,6 +315,22 @@ impl Grid {
             .extend(children.into_iter().map(IntoElement::into_any_element));
         self
     }
+
+    fn apply_gap<T: Styled>(node: T, gap: Size) -> T {
+        match gap {
+            Size::Xs => node.gap_1(),
+            Size::Sm => node.gap_1p5(),
+            Size::Md => node.gap_2(),
+            Size::Lg => node.gap_3(),
+            Size::Xl => node.gap_4(),
+        }
+    }
+}
+
+impl ParentElement for Grid {
+    fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
+        self.children.extend(elements);
+    }
 }
 
 impl WithId for Grid {
@@ -320,7 +356,7 @@ impl RenderOnce for Grid {
             current_row.push(child);
             if current_row.len() == columns {
                 let mut row = div().flex().flex_row().w_full();
-                row = apply_gap(row, gap_x);
+                row = Self::apply_gap(row, gap_x);
                 let items = current_row
                     .drain(..)
                     .map(|item| div().flex_1().min_w_0().child(item).into_any_element())
@@ -331,7 +367,7 @@ impl RenderOnce for Grid {
 
         if !current_row.is_empty() {
             let mut row = div().flex().flex_row().w_full();
-            row = apply_gap(row, gap_x);
+            row = Self::apply_gap(row, gap_x);
             while current_row.len() < columns {
                 current_row.push(div().w_full().h_full().into_any_element());
             }
@@ -342,7 +378,7 @@ impl RenderOnce for Grid {
             rows.push(row.children(items).into_any_element());
         }
 
-        apply_gap(div().id(self.id).flex().flex_col().w_full(), gap_y)
+        Self::apply_gap(div().id(self.id).flex().flex_col().w_full(), gap_y)
             .text_color(self.theme.resolve_hsla(&self.theme.semantic.text_primary))
             .children(rows)
     }
@@ -358,12 +394,16 @@ impl IntoElement for Grid {
 
 pub struct SimpleGrid {
     inner: Grid,
+    style: gpui::StyleRefinement,
 }
 
 impl SimpleGrid {
     #[track_caller]
     pub fn new() -> Self {
-        Self { inner: Grid::new() }
+        Self {
+            inner: Grid::new(),
+            style: gpui::StyleRefinement::default(),
+        }
     }
 
     pub fn cols(mut self, value: usize) -> Self {
@@ -413,7 +453,9 @@ impl WithId for SimpleGrid {
 
 impl RenderOnce for SimpleGrid {
     fn render(self, window: &mut Window, cx: &mut gpui::App) -> impl IntoElement {
-        self.inner.render(window, cx)
+        let mut inner = self.inner;
+        gpui::Refineable::refine(gpui::Styled::style(&mut inner), &self.style);
+        inner.render(window, cx)
     }
 }
 
@@ -422,6 +464,12 @@ impl IntoElement for SimpleGrid {
 
     fn into_element(self) -> Self::Element {
         Component::new(self)
+    }
+}
+
+impl ParentElement for SimpleGrid {
+    fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
+        self.inner.extend(elements);
     }
 }
 
@@ -450,5 +498,29 @@ impl crate::contracts::ComponentThemePatchable for Flex {
 impl crate::contracts::ComponentThemePatchable for Grid {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+impl gpui::Styled for Flex {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
+    }
+}
+
+impl gpui::Styled for Grid {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
+    }
+}
+
+impl gpui::Styled for Stack {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
+    }
+}
+
+impl gpui::Styled for SimpleGrid {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

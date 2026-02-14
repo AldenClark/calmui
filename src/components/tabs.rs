@@ -56,6 +56,7 @@ pub struct Tabs {
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_change: Option<ChangeHandler>,
 }
@@ -73,6 +74,7 @@ impl Tabs {
             size: Size::Md,
             radius: Radius::Md,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -321,5 +323,13 @@ impl IntoElement for Tabs {
 impl crate::contracts::ComponentThemePatchable for Tabs {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(TabItem);
+
+impl gpui::Styled for Tabs {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

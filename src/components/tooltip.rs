@@ -30,6 +30,7 @@ pub struct Tooltip {
     placement: TooltipPlacement,
     offset_px: f32,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     trigger: Option<SlotRenderer>,
     on_open_change: Option<OpenChangeHandler>,
@@ -48,6 +49,7 @@ impl Tooltip {
             placement: TooltipPlacement::Top,
             offset_px: 3.0,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             trigger: None,
             on_open_change: None,
@@ -272,5 +274,15 @@ impl IntoElement for Tooltip {
 impl crate::contracts::ComponentThemePatchable for Tooltip {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(Tooltip);
+crate::impl_openable!(Tooltip);
+crate::impl_placeable!(Tooltip, TooltipPlacement);
+
+impl gpui::Styled for Tooltip {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

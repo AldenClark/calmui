@@ -29,6 +29,7 @@ pub struct Checkbox {
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_change: Option<CheckboxChangeHandler>,
 }
@@ -48,6 +49,7 @@ impl Checkbox {
             size: Size::Md,
             radius: Radius::Xs,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -264,6 +266,7 @@ pub struct CheckboxGroup {
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_change: Option<CheckboxGroupChangeHandler>,
 }
@@ -281,6 +284,7 @@ impl CheckboxGroup {
             size: Size::Md,
             radius: Radius::Xs,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -404,10 +408,10 @@ impl RenderOnce for CheckboxGroup {
                     .with_id(format!("{}-option-{index}", self.id))
                     .value(option.value.clone())
                     .checked(checked)
-                    .disabled(option.disabled)
-                    .size(self.size)
-                    .radius(self.radius)
-                    .motion(self.motion);
+                    .disabled(option.disabled);
+                checkbox = VariantSupport::size(checkbox, self.size);
+                checkbox = VariantSupport::radius(checkbox, self.radius);
+                checkbox = checkbox.motion(self.motion);
 
                 if let Some(description) = option.description {
                     checkbox = checkbox.description(description);
@@ -431,20 +435,30 @@ impl RenderOnce for CheckboxGroup {
                         (handler)(next, window, cx);
                     }
                 });
-                checkbox.into_any_element()
+                div()
+                    .group(self.id.clone())
+                    .child(checkbox)
+                    .into_any_element()
             })
             .collect::<Vec<_>>();
 
         match self.orientation {
             GroupOrientation::Horizontal => div()
                 .id(self.id.clone())
+                .group(self.id.clone())
+                .tab_group()
                 .flex()
                 .flex_row()
                 .items_start()
                 .gap_3()
                 .flex_wrap()
                 .children(items),
-            GroupOrientation::Vertical => v_stack().id(self.id.clone()).gap_2().children(items),
+            GroupOrientation::Vertical => v_stack()
+                .id(self.id.clone())
+                .group(self.id.clone())
+                .tab_group()
+                .gap_2()
+                .children(items),
         }
     }
 }
@@ -466,5 +480,20 @@ impl crate::contracts::ComponentThemePatchable for Checkbox {
 impl crate::contracts::ComponentThemePatchable for CheckboxGroup {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(Checkbox);
+crate::impl_disableable!(CheckboxOption);
+
+impl gpui::Styled for Checkbox {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
+    }
+}
+
+impl gpui::Styled for CheckboxGroup {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

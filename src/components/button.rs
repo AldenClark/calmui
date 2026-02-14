@@ -34,6 +34,7 @@ pub struct Button {
     left_slot: Option<SlotRenderer>,
     right_slot: Option<SlotRenderer>,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_click: Option<ClickHandler>,
 }
@@ -54,6 +55,7 @@ impl Button {
             left_slot: None,
             right_slot: None,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_click: None,
         }
@@ -318,6 +320,7 @@ pub struct ButtonGroup {
     active_variant: Variant,
     inactive_variant: Variant,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_change: Option<GroupChangeHandler>,
 }
@@ -337,6 +340,7 @@ impl ButtonGroup {
             active_variant: Variant::Filled,
             inactive_variant: Variant::Light,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -459,10 +463,10 @@ impl RenderOnce for ButtonGroup {
 
                 let mut button = Button::new(item.label.clone())
                     .with_id(format!("{}-item-{index}", self.id))
-                    .variant(variant)
-                    .size(self.size)
-                    .radius(self.radius)
-                    .motion(self.motion);
+                    .variant(variant);
+                button = VariantSupport::size(button, self.size);
+                button = VariantSupport::radius(button, self.radius);
+                button = button.motion(self.motion);
 
                 if item.disabled {
                     button = button.disabled(true);
@@ -485,18 +489,25 @@ impl RenderOnce for ButtonGroup {
                     });
                 }
 
-                button.into_any_element()
+                div()
+                    .group(self.id.clone())
+                    .child(button)
+                    .into_any_element()
             })
             .collect::<Vec<_>>();
 
         let root = match self.orientation {
             GroupOrientation::Horizontal => h_stack()
                 .id(self.id.clone())
+                .group(self.id.clone())
+                .tab_group()
                 .gap_1()
                 .children(children)
                 .into_any_element(),
             GroupOrientation::Vertical => div()
                 .id(self.id.clone())
+                .group(self.id.clone())
+                .tab_group()
                 .flex()
                 .flex_col()
                 .gap_1()
@@ -524,5 +535,20 @@ impl crate::contracts::ComponentThemePatchable for Button {
 impl crate::contracts::ComponentThemePatchable for ButtonGroup {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(Button);
+crate::impl_disableable!(ButtonGroupItem);
+
+impl gpui::Styled for Button {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
+    }
+}
+
+impl gpui::Styled for ButtonGroup {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

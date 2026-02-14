@@ -20,15 +20,6 @@ type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 type ItemClickHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
 type OpenChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
 
-fn dropdown_width_px(id: &str) -> f32 {
-    control::text_state(id, "dropdown-width-px", None, String::new())
-        .parse::<f32>()
-        .ok()
-        .filter(|width| *width >= 1.0)
-        .map(|width| width.max(180.0))
-        .unwrap_or(220.0)
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MenuItem {
     pub value: SharedString,
@@ -69,6 +60,7 @@ pub struct Menu {
     trigger: Option<SlotRenderer>,
     items: Vec<MenuItem>,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_item_click: Option<ItemClickHandler>,
     on_open_change: Option<OpenChangeHandler>,
@@ -88,6 +80,7 @@ impl Menu {
             trigger: None,
             items: Vec::new(),
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_item_click: None,
             on_open_change: None,
@@ -157,6 +150,15 @@ impl Menu {
 
     fn resolved_opened(&self) -> bool {
         control::bool_state(&self.id, "opened", self.opened, self.default_opened)
+    }
+
+    fn dropdown_width_px(id: &str) -> f32 {
+        control::text_state(id, "dropdown-width-px", None, String::new())
+            .parse::<f32>()
+            .ok()
+            .filter(|width| *width >= 1.0)
+            .map(|width| width.max(180.0))
+            .unwrap_or(220.0)
     }
 
     fn render_dropdown(&self, is_controlled: bool) -> AnyElement {
@@ -237,7 +239,7 @@ impl Menu {
 
         let mut dropdown = v_stack()
             .id(format!("{}-dropdown", self.id))
-            .w(px(dropdown_width_px(&self.id)))
+            .w(px(Self::dropdown_width_px(&self.id)))
             .max_w_full()
             .p_1p5()
             .gap_1()
@@ -384,5 +386,15 @@ impl IntoElement for Menu {
 impl crate::contracts::ComponentThemePatchable for Menu {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(MenuItem);
+crate::impl_disableable!(Menu);
+crate::impl_openable!(Menu);
+
+impl gpui::Styled for Menu {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

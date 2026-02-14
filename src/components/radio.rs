@@ -29,6 +29,7 @@ pub struct Radio {
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_change: Option<RadioChangeHandler>,
 }
@@ -48,6 +49,7 @@ impl Radio {
             size: Size::Md,
             radius: Radius::Pill,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -263,6 +265,7 @@ pub struct RadioGroup {
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_change: Option<RadioGroupChangeHandler>,
 }
@@ -280,6 +283,7 @@ impl RadioGroup {
             size: Size::Md,
             radius: Radius::Pill,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -387,10 +391,10 @@ impl RenderOnce for RadioGroup {
                     .with_id(format!("{}-option-{index}", self.id))
                     .value(option.value.clone())
                     .checked(checked)
-                    .disabled(option.disabled)
-                    .size(self.size)
-                    .radius(self.radius)
-                    .motion(self.motion);
+                    .disabled(option.disabled);
+                radio = VariantSupport::size(radio, self.size);
+                radio = VariantSupport::radius(radio, self.radius);
+                radio = radio.motion(self.motion);
 
                 if let Some(description) = option.description {
                     radio = radio.description(description);
@@ -410,20 +414,27 @@ impl RenderOnce for RadioGroup {
                         }
                     }
                 });
-                radio.into_any_element()
+                div().group(self.id.clone()).child(radio).into_any_element()
             })
             .collect::<Vec<_>>();
 
         match self.orientation {
             GroupOrientation::Horizontal => div()
                 .id(self.id.clone())
+                .group(self.id.clone())
+                .tab_group()
                 .flex()
                 .flex_row()
                 .items_start()
                 .gap_3()
                 .flex_wrap()
                 .children(radios),
-            GroupOrientation::Vertical => v_stack().id(self.id.clone()).gap_2().children(radios),
+            GroupOrientation::Vertical => v_stack()
+                .id(self.id.clone())
+                .group(self.id.clone())
+                .tab_group()
+                .gap_2()
+                .children(radios),
         }
     }
 }
@@ -445,5 +456,20 @@ impl crate::contracts::ComponentThemePatchable for Radio {
 impl crate::contracts::ComponentThemePatchable for RadioGroup {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(Radio);
+crate::impl_disableable!(RadioOption);
+
+impl gpui::Styled for Radio {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
+    }
+}
+
+impl gpui::Styled for RadioGroup {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

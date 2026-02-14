@@ -22,6 +22,7 @@ pub struct Badge {
     left_slot: Option<SlotRenderer>,
     right_slot: Option<SlotRenderer>,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
 }
 
@@ -37,6 +38,7 @@ impl Badge {
             left_slot: None,
             right_slot: None,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
         }
     }
@@ -161,5 +163,11 @@ impl IntoElement for Badge {
 impl crate::contracts::ComponentThemePatchable for Badge {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+impl gpui::Styled for Badge {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

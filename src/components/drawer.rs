@@ -37,6 +37,7 @@ pub struct Drawer {
     close_button: bool,
     close_on_click_outside: bool,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     content: Option<SlotRenderer>,
     on_close: Option<CloseHandler>,
@@ -56,6 +57,7 @@ impl Drawer {
             close_button: true,
             close_on_click_outside: true,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             content: None,
             on_close: None,
@@ -275,5 +277,14 @@ impl IntoElement for Drawer {
 impl crate::contracts::ComponentThemePatchable for Drawer {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_openable!(Drawer);
+crate::impl_placeable!(Drawer, DrawerPlacement);
+
+impl gpui::Styled for Drawer {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

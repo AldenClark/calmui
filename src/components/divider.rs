@@ -27,6 +27,7 @@ pub struct Divider {
     label: Option<SharedString>,
     label_position: DividerLabelPosition,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
 }
 
 impl Divider {
@@ -38,6 +39,7 @@ impl Divider {
             label: None,
             label_position: DividerLabelPosition::Center,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
         }
     }
 
@@ -129,5 +131,11 @@ impl IntoElement for Divider {
 impl crate::contracts::ComponentThemePatchable for Divider {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+impl gpui::Styled for Divider {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

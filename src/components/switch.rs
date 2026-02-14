@@ -27,6 +27,7 @@ pub struct Switch {
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_change: Option<SwitchChangeHandler>,
 }
@@ -44,6 +45,7 @@ impl Switch {
             size: Size::Md,
             radius: Radius::Pill,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -220,5 +222,13 @@ impl IntoElement for Switch {
 impl crate::contracts::ComponentThemePatchable for Switch {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(Switch);
+
+impl gpui::Styled for Switch {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

@@ -21,6 +21,7 @@ pub struct Icon {
     size: f32,
     color: Option<IconColor>,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     registry: IconRegistry,
 }
 
@@ -33,6 +34,7 @@ impl Icon {
             size: 16.0,
             color: None,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             registry: IconRegistry::new(),
         }
     }
@@ -132,5 +134,11 @@ impl IntoElement for Icon {
 impl crate::contracts::ComponentThemePatchable for Icon {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+impl gpui::Styled for Icon {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

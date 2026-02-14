@@ -43,6 +43,7 @@ pub struct HoverCard {
     offset_px: f32,
     match_trigger_width: bool,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     trigger: Option<SlotRenderer>,
     content: Option<SlotRenderer>,
@@ -63,6 +64,7 @@ impl HoverCard {
             offset_px: 2.0,
             match_trigger_width: true,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             trigger: None,
             content: None,
@@ -395,5 +397,15 @@ impl IntoElement for HoverCard {
 impl crate::contracts::ComponentThemePatchable for HoverCard {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(HoverCard);
+crate::impl_openable!(HoverCard);
+crate::impl_placeable!(HoverCard, HoverCardPlacement);
+
+impl gpui::Styled for HoverCard {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

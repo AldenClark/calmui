@@ -9,16 +9,6 @@ use crate::style::Size;
 
 use super::utils::resolve_hsla;
 
-fn apply_padding<T: Styled>(node: T, padding: Size) -> T {
-    match padding {
-        Size::Xs => node.p_1(),
-        Size::Sm => node.p_2(),
-        Size::Md => node.p_3(),
-        Size::Lg => node.p_4(),
-        Size::Xl => node.p_5(),
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ScrollDirection {
     Vertical,
@@ -35,6 +25,7 @@ pub struct ScrollArea {
     show_scrollbars: bool,
     bordered: bool,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     children: Vec<AnyElement>,
 }
 
@@ -50,6 +41,7 @@ impl ScrollArea {
             show_scrollbars: true,
             bordered: true,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             children: Vec::new(),
         }
     }
@@ -98,6 +90,22 @@ impl ScrollArea {
             .extend(children.into_iter().map(IntoElement::into_any_element));
         self
     }
+
+    fn apply_padding<T: Styled>(node: T, padding: Size) -> T {
+        match padding {
+            Size::Xs => node.p_1(),
+            Size::Sm => node.p_2(),
+            Size::Md => node.p_3(),
+            Size::Lg => node.p_4(),
+            Size::Xl => node.p_5(),
+        }
+    }
+}
+
+impl ParentElement for ScrollArea {
+    fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
+        self.children.extend(elements);
+    }
 }
 
 impl WithId for ScrollArea {
@@ -136,7 +144,7 @@ impl RenderOnce for ScrollArea {
             viewport = viewport.scrollbar_width(px(0.0));
         }
 
-        viewport = apply_padding(viewport, self.padding).children(self.children);
+        viewport = Self::apply_padding(viewport, self.padding).children(self.children);
 
         let mut root = div()
             .id(self.id)
@@ -166,5 +174,11 @@ impl IntoElement for ScrollArea {
 impl crate::contracts::ComponentThemePatchable for ScrollArea {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+impl gpui::Styled for ScrollArea {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

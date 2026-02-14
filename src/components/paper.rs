@@ -16,6 +16,7 @@ pub struct Paper {
     bordered: bool,
     with_shadow: bool,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     children: Vec<AnyElement>,
 }
 
@@ -29,6 +30,7 @@ impl Paper {
             bordered: true,
             with_shadow: false,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             children: Vec::new(),
         }
     }
@@ -89,6 +91,12 @@ impl WithId for Paper {
     }
 }
 
+impl ParentElement for Paper {
+    fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
+        self.children.extend(elements);
+    }
+}
+
 impl RenderOnce for Paper {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
@@ -127,5 +135,11 @@ impl IntoElement for Paper {
 impl crate::contracts::ComponentThemePatchable for Paper {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+impl gpui::Styled for Paper {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

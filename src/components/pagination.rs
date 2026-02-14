@@ -36,6 +36,7 @@ pub struct Pagination {
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_change: Option<ChangeHandler>,
 }
@@ -56,6 +57,7 @@ impl Pagination {
             size: Size::Md,
             radius: Radius::Sm,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -377,5 +379,13 @@ impl IntoElement for Pagination {
 impl crate::contracts::ComponentThemePatchable for Pagination {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(Pagination);
+
+impl gpui::Styled for Pagination {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

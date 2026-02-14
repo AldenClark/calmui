@@ -48,6 +48,7 @@ pub struct Breadcrumbs {
     max_items: Option<usize>,
     size: Size,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_item_click: Option<ItemClickHandler>,
 }
@@ -62,6 +63,7 @@ impl Breadcrumbs {
             max_items: None,
             size: Size::Md,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_item_click: None,
         }
@@ -247,5 +249,13 @@ impl IntoElement for Breadcrumbs {
 impl crate::contracts::ComponentThemePatchable for Breadcrumbs {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(BreadcrumbItem);
+
+impl gpui::Styled for Breadcrumbs {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

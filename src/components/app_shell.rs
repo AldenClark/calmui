@@ -154,6 +154,7 @@ struct TitleBar {
     center_slots: Vec<SlotRenderer>,
     right_slots: Vec<SlotRenderer>,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
 }
 
 impl TitleBar {
@@ -172,6 +173,7 @@ impl TitleBar {
             center_slots: Vec::new(),
             right_slots: Vec::new(),
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
         }
     }
 
@@ -530,6 +532,7 @@ struct Sidebar {
     content: Option<SlotRenderer>,
     footer: Option<SlotRenderer>,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
 }
 
 impl Sidebar {
@@ -544,6 +547,7 @@ impl Sidebar {
             content: None,
             footer: None,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
         }
     }
 
@@ -655,6 +659,7 @@ pub struct AppShell {
     overlay_sidebar_default_opened: bool,
     on_overlay_sidebar_change: Option<OverlaySidebarChangeHandler>,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
 }
 
 impl AppShell {
@@ -674,6 +679,7 @@ impl AppShell {
             overlay_sidebar_default_opened: false,
             on_overlay_sidebar_change: None,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
         }
     }
 
@@ -1079,5 +1085,23 @@ impl crate::contracts::ComponentThemePatchable for Sidebar {
 impl crate::contracts::ComponentThemePatchable for AppShell {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+impl gpui::Styled for AppShell {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
+    }
+}
+
+impl gpui::Styled for Sidebar {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
+    }
+}
+
+impl gpui::Styled for TitleBar {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

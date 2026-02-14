@@ -35,6 +35,7 @@ pub struct Chip {
     radius: Radius,
     variant: Variant,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_change: Option<ChipChangeHandler>,
 }
@@ -54,6 +55,7 @@ impl Chip {
             radius: Radius::Pill,
             variant: Variant::Light,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -274,6 +276,7 @@ pub struct ChipGroup {
     radius: Radius,
     variant: Variant,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_change: Option<ChipGroupChangeHandler>,
 }
@@ -296,6 +299,7 @@ impl ChipGroup {
             radius: Radius::Pill,
             variant: Variant::Light,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -453,10 +457,10 @@ impl RenderOnce for ChipGroup {
                     .value(option.value.clone())
                     .checked(checked)
                     .disabled(option.disabled)
-                    .variant(self.variant)
-                    .size(self.size)
-                    .radius(self.radius)
-                    .motion(self.motion);
+                    .variant(self.variant);
+                chip = VariantSupport::size(chip, self.size);
+                chip = VariantSupport::radius(chip, self.radius);
+                chip = chip.motion(self.motion);
 
                 if let Some(handler) = self.on_change.clone() {
                     let value = option.value;
@@ -533,19 +537,23 @@ impl RenderOnce for ChipGroup {
                     });
                 }
 
-                chip.into_any_element()
+                div().group(self.id.clone()).child(chip).into_any_element()
             })
             .collect::<Vec<_>>();
 
         match self.orientation {
             GroupOrientation::Horizontal => h_stack()
                 .id(self.id.clone())
+                .group(self.id.clone())
+                .tab_group()
                 .gap_2()
                 .flex_wrap()
                 .children(chips)
                 .into_any_element(),
             GroupOrientation::Vertical => v_stack()
                 .id(self.id.clone())
+                .group(self.id.clone())
+                .tab_group()
                 .gap_2()
                 .children(chips)
                 .into_any_element(),
@@ -570,5 +578,20 @@ impl crate::contracts::ComponentThemePatchable for Chip {
 impl crate::contracts::ComponentThemePatchable for ChipGroup {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(Chip);
+crate::impl_disableable!(ChipOption);
+
+impl gpui::Styled for Chip {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
+    }
+}
+
+impl gpui::Styled for ChipGroup {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

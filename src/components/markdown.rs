@@ -307,6 +307,7 @@ pub struct Markdown {
     source: SharedString,
     compact: bool,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
 }
 
 impl Markdown {
@@ -317,6 +318,7 @@ impl Markdown {
             source: source.into(),
             compact: false,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
         }
     }
 
@@ -452,5 +454,11 @@ impl IntoElement for Markdown {
 impl crate::contracts::ComponentThemePatchable for Markdown {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+impl gpui::Styled for Markdown {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

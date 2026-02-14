@@ -75,6 +75,7 @@ pub struct Tree {
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_select: Option<SelectHandler>,
     on_expanded_change: Option<ExpandedChangeHandler>,
@@ -98,6 +99,7 @@ impl Tree {
             size: Size::Md,
             radius: Radius::Sm,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_select: None,
             on_expanded_change: None,
@@ -525,6 +527,7 @@ impl RenderOnce for Tree {
             root = root.child(ctx.render_node(node, 0, index.to_string()));
         }
 
+        gpui::Refineable::refine(gpui::Styled::style(&mut root), &self.style);
         root.with_enter_transition(format!("{}-enter", self.id), self.motion)
     }
 }
@@ -540,5 +543,13 @@ impl IntoElement for Tree {
 impl crate::contracts::ComponentThemePatchable for Tree {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(TreeNode);
+
+impl gpui::Styled for Tree {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

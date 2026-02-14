@@ -34,6 +34,7 @@ pub struct Loader {
     size: Size,
     color: Option<Hsla>,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
 }
 
@@ -47,6 +48,7 @@ impl Loader {
             size: Size::Md,
             color: None,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::new().enter(
                 MotionTransition::new()
                     .preset(TransitionPreset::Pulse)
@@ -368,5 +370,11 @@ impl IntoElement for Loader {
 impl crate::contracts::ComponentThemePatchable for Loader {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+impl gpui::Styled for Loader {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

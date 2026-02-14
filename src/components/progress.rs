@@ -44,6 +44,7 @@ pub struct Progress {
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
 }
 
@@ -63,6 +64,7 @@ impl Progress {
             size: Size::Md,
             radius: Radius::Pill,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
         }
     }
@@ -439,5 +441,11 @@ impl IntoElement for Progress {
 impl crate::contracts::ComponentThemePatchable for Progress {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+impl gpui::Styled for Progress {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

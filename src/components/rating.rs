@@ -32,6 +32,7 @@ pub struct Rating {
     radius: Radius,
     variant: Variant,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_change: Option<ChangeHandler>,
 }
@@ -53,6 +54,7 @@ impl Rating {
             radius: Radius::Sm,
             variant: Variant::Filled,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_change: None,
         }
@@ -315,5 +317,13 @@ impl IntoElement for Rating {
 impl crate::contracts::ComponentThemePatchable for Rating {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(Rating);
+
+impl gpui::Styled for Rating {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

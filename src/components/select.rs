@@ -23,71 +23,79 @@ type SelectChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>
 type MultiSelectChangeHandler = Rc<dyn Fn(Vec<SharedString>, &mut Window, &mut gpui::App)>;
 type OpenChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
 
-fn should_open_dropdown_upward(event: &ClickEvent, window: &Window) -> bool {
-    let click_y = event.position().y;
-    let viewport_height = window.viewport_size().height;
-    let space_above = click_y;
-    let space_below = viewport_height - click_y;
-    let preferred_height = px(260.0);
+struct SelectRuntime;
 
-    space_below < preferred_height && space_above > space_below
-}
+impl SelectRuntime {
+    fn should_open_dropdown_upward(event: &ClickEvent, window: &Window) -> bool {
+        let click_y = event.position().y;
+        let viewport_height = window.viewport_size().height;
+        let space_above = click_y;
+        let space_below = viewport_height - click_y;
+        let preferred_height = px(260.0);
 
-fn capture_dropdown_metrics(id: &str, event: &ClickEvent, window: &Window) {
-    control::set_bool_state(
-        id,
-        "dropdown-upward",
-        should_open_dropdown_upward(event, window),
-    );
-    if let ClickEvent::Keyboard(keyboard) = event {
-        control::set_text_state(
+        space_below < preferred_height && space_above > space_below
+    }
+
+    fn capture_dropdown_metrics(id: &str, event: &ClickEvent, window: &Window) {
+        control::set_bool_state(
             id,
-            "dropdown-width-px",
-            format!("{:.2}", f32::from(keyboard.bounds.size.width)),
+            "dropdown-upward",
+            Self::should_open_dropdown_upward(event, window),
         );
+        if let ClickEvent::Keyboard(keyboard) = event {
+            control::set_text_state(
+                id,
+                "dropdown-width-px",
+                format!("{:.2}", f32::from(keyboard.bounds.size.width)),
+            );
+        }
     }
-}
 
-fn dropdown_width_px(id: &str) -> f32 {
-    control::text_state(id, "dropdown-width-px", None, String::new())
-        .parse::<f32>()
-        .ok()
-        .filter(|width| *width >= 1.0)
-        .unwrap_or(220.0)
-}
-
-fn control_bg_for_variant(theme: &Theme, tokens: &SelectTokens, variant: Variant) -> gpui::Hsla {
-    let base = resolve_hsla(theme, &tokens.bg);
-    match variant {
-        Variant::Filled | Variant::Default => base,
-        Variant::Light => base.alpha(0.9),
-        Variant::Subtle => base.alpha(0.74),
-        Variant::Outline => base.alpha(0.22),
-        Variant::Ghost => base.alpha(0.0),
+    fn dropdown_width_px(id: &str) -> f32 {
+        control::text_state(id, "dropdown-width-px", None, String::new())
+            .parse::<f32>()
+            .ok()
+            .filter(|width| *width >= 1.0)
+            .unwrap_or(220.0)
     }
-}
 
-fn control_border_for_variant(
-    theme: &Theme,
-    tokens: &SelectTokens,
-    variant: Variant,
-    opened: bool,
-    has_error: bool,
-) -> gpui::Hsla {
-    let base = if has_error {
-        resolve_hsla(theme, &tokens.border_error)
-    } else if opened {
-        resolve_hsla(theme, &tokens.border_focus)
-    } else {
-        resolve_hsla(theme, &tokens.border)
-    };
+    fn control_bg_for_variant(
+        theme: &Theme,
+        tokens: &SelectTokens,
+        variant: Variant,
+    ) -> gpui::Hsla {
+        let base = resolve_hsla(theme, &tokens.bg);
+        match variant {
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.9),
+            Variant::Subtle => base.alpha(0.74),
+            Variant::Outline => base.alpha(0.22),
+            Variant::Ghost => base.alpha(0.0),
+        }
+    }
 
-    match variant {
-        Variant::Ghost if !opened && !has_error => base.alpha(0.0),
-        Variant::Ghost => base.alpha(0.88),
-        Variant::Subtle => base.alpha(if opened { 0.78 } else { 0.52 }),
-        Variant::Light => base.alpha(if opened { 0.92 } else { 0.7 }),
-        _ => base,
+    fn control_border_for_variant(
+        theme: &Theme,
+        tokens: &SelectTokens,
+        variant: Variant,
+        opened: bool,
+        has_error: bool,
+    ) -> gpui::Hsla {
+        let base = if has_error {
+            resolve_hsla(theme, &tokens.border_error)
+        } else if opened {
+            resolve_hsla(theme, &tokens.border_focus)
+        } else {
+            resolve_hsla(theme, &tokens.border)
+        };
+
+        match variant {
+            Variant::Ghost if !opened && !has_error => base.alpha(0.0),
+            Variant::Ghost => base.alpha(0.88),
+            Variant::Subtle => base.alpha(if opened { 0.78 } else { 0.52 }),
+            Variant::Light => base.alpha(if opened { 0.92 } else { 0.7 }),
+            _ => base,
+        }
     }
 }
 
@@ -136,6 +144,7 @@ pub struct Select {
     radius: Radius,
     variant: Variant,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_change: Option<SelectChangeHandler>,
     on_open_change: Option<OpenChangeHandler>,
@@ -167,6 +176,7 @@ impl Select {
             radius: Radius::Sm,
             variant: Variant::Default,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_change: None,
             on_open_change: None,
@@ -339,14 +349,18 @@ impl Select {
             .items_center()
             .gap_2()
             .cursor_pointer()
-            .bg(control_bg_for_variant(&self.theme, tokens, self.variant))
+            .bg(SelectRuntime::control_bg_for_variant(
+                &self.theme,
+                tokens,
+                self.variant,
+            ))
             .text_color(resolve_hsla(&self.theme, &tokens.fg))
             .border_1();
 
         control = apply_input_size(control, self.size);
         control = apply_radius(&self.theme, control, self.radius);
 
-        let border = control_border_for_variant(
+        let border = SelectRuntime::control_border_for_variant(
             &self.theme,
             tokens,
             self.variant,
@@ -370,7 +384,7 @@ impl Select {
                 control = control.on_click(
                     move |event: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
                         if next {
-                            capture_dropdown_metrics(&id, event, window);
+                            SelectRuntime::capture_dropdown_metrics(&id, event, window);
                         }
                         if !opened_controlled {
                             control::set_bool_state(&id, "opened", next);
@@ -384,7 +398,7 @@ impl Select {
                 let next = !opened;
                 control = control.on_click(move |event: &ClickEvent, window: &mut Window, _cx| {
                     if next {
-                        capture_dropdown_metrics(&id, event, window);
+                        SelectRuntime::capture_dropdown_metrics(&id, event, window);
                     }
                     control::set_bool_state(&id, "opened", next);
                     window.refresh();
@@ -559,7 +573,7 @@ impl Select {
 
         let mut dropdown = div()
             .id(format!("{}-dropdown", self.id))
-            .w(px(dropdown_width_px(&self.id)))
+            .w(px(SelectRuntime::dropdown_width_px(&self.id)))
             .rounded_md()
             .border_1()
             .border_color(resolve_hsla(&self.theme, &tokens.dropdown_border))
@@ -762,6 +776,7 @@ pub struct MultiSelect {
     radius: Radius,
     variant: Variant,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_change: Option<MultiSelectChangeHandler>,
     on_open_change: Option<OpenChangeHandler>,
@@ -793,6 +808,7 @@ impl MultiSelect {
             radius: Radius::Sm,
             variant: Variant::Default,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_change: None,
             on_open_change: None,
@@ -987,13 +1003,17 @@ impl MultiSelect {
             .items_center()
             .gap_2()
             .cursor_pointer()
-            .bg(control_bg_for_variant(&self.theme, tokens, self.variant))
+            .bg(SelectRuntime::control_bg_for_variant(
+                &self.theme,
+                tokens,
+                self.variant,
+            ))
             .border_1();
 
         control = apply_input_size(control, self.size);
         control = apply_radius(&self.theme, control, self.radius);
 
-        let border = control_border_for_variant(
+        let border = SelectRuntime::control_border_for_variant(
             &self.theme,
             tokens,
             self.variant,
@@ -1014,7 +1034,7 @@ impl MultiSelect {
             control = control.on_click(
                 move |event: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
                     if next {
-                        capture_dropdown_metrics(&id, event, window);
+                        SelectRuntime::capture_dropdown_metrics(&id, event, window);
                     }
                     if !opened_controlled {
                         control::set_bool_state(&id, "opened", next);
@@ -1028,7 +1048,7 @@ impl MultiSelect {
             let id = self.id.clone();
             control = control.on_click(move |event: &ClickEvent, window: &mut Window, _cx| {
                 if next {
-                    capture_dropdown_metrics(&id, event, window);
+                    SelectRuntime::capture_dropdown_metrics(&id, event, window);
                 }
                 control::set_bool_state(&id, "opened", next);
                 window.refresh();
@@ -1211,7 +1231,7 @@ impl MultiSelect {
 
         let mut dropdown = div()
             .id(format!("{}-dropdown", self.id))
-            .w(px(dropdown_width_px(&self.id)))
+            .w(px(SelectRuntime::dropdown_width_px(&self.id)))
             .rounded_md()
             .border_1()
             .border_color(resolve_hsla(&self.theme, &tokens.dropdown_border))
@@ -1399,5 +1419,23 @@ impl crate::contracts::ComponentThemePatchable for Select {
 impl crate::contracts::ComponentThemePatchable for MultiSelect {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+crate::impl_disableable!(SelectOption);
+crate::impl_disableable!(Select);
+crate::impl_disableable!(MultiSelect);
+crate::impl_openable!(Select);
+crate::impl_openable!(MultiSelect);
+
+impl gpui::Styled for MultiSelect {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
+    }
+}
+
+impl gpui::Styled for Select {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

@@ -137,6 +137,7 @@ pub struct Table {
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
     on_page_change: Option<PageChangeHandler>,
     on_page_size_change: Option<PageSizeChangeHandler>,
@@ -181,6 +182,7 @@ impl Table {
             size: Size::Md,
             radius: Radius::Sm,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_page_change: None,
             on_page_size_change: None,
@@ -1151,5 +1153,11 @@ impl IntoElement for Table {
 impl crate::contracts::ComponentThemePatchable for Table {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+impl gpui::Styled for Table {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }

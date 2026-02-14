@@ -56,6 +56,7 @@ pub struct Timeline {
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
+    style: gpui::StyleRefinement,
     motion: MotionConfig,
 }
 
@@ -70,6 +71,7 @@ impl Timeline {
             size: Size::Md,
             radius: Radius::Pill,
             theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
         }
     }
@@ -313,5 +315,11 @@ impl IntoElement for Timeline {
 impl crate::contracts::ComponentThemePatchable for Timeline {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+impl gpui::Styled for Timeline {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
     }
 }
