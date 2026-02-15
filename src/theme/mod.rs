@@ -7,8 +7,8 @@ use gpui::{
     Background, Corners, Fill, FontWeight, Hsla, Pixels, Rgba, black, px, transparent_black, white,
 };
 
-mod component_theme_dsl_impls;
 mod overrides_api;
+mod themable_impls;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ColorScheme {

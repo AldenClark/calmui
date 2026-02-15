@@ -144,7 +144,7 @@ pub trait ComponentThemeOverridable: Sized {
     }
 }
 
-pub trait ComponentThemeDsl: ComponentThemeOverridable + Sized {
+pub trait Themable: ComponentThemeOverridable + Sized {
     type ThemeOverrides: Default;
 
     fn component_overrides_mut(overrides: &mut ComponentOverrides) -> &mut Self::ThemeOverrides;
@@ -164,9 +164,9 @@ pub trait ComponentThemeDsl: ComponentThemeOverridable + Sized {
 }
 
 #[macro_export]
-macro_rules! impl_component_theme_dsl {
+macro_rules! impl_themable {
     ($type:ty, $field:ident, $overrides:ty) => {
-        impl $crate::contracts::ComponentThemeDsl for $type {
+        impl $crate::contracts::Themable for $type {
             type ThemeOverrides = $overrides;
 
             fn component_overrides_mut(
