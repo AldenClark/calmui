@@ -7,7 +7,7 @@ pub trait StyleRecipe<Props> {
     fn resolve_styles(&self, props: &Props, state: ComponentState) -> StyleMap;
 }
 
-pub trait VariantSupport: Sized {
+pub(crate) trait VariantConfigurable: Sized {
     fn variant(self, value: Variant) -> Self;
     fn size(self, value: Size) -> Self;
     fn radius(self, value: Radius) -> Self;
@@ -19,10 +19,10 @@ pub trait Variantable: Sized {
 
 impl<T> Variantable for T
 where
-    T: VariantSupport,
+    T: VariantConfigurable,
 {
     fn variant(self, value: Variant) -> Self {
-        VariantSupport::variant(self, value)
+        VariantConfigurable::variant(self, value)
     }
 }
 
@@ -32,10 +32,10 @@ pub trait Sizeable: Sized {
 
 impl<T> Sizeable for T
 where
-    T: VariantSupport,
+    T: VariantConfigurable,
 {
     fn size(self, value: Size) -> Self {
-        VariantSupport::size(self, value)
+        VariantConfigurable::size(self, value)
     }
 }
 
@@ -45,10 +45,10 @@ pub trait Radiusable: Sized {
 
 impl<T> Radiusable for T
 where
-    T: VariantSupport,
+    T: VariantConfigurable,
 {
     fn radius(self, value: Radius) -> Self {
-        VariantSupport::radius(self, value)
+        VariantConfigurable::radius(self, value)
     }
 }
 
@@ -107,6 +107,25 @@ macro_rules! impl_placeable {
         impl $crate::contracts::Placeable<$placement> for $type {
             fn placement(self, value: $placement) -> Self {
                 <$type>::placement(self, value)
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_variant_size_radius_via_methods {
+    ($type:ty) => {
+        impl $crate::contracts::VariantConfigurable for $type {
+            fn variant(self, value: $crate::style::Variant) -> Self {
+                <$type>::variant(self, value)
+            }
+
+            fn size(self, value: $crate::style::Size) -> Self {
+                <$type>::size(self, value)
+            }
+
+            fn radius(self, value: $crate::style::Radius) -> Self {
+                <$type>::radius(self, value)
             }
         }
     };

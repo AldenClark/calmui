@@ -6,7 +6,7 @@ use gpui::{
     deferred, div, point, px,
 };
 
-use crate::contracts::{FieldLike, MotionAware, VariantSupport, WithId};
+use crate::contracts::{FieldLike, MotionAware, VariantConfigurable, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
@@ -647,7 +647,7 @@ impl FieldLike for Select {
     }
 }
 
-impl VariantSupport for Select {
+impl VariantConfigurable for Select {
     fn variant(mut self, value: Variant) -> Self {
         self.variant = value;
         self
@@ -1305,7 +1305,7 @@ impl FieldLike for MultiSelect {
     }
 }
 
-impl VariantSupport for MultiSelect {
+impl VariantConfigurable for MultiSelect {
     fn variant(mut self, value: Variant) -> Self {
         self.variant = value;
         self

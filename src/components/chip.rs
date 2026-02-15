@@ -5,7 +5,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, VariantSupport, WithId};
+use crate::contracts::{MotionAware, Radiusable, Sizeable, VariantConfigurable, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
@@ -148,7 +148,7 @@ impl WithId for Chip {
     }
 }
 
-impl VariantSupport for Chip {
+impl VariantConfigurable for Chip {
     fn variant(mut self, value: Variant) -> Self {
         self.variant = value;
         self
@@ -415,7 +415,7 @@ impl WithId for ChipGroup {
     }
 }
 
-impl VariantSupport for ChipGroup {
+impl VariantConfigurable for ChipGroup {
     fn variant(mut self, value: Variant) -> Self {
         self.variant = value;
         self
@@ -458,8 +458,8 @@ impl RenderOnce for ChipGroup {
                     .checked(checked)
                     .disabled(option.disabled)
                     .variant(self.variant);
-                chip = VariantSupport::size(chip, self.size);
-                chip = VariantSupport::radius(chip, self.radius);
+                chip = Sizeable::size(chip, self.size);
+                chip = Radiusable::radius(chip, self.radius);
                 chip = chip.motion(self.motion);
 
                 if let Some(handler) = self.on_change.clone() {

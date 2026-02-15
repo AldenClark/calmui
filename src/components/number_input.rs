@@ -8,7 +8,7 @@ use gpui::{
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 
-use crate::contracts::{FieldLike, MotionAware, VariantSupport, WithId};
+use crate::contracts::{FieldLike, MotionAware, VariantConfigurable, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
@@ -699,7 +699,7 @@ impl FieldLike for NumberInput {
     }
 }
 
-impl VariantSupport for NumberInput {
+impl VariantConfigurable for NumberInput {
     fn variant(mut self, value: Variant) -> Self {
         self.variant = value;
         self

@@ -5,7 +5,7 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, VariantSupport, WithId};
+use crate::contracts::{MotionAware, VariantConfigurable, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
@@ -196,7 +196,7 @@ impl WithId for Stepper {
     }
 }
 
-impl VariantSupport for Stepper {
+impl VariantConfigurable for Stepper {
     fn variant(mut self, value: Variant) -> Self {
         self.variant = value;
         self

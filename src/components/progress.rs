@@ -5,7 +5,7 @@ use gpui::{
     ParentElement, RenderOnce, SharedString, Styled, div, px,
 };
 
-use crate::contracts::{MotionAware, VariantSupport, WithId};
+use crate::contracts::{MotionAware, VariantConfigurable, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
@@ -323,7 +323,7 @@ impl WithId for Progress {
     }
 }
 
-impl VariantSupport for Progress {
+impl VariantConfigurable for Progress {
     fn variant(mut self, value: Variant) -> Self {
         self.variant = value;
         self

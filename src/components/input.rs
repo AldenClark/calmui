@@ -12,7 +12,7 @@ use gpui::{
 };
 
 use crate::contracts::WithId;
-use crate::contracts::{FieldLike, MotionAware, VariantSupport};
+use crate::contracts::{FieldLike, MotionAware, Sizeable, VariantConfigurable};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
@@ -563,7 +563,7 @@ impl FieldLike for TextInput {
     }
 }
 
-impl VariantSupport for TextInput {
+impl VariantConfigurable for TextInput {
     fn variant(mut self, value: Variant) -> Self {
         self.variant = value;
         self
@@ -727,14 +727,14 @@ impl FieldLike for PasswordInput {
     }
 }
 
-impl VariantSupport for PasswordInput {
+impl VariantConfigurable for PasswordInput {
     fn variant(mut self, value: Variant) -> Self {
         self.inner = self.inner.variant(value);
         self
     }
 
     fn size(mut self, value: Size) -> Self {
-        self.inner = VariantSupport::size(self.inner, value);
+        self.inner = Sizeable::size(self.inner, value);
         self
     }
 
@@ -854,7 +854,7 @@ impl WithId for PinInput {
     }
 }
 
-impl VariantSupport for PinInput {
+impl VariantConfigurable for PinInput {
     fn variant(self, _value: Variant) -> Self {
         self
     }

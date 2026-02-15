@@ -5,7 +5,7 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, VariantSupport, WithId};
+use crate::contracts::{MotionAware, VariantConfigurable, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
@@ -256,7 +256,7 @@ impl WithId for Tree {
     }
 }
 
-impl VariantSupport for Tree {
+impl VariantConfigurable for Tree {
     fn variant(mut self, value: Variant) -> Self {
         self.variant = value;
         self

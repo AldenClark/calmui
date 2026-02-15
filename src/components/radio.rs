@@ -5,7 +5,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, VariantSupport, WithId};
+use crate::contracts::{MotionAware, Radiusable, Sizeable, VariantConfigurable, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
@@ -113,7 +113,7 @@ impl WithId for Radio {
     }
 }
 
-impl VariantSupport for Radio {
+impl VariantConfigurable for Radio {
     fn variant(self, _value: Variant) -> Self {
         self
     }
@@ -351,7 +351,7 @@ impl WithId for RadioGroup {
     }
 }
 
-impl VariantSupport for RadioGroup {
+impl VariantConfigurable for RadioGroup {
     fn variant(self, _value: Variant) -> Self {
         self
     }
@@ -392,8 +392,8 @@ impl RenderOnce for RadioGroup {
                     .value(option.value.clone())
                     .checked(checked)
                     .disabled(option.disabled);
-                radio = VariantSupport::size(radio, self.size);
-                radio = VariantSupport::radius(radio, self.radius);
+                radio = Sizeable::size(radio, self.size);
+                radio = Radiusable::radius(radio, self.radius);
                 radio = radio.motion(self.motion);
 
                 if let Some(description) = option.description {

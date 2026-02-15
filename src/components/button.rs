@@ -6,7 +6,7 @@ use gpui::{
 };
 
 use crate::contracts::WithId;
-use crate::contracts::{MotionAware, VariantSupport};
+use crate::contracts::{MotionAware, Radiusable, Sizeable, VariantConfigurable};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
@@ -208,7 +208,7 @@ impl WithId for Button {
     }
 }
 
-impl VariantSupport for Button {
+impl VariantConfigurable for Button {
     fn variant(mut self, value: Variant) -> Self {
         self.variant = value;
         self
@@ -418,7 +418,7 @@ impl WithId for ButtonGroup {
     }
 }
 
-impl VariantSupport for ButtonGroup {
+impl VariantConfigurable for ButtonGroup {
     fn variant(mut self, value: Variant) -> Self {
         self.active_variant = value;
         self
@@ -464,8 +464,8 @@ impl RenderOnce for ButtonGroup {
                 let mut button = Button::new(item.label.clone())
                     .with_id(format!("{}-item-{index}", self.id))
                     .variant(variant);
-                button = VariantSupport::size(button, self.size);
-                button = VariantSupport::radius(button, self.radius);
+                button = Sizeable::size(button, self.size);
+                button = Radiusable::radius(button, self.radius);
                 button = button.motion(self.motion);
 
                 if item.disabled {

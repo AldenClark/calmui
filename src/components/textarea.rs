@@ -6,7 +6,7 @@ use gpui::{
     RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, canvas, div, px,
 };
 
-use crate::contracts::{FieldLike, MotionAware, VariantSupport, WithId};
+use crate::contracts::{FieldLike, MotionAware, VariantConfigurable, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
@@ -1033,7 +1033,7 @@ impl FieldLike for Textarea {
     }
 }
 
-impl VariantSupport for Textarea {
+impl VariantConfigurable for Textarea {
     fn variant(mut self, value: Variant) -> Self {
         self.variant = value;
         self

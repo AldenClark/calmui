@@ -5,7 +5,7 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, VariantSupport, WithId};
+use crate::contracts::{MotionAware, VariantConfigurable, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
@@ -157,7 +157,7 @@ impl WithId for Accordion {
     }
 }
 
-impl VariantSupport for Accordion {
+impl VariantConfigurable for Accordion {
     fn variant(self, _value: Variant) -> Self {
         self
     }
