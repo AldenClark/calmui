@@ -312,7 +312,7 @@ impl IntoElement for Timeline {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Timeline {
+impl crate::contracts::ComponentThemeOverridable for Timeline {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

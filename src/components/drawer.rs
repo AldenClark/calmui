@@ -274,7 +274,7 @@ impl IntoElement for Drawer {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Drawer {
+impl crate::contracts::ComponentThemeOverridable for Drawer {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

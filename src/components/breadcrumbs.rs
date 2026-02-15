@@ -246,7 +246,7 @@ impl IntoElement for Breadcrumbs {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Breadcrumbs {
+impl crate::contracts::ComponentThemeOverridable for Breadcrumbs {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

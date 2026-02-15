@@ -337,7 +337,7 @@ impl IntoElement for Accordion {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Accordion {
+impl crate::contracts::ComponentThemeOverridable for Accordion {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

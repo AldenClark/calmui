@@ -7,6 +7,9 @@ use gpui::{
     Background, Corners, Fill, FontWeight, Hsla, Pixels, Rgba, black, px, transparent_black, white,
 };
 
+mod component_theme_dsl_impls;
+mod overrides_api;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ColorScheme {
     Light,
@@ -3309,7 +3312,7 @@ impl Theme {
         token.resolve(self)
     }
 
-    pub fn merged(&self, patch: &ThemePatch) -> Self {
+    pub fn merged(&self, patch: &ThemeOverrides) -> Self {
         let mut next = self.clone();
         if let Some(primary) = patch.primary_color {
             next = next.with_primary_color(primary);
@@ -3334,7 +3337,7 @@ impl Theme {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct SemanticPatch {
+pub struct SemanticOverrides {
     pub text_primary: Option<Hsla>,
     pub text_secondary: Option<Hsla>,
     pub text_muted: Option<Hsla>,
@@ -3351,7 +3354,7 @@ pub struct SemanticPatch {
     pub overlay_mask: Option<Hsla>,
 }
 
-impl SemanticPatch {
+impl SemanticOverrides {
     fn apply(&self, mut current: SemanticColors) -> SemanticColors {
         if let Some(value) = &self.text_primary {
             current.text_primary = value.clone();
@@ -3400,7 +3403,7 @@ impl SemanticPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct RadiiPatch {
+pub struct RadiiOverrides {
     pub default: Option<Pixels>,
     pub xs: Option<Pixels>,
     pub sm: Option<Pixels>,
@@ -3410,7 +3413,7 @@ pub struct RadiiPatch {
     pub pill: Option<Pixels>,
 }
 
-impl RadiiPatch {
+impl RadiiOverrides {
     fn apply(&self, mut current: ThemeRadii) -> ThemeRadii {
         if let Some(value) = self.default {
             current.default = value;
@@ -3438,7 +3441,7 @@ impl RadiiPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct ButtonPatch {
+pub struct ButtonOverrides {
     pub filled_bg: Option<Hsla>,
     pub filled_fg: Option<Hsla>,
     pub light_bg: Option<Hsla>,
@@ -3452,7 +3455,7 @@ pub struct ButtonPatch {
     pub disabled_fg: Option<Hsla>,
 }
 
-impl ButtonPatch {
+impl ButtonOverrides {
     fn apply(&self, mut current: ButtonTokens) -> ButtonTokens {
         if let Some(value) = &self.filled_bg {
             current.filled_bg = value.clone();
@@ -3492,7 +3495,7 @@ impl ButtonPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct InputPatch {
+pub struct InputOverrides {
     pub bg: Option<Hsla>,
     pub fg: Option<Hsla>,
     pub placeholder: Option<Hsla>,
@@ -3504,7 +3507,7 @@ pub struct InputPatch {
     pub error: Option<Hsla>,
 }
 
-impl InputPatch {
+impl InputOverrides {
     fn apply(&self, mut current: InputTokens) -> InputTokens {
         if let Some(value) = &self.bg {
             current.bg = value.clone();
@@ -3538,7 +3541,7 @@ impl InputPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct RadioPatch {
+pub struct RadioOverrides {
     pub control_bg: Option<Hsla>,
     pub border: Option<Hsla>,
     pub border_checked: Option<Hsla>,
@@ -3547,7 +3550,7 @@ pub struct RadioPatch {
     pub description: Option<Hsla>,
 }
 
-impl RadioPatch {
+impl RadioOverrides {
     fn apply(&self, mut current: RadioTokens) -> RadioTokens {
         if let Some(value) = &self.control_bg {
             current.control_bg = value.clone();
@@ -3572,7 +3575,7 @@ impl RadioPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct CheckboxPatch {
+pub struct CheckboxOverrides {
     pub control_bg: Option<Hsla>,
     pub control_bg_checked: Option<Hsla>,
     pub border: Option<Hsla>,
@@ -3582,7 +3585,7 @@ pub struct CheckboxPatch {
     pub description: Option<Hsla>,
 }
 
-impl CheckboxPatch {
+impl CheckboxOverrides {
     fn apply(&self, mut current: CheckboxTokens) -> CheckboxTokens {
         if let Some(value) = &self.control_bg {
             current.control_bg = value.clone();
@@ -3610,7 +3613,7 @@ impl CheckboxPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct SwitchPatch {
+pub struct SwitchOverrides {
     pub track_off_bg: Option<Hsla>,
     pub track_on_bg: Option<Hsla>,
     pub thumb_bg: Option<Hsla>,
@@ -3618,7 +3621,7 @@ pub struct SwitchPatch {
     pub description: Option<Hsla>,
 }
 
-impl SwitchPatch {
+impl SwitchOverrides {
     fn apply(&self, mut current: SwitchTokens) -> SwitchTokens {
         if let Some(value) = &self.track_off_bg {
             current.track_off_bg = value.clone();
@@ -3640,7 +3643,7 @@ impl SwitchPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct ChipPatch {
+pub struct ChipOverrides {
     pub unchecked_bg: Option<Hsla>,
     pub unchecked_fg: Option<Hsla>,
     pub unchecked_border: Option<Hsla>,
@@ -3658,7 +3661,7 @@ pub struct ChipPatch {
     pub default_border: Option<Hsla>,
 }
 
-impl ChipPatch {
+impl ChipOverrides {
     fn apply(&self, mut current: ChipTokens) -> ChipTokens {
         if let Some(value) = &self.unchecked_bg {
             current.unchecked_bg = value.clone();
@@ -3710,7 +3713,7 @@ impl ChipPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct BadgePatch {
+pub struct BadgeOverrides {
     pub filled_bg: Option<Hsla>,
     pub filled_fg: Option<Hsla>,
     pub light_bg: Option<Hsla>,
@@ -3724,7 +3727,7 @@ pub struct BadgePatch {
     pub default_border: Option<Hsla>,
 }
 
-impl BadgePatch {
+impl BadgeOverrides {
     fn apply(&self, mut current: BadgeTokens) -> BadgeTokens {
         if let Some(value) = &self.filled_bg {
             current.filled_bg = value.clone();
@@ -3764,7 +3767,7 @@ impl BadgePatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct AccordionPatch {
+pub struct AccordionOverrides {
     pub item_bg: Option<Hsla>,
     pub item_border: Option<Hsla>,
     pub label: Option<Hsla>,
@@ -3773,7 +3776,7 @@ pub struct AccordionPatch {
     pub chevron: Option<Hsla>,
 }
 
-impl AccordionPatch {
+impl AccordionOverrides {
     fn apply(&self, mut current: AccordionTokens) -> AccordionTokens {
         if let Some(value) = &self.item_bg {
             current.item_bg = value.clone();
@@ -3798,7 +3801,7 @@ impl AccordionPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct MenuPatch {
+pub struct MenuOverrides {
     pub dropdown_bg: Option<Hsla>,
     pub dropdown_border: Option<Hsla>,
     pub item_fg: Option<Hsla>,
@@ -3807,7 +3810,7 @@ pub struct MenuPatch {
     pub icon: Option<Hsla>,
 }
 
-impl MenuPatch {
+impl MenuOverrides {
     fn apply(&self, mut current: MenuTokens) -> MenuTokens {
         if let Some(value) = &self.dropdown_bg {
             current.dropdown_bg = value.clone();
@@ -3832,13 +3835,13 @@ impl MenuPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct ProgressPatch {
+pub struct ProgressOverrides {
     pub track_bg: Option<Hsla>,
     pub fill_bg: Option<Hsla>,
     pub label: Option<Hsla>,
 }
 
-impl ProgressPatch {
+impl ProgressOverrides {
     fn apply(&self, mut current: ProgressTokens) -> ProgressTokens {
         if let Some(value) = &self.track_bg {
             current.track_bg = value.clone();
@@ -3854,7 +3857,7 @@ impl ProgressPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct SliderPatch {
+pub struct SliderOverrides {
     pub track_bg: Option<Hsla>,
     pub fill_bg: Option<Hsla>,
     pub thumb_bg: Option<Hsla>,
@@ -3863,7 +3866,7 @@ pub struct SliderPatch {
     pub value: Option<Hsla>,
 }
 
-impl SliderPatch {
+impl SliderOverrides {
     fn apply(&self, mut current: SliderTokens) -> SliderTokens {
         if let Some(value) = &self.track_bg {
             current.track_bg = value.clone();
@@ -3888,11 +3891,11 @@ impl SliderPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct OverlayPatch {
+pub struct OverlayOverrides {
     pub bg: Option<Hsla>,
 }
 
-impl OverlayPatch {
+impl OverlayOverrides {
     fn apply(&self, mut current: OverlayTokens) -> OverlayTokens {
         if let Some(value) = &self.bg {
             current.bg = value.clone();
@@ -3902,13 +3905,13 @@ impl OverlayPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct LoadingOverlayPatch {
+pub struct LoadingOverlayOverrides {
     pub bg: Option<Hsla>,
     pub loader_color: Option<Hsla>,
     pub label: Option<Hsla>,
 }
 
-impl LoadingOverlayPatch {
+impl LoadingOverlayOverrides {
     fn apply(&self, mut current: LoadingOverlayTokens) -> LoadingOverlayTokens {
         if let Some(value) = &self.bg {
             current.bg = value.clone();
@@ -3924,14 +3927,14 @@ impl LoadingOverlayPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct PopoverPatch {
+pub struct PopoverOverrides {
     pub bg: Option<Hsla>,
     pub border: Option<Hsla>,
     pub title: Option<Hsla>,
     pub body: Option<Hsla>,
 }
 
-impl PopoverPatch {
+impl PopoverOverrides {
     fn apply(&self, mut current: PopoverTokens) -> PopoverTokens {
         if let Some(value) = &self.bg {
             current.bg = value.clone();
@@ -3950,13 +3953,13 @@ impl PopoverPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct TooltipPatch {
+pub struct TooltipOverrides {
     pub bg: Option<Hsla>,
     pub fg: Option<Hsla>,
     pub border: Option<Hsla>,
 }
 
-impl TooltipPatch {
+impl TooltipOverrides {
     fn apply(&self, mut current: TooltipTokens) -> TooltipTokens {
         if let Some(value) = &self.bg {
             current.bg = value.clone();
@@ -3972,14 +3975,14 @@ impl TooltipPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct HoverCardPatch {
+pub struct HoverCardOverrides {
     pub bg: Option<Hsla>,
     pub border: Option<Hsla>,
     pub title: Option<Hsla>,
     pub body: Option<Hsla>,
 }
 
-impl HoverCardPatch {
+impl HoverCardOverrides {
     fn apply(&self, mut current: HoverCardTokens) -> HoverCardTokens {
         if let Some(value) = &self.bg {
             current.bg = value.clone();
@@ -3998,7 +4001,7 @@ impl HoverCardPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct SelectPatch {
+pub struct SelectOverrides {
     pub bg: Option<Hsla>,
     pub fg: Option<Hsla>,
     pub placeholder: Option<Hsla>,
@@ -4019,7 +4022,7 @@ pub struct SelectPatch {
     pub error: Option<Hsla>,
 }
 
-impl SelectPatch {
+impl SelectOverrides {
     fn apply(&self, mut current: SelectTokens) -> SelectTokens {
         if let Some(value) = &self.bg {
             current.bg = value.clone();
@@ -4080,7 +4083,7 @@ impl SelectPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct ModalPatch {
+pub struct ModalOverrides {
     pub panel_bg: Option<Hsla>,
     pub panel_border: Option<Hsla>,
     pub overlay_bg: Option<Hsla>,
@@ -4088,7 +4091,7 @@ pub struct ModalPatch {
     pub body: Option<Hsla>,
 }
 
-impl ModalPatch {
+impl ModalOverrides {
     fn apply(&self, mut current: ModalTokens) -> ModalTokens {
         if let Some(value) = &self.panel_bg {
             current.panel_bg = value.clone();
@@ -4110,7 +4113,7 @@ impl ModalPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct ToastPatch {
+pub struct ToastOverrides {
     pub info_bg: Option<Hsla>,
     pub info_fg: Option<Hsla>,
     pub success_bg: Option<Hsla>,
@@ -4121,7 +4124,7 @@ pub struct ToastPatch {
     pub error_fg: Option<Hsla>,
 }
 
-impl ToastPatch {
+impl ToastOverrides {
     fn apply(&self, mut current: ToastTokens) -> ToastTokens {
         if let Some(value) = &self.info_bg {
             current.info_bg = value.clone();
@@ -4152,12 +4155,12 @@ impl ToastPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct DividerPatch {
+pub struct DividerOverrides {
     pub line: Option<Hsla>,
     pub label: Option<Hsla>,
 }
 
-impl DividerPatch {
+impl DividerOverrides {
     fn apply(&self, mut current: DividerTokens) -> DividerTokens {
         if let Some(value) = &self.line {
             current.line = value.clone();
@@ -4170,12 +4173,12 @@ impl DividerPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct ScrollAreaPatch {
+pub struct ScrollAreaOverrides {
     pub bg: Option<Hsla>,
     pub border: Option<Hsla>,
 }
 
-impl ScrollAreaPatch {
+impl ScrollAreaOverrides {
     fn apply(&self, mut current: ScrollAreaTokens) -> ScrollAreaTokens {
         if let Some(value) = &self.bg {
             current.bg = value.clone();
@@ -4188,7 +4191,7 @@ impl ScrollAreaPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct DrawerPatch {
+pub struct DrawerOverrides {
     pub panel_bg: Option<Hsla>,
     pub panel_border: Option<Hsla>,
     pub overlay_bg: Option<Hsla>,
@@ -4196,7 +4199,7 @@ pub struct DrawerPatch {
     pub body: Option<Hsla>,
 }
 
-impl DrawerPatch {
+impl DrawerOverrides {
     fn apply(&self, mut current: DrawerTokens) -> DrawerTokens {
         if let Some(value) = &self.panel_bg {
             current.panel_bg = value.clone();
@@ -4218,11 +4221,11 @@ impl DrawerPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct AppShellPatch {
+pub struct AppShellOverrides {
     pub bg: Option<Hsla>,
 }
 
-impl AppShellPatch {
+impl AppShellOverrides {
     fn apply(&self, mut current: AppShellTokens) -> AppShellTokens {
         if let Some(value) = &self.bg {
             current.bg = value.clone();
@@ -4232,14 +4235,14 @@ impl AppShellPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct TitleBarPatch {
+pub struct TitleBarOverrides {
     pub bg: Option<Hsla>,
     pub border: Option<Hsla>,
     pub fg: Option<Hsla>,
     pub controls_bg: Option<Hsla>,
 }
 
-impl TitleBarPatch {
+impl TitleBarOverrides {
     fn apply(&self, mut current: TitleBarTokens) -> TitleBarTokens {
         if let Some(value) = &self.bg {
             current.bg = value.clone();
@@ -4258,7 +4261,7 @@ impl TitleBarPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct SidebarPatch {
+pub struct SidebarOverrides {
     pub bg: Option<Hsla>,
     pub border: Option<Hsla>,
     pub header_fg: Option<Hsla>,
@@ -4266,7 +4269,7 @@ pub struct SidebarPatch {
     pub footer_fg: Option<Hsla>,
 }
 
-impl SidebarPatch {
+impl SidebarOverrides {
     fn apply(&self, mut current: SidebarTokens) -> SidebarTokens {
         if let Some(value) = &self.bg {
             current.bg = value.clone();
@@ -4288,7 +4291,7 @@ impl SidebarPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct TextPatch {
+pub struct TextOverrides {
     pub fg: Option<Hsla>,
     pub secondary: Option<Hsla>,
     pub muted: Option<Hsla>,
@@ -4298,7 +4301,7 @@ pub struct TextPatch {
     pub error: Option<Hsla>,
 }
 
-impl TextPatch {
+impl TextOverrides {
     fn apply(&self, mut current: TextTokens) -> TextTokens {
         if let Some(value) = &self.fg {
             current.fg = value.clone();
@@ -4326,29 +4329,29 @@ impl TextPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct TitlePatch {
+pub struct TitleOverrides {
     pub fg: Option<Hsla>,
     pub subtitle: Option<Hsla>,
     pub gap: Option<Pixels>,
     pub subtitle_size: Option<Pixels>,
     pub subtitle_line_height: Option<Pixels>,
     pub subtitle_weight: Option<FontWeight>,
-    pub h1: TitleLevelPatch,
-    pub h2: TitleLevelPatch,
-    pub h3: TitleLevelPatch,
-    pub h4: TitleLevelPatch,
-    pub h5: TitleLevelPatch,
-    pub h6: TitleLevelPatch,
+    pub h1: TitleLevelOverrides,
+    pub h2: TitleLevelOverrides,
+    pub h3: TitleLevelOverrides,
+    pub h4: TitleLevelOverrides,
+    pub h5: TitleLevelOverrides,
+    pub h6: TitleLevelOverrides,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct TitleLevelPatch {
+pub struct TitleLevelOverrides {
     pub font_size: Option<Pixels>,
     pub line_height: Option<Pixels>,
     pub weight: Option<FontWeight>,
 }
 
-impl TitleLevelPatch {
+impl TitleLevelOverrides {
     fn apply(&self, mut current: TitleLevelTokens) -> TitleLevelTokens {
         if let Some(value) = &self.font_size {
             current.font_size = *value;
@@ -4363,7 +4366,7 @@ impl TitleLevelPatch {
     }
 }
 
-impl TitlePatch {
+impl TitleOverrides {
     fn apply(&self, mut current: TitleTokens) -> TitleTokens {
         if let Some(value) = &self.fg {
             current.fg = value.clone();
@@ -4394,12 +4397,12 @@ impl TitlePatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct PaperPatch {
+pub struct PaperOverrides {
     pub bg: Option<Hsla>,
     pub border: Option<Hsla>,
 }
 
-impl PaperPatch {
+impl PaperOverrides {
     fn apply(&self, mut current: PaperTokens) -> PaperTokens {
         if let Some(value) = &self.bg {
             current.bg = value.clone();
@@ -4412,7 +4415,7 @@ impl PaperPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct ActionIconPatch {
+pub struct ActionIconOverrides {
     pub filled_bg: Option<Hsla>,
     pub filled_fg: Option<Hsla>,
     pub light_bg: Option<Hsla>,
@@ -4430,7 +4433,7 @@ pub struct ActionIconPatch {
     pub disabled_border: Option<Hsla>,
 }
 
-impl ActionIconPatch {
+impl ActionIconOverrides {
     fn apply(&self, mut current: ActionIconTokens) -> ActionIconTokens {
         if let Some(value) = &self.filled_bg {
             current.filled_bg = value.clone();
@@ -4482,7 +4485,7 @@ impl ActionIconPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct SegmentedControlPatch {
+pub struct SegmentedControlOverrides {
     pub bg: Option<Hsla>,
     pub border: Option<Hsla>,
     pub item_fg: Option<Hsla>,
@@ -4492,7 +4495,7 @@ pub struct SegmentedControlPatch {
     pub item_disabled_fg: Option<Hsla>,
 }
 
-impl SegmentedControlPatch {
+impl SegmentedControlOverrides {
     fn apply(&self, mut current: SegmentedControlTokens) -> SegmentedControlTokens {
         if let Some(value) = &self.bg {
             current.bg = value.clone();
@@ -4520,7 +4523,7 @@ impl SegmentedControlPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct TextareaPatch {
+pub struct TextareaOverrides {
     pub bg: Option<Hsla>,
     pub fg: Option<Hsla>,
     pub placeholder: Option<Hsla>,
@@ -4532,7 +4535,7 @@ pub struct TextareaPatch {
     pub error: Option<Hsla>,
 }
 
-impl TextareaPatch {
+impl TextareaOverrides {
     fn apply(&self, mut current: TextareaTokens) -> TextareaTokens {
         if let Some(value) = &self.bg {
             current.bg = value.clone();
@@ -4566,7 +4569,7 @@ impl TextareaPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct NumberInputPatch {
+pub struct NumberInputOverrides {
     pub bg: Option<Hsla>,
     pub fg: Option<Hsla>,
     pub placeholder: Option<Hsla>,
@@ -4581,7 +4584,7 @@ pub struct NumberInputPatch {
     pub error: Option<Hsla>,
 }
 
-impl NumberInputPatch {
+impl NumberInputOverrides {
     fn apply(&self, mut current: NumberInputTokens) -> NumberInputTokens {
         if let Some(value) = &self.bg {
             current.bg = value.clone();
@@ -4624,7 +4627,7 @@ impl NumberInputPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct RangeSliderPatch {
+pub struct RangeSliderOverrides {
     pub track_bg: Option<Hsla>,
     pub range_bg: Option<Hsla>,
     pub thumb_bg: Option<Hsla>,
@@ -4633,7 +4636,7 @@ pub struct RangeSliderPatch {
     pub value: Option<Hsla>,
 }
 
-impl RangeSliderPatch {
+impl RangeSliderOverrides {
     fn apply(&self, mut current: RangeSliderTokens) -> RangeSliderTokens {
         if let Some(value) = &self.track_bg {
             current.track_bg = value.clone();
@@ -4658,12 +4661,12 @@ impl RangeSliderPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct RatingPatch {
+pub struct RatingOverrides {
     pub active: Option<Hsla>,
     pub inactive: Option<Hsla>,
 }
 
-impl RatingPatch {
+impl RatingOverrides {
     fn apply(&self, mut current: RatingTokens) -> RatingTokens {
         if let Some(value) = &self.active {
             current.active = value.clone();
@@ -4676,7 +4679,7 @@ impl RatingPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct TabsPatch {
+pub struct TabsOverrides {
     pub list_bg: Option<Hsla>,
     pub list_border: Option<Hsla>,
     pub tab_fg: Option<Hsla>,
@@ -4689,7 +4692,7 @@ pub struct TabsPatch {
     pub panel_fg: Option<Hsla>,
 }
 
-impl TabsPatch {
+impl TabsOverrides {
     fn apply(&self, mut current: TabsTokens) -> TabsTokens {
         if let Some(value) = &self.list_bg {
             current.list_bg = value.clone();
@@ -4726,7 +4729,7 @@ impl TabsPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct PaginationPatch {
+pub struct PaginationOverrides {
     pub item_bg: Option<Hsla>,
     pub item_border: Option<Hsla>,
     pub item_fg: Option<Hsla>,
@@ -4737,7 +4740,7 @@ pub struct PaginationPatch {
     pub dots_fg: Option<Hsla>,
 }
 
-impl PaginationPatch {
+impl PaginationOverrides {
     fn apply(&self, mut current: PaginationTokens) -> PaginationTokens {
         if let Some(value) = &self.item_bg {
             current.item_bg = value.clone();
@@ -4768,14 +4771,14 @@ impl PaginationPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct BreadcrumbsPatch {
+pub struct BreadcrumbsOverrides {
     pub item_fg: Option<Hsla>,
     pub item_current_fg: Option<Hsla>,
     pub separator: Option<Hsla>,
     pub item_hover_bg: Option<Hsla>,
 }
 
-impl BreadcrumbsPatch {
+impl BreadcrumbsOverrides {
     fn apply(&self, mut current: BreadcrumbsTokens) -> BreadcrumbsTokens {
         if let Some(value) = &self.item_fg {
             current.item_fg = value.clone();
@@ -4794,7 +4797,7 @@ impl BreadcrumbsPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct TablePatch {
+pub struct TableOverrides {
     pub header_bg: Option<Hsla>,
     pub header_fg: Option<Hsla>,
     pub row_bg: Option<Hsla>,
@@ -4805,7 +4808,7 @@ pub struct TablePatch {
     pub caption: Option<Hsla>,
 }
 
-impl TablePatch {
+impl TableOverrides {
     fn apply(&self, mut current: TableTokens) -> TableTokens {
         if let Some(value) = &self.header_bg {
             current.header_bg = value.clone();
@@ -4836,7 +4839,7 @@ impl TablePatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct StepperPatch {
+pub struct StepperOverrides {
     pub step_bg: Option<Hsla>,
     pub step_border: Option<Hsla>,
     pub step_fg: Option<Hsla>,
@@ -4854,7 +4857,7 @@ pub struct StepperPatch {
     pub panel_fg: Option<Hsla>,
 }
 
-impl StepperPatch {
+impl StepperOverrides {
     fn apply(&self, mut current: StepperTokens) -> StepperTokens {
         if let Some(value) = &self.step_bg {
             current.step_bg = value.clone();
@@ -4906,7 +4909,7 @@ impl StepperPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct TimelinePatch {
+pub struct TimelineOverrides {
     pub bullet_bg: Option<Hsla>,
     pub bullet_border: Option<Hsla>,
     pub bullet_fg: Option<Hsla>,
@@ -4922,7 +4925,7 @@ pub struct TimelinePatch {
     pub card_border: Option<Hsla>,
 }
 
-impl TimelinePatch {
+impl TimelineOverrides {
     fn apply(&self, mut current: TimelineTokens) -> TimelineTokens {
         if let Some(value) = &self.bullet_bg {
             current.bullet_bg = value.clone();
@@ -4968,7 +4971,7 @@ impl TimelinePatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct TreePatch {
+pub struct TreeOverrides {
     pub row_fg: Option<Hsla>,
     pub row_selected_fg: Option<Hsla>,
     pub row_selected_bg: Option<Hsla>,
@@ -4977,7 +4980,7 @@ pub struct TreePatch {
     pub line: Option<Hsla>,
 }
 
-impl TreePatch {
+impl TreeOverrides {
     fn apply(&self, mut current: TreeTokens) -> TreeTokens {
         if let Some(value) = &self.row_fg {
             current.row_fg = value.clone();
@@ -5002,51 +5005,51 @@ impl TreePatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct ComponentPatch {
-    pub button: ButtonPatch,
-    pub input: InputPatch,
-    pub radio: RadioPatch,
-    pub checkbox: CheckboxPatch,
-    pub switch: SwitchPatch,
-    pub chip: ChipPatch,
-    pub badge: BadgePatch,
-    pub accordion: AccordionPatch,
-    pub menu: MenuPatch,
-    pub progress: ProgressPatch,
-    pub slider: SliderPatch,
-    pub overlay: OverlayPatch,
-    pub loading_overlay: LoadingOverlayPatch,
-    pub popover: PopoverPatch,
-    pub tooltip: TooltipPatch,
-    pub hover_card: HoverCardPatch,
-    pub select: SelectPatch,
-    pub modal: ModalPatch,
-    pub toast: ToastPatch,
-    pub divider: DividerPatch,
-    pub scroll_area: ScrollAreaPatch,
-    pub drawer: DrawerPatch,
-    pub app_shell: AppShellPatch,
-    pub title_bar: TitleBarPatch,
-    pub sidebar: SidebarPatch,
-    pub text: TextPatch,
-    pub title: TitlePatch,
-    pub paper: PaperPatch,
-    pub action_icon: ActionIconPatch,
-    pub segmented_control: SegmentedControlPatch,
-    pub textarea: TextareaPatch,
-    pub number_input: NumberInputPatch,
-    pub range_slider: RangeSliderPatch,
-    pub rating: RatingPatch,
-    pub tabs: TabsPatch,
-    pub pagination: PaginationPatch,
-    pub breadcrumbs: BreadcrumbsPatch,
-    pub table: TablePatch,
-    pub stepper: StepperPatch,
-    pub timeline: TimelinePatch,
-    pub tree: TreePatch,
+pub struct ComponentOverrides {
+    pub button: ButtonOverrides,
+    pub input: InputOverrides,
+    pub radio: RadioOverrides,
+    pub checkbox: CheckboxOverrides,
+    pub switch: SwitchOverrides,
+    pub chip: ChipOverrides,
+    pub badge: BadgeOverrides,
+    pub accordion: AccordionOverrides,
+    pub menu: MenuOverrides,
+    pub progress: ProgressOverrides,
+    pub slider: SliderOverrides,
+    pub overlay: OverlayOverrides,
+    pub loading_overlay: LoadingOverlayOverrides,
+    pub popover: PopoverOverrides,
+    pub tooltip: TooltipOverrides,
+    pub hover_card: HoverCardOverrides,
+    pub select: SelectOverrides,
+    pub modal: ModalOverrides,
+    pub toast: ToastOverrides,
+    pub divider: DividerOverrides,
+    pub scroll_area: ScrollAreaOverrides,
+    pub drawer: DrawerOverrides,
+    pub app_shell: AppShellOverrides,
+    pub title_bar: TitleBarOverrides,
+    pub sidebar: SidebarOverrides,
+    pub text: TextOverrides,
+    pub title: TitleOverrides,
+    pub paper: PaperOverrides,
+    pub action_icon: ActionIconOverrides,
+    pub segmented_control: SegmentedControlOverrides,
+    pub textarea: TextareaOverrides,
+    pub number_input: NumberInputOverrides,
+    pub range_slider: RangeSliderOverrides,
+    pub rating: RatingOverrides,
+    pub tabs: TabsOverrides,
+    pub pagination: PaginationOverrides,
+    pub breadcrumbs: BreadcrumbsOverrides,
+    pub table: TableOverrides,
+    pub stepper: StepperOverrides,
+    pub timeline: TimelineOverrides,
+    pub tree: TreeOverrides,
 }
 
-impl ComponentPatch {
+impl ComponentOverrides {
     fn apply(&self, current: ComponentTokens) -> ComponentTokens {
         ComponentTokens {
             button: self.button.apply(current.button),
@@ -5095,39 +5098,48 @@ impl ComponentPatch {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct ThemePatch {
+pub struct ThemeOverrides {
     pub primary_color: Option<PaletteKey>,
     pub primary_shade_light: Option<u8>,
     pub primary_shade_dark: Option<u8>,
     pub color_scheme: Option<ColorScheme>,
     pub palette_overrides: BTreeMap<PaletteKey, ColorScale>,
-    pub radii: RadiiPatch,
-    pub semantic: SemanticPatch,
-    pub components: ComponentPatch,
+    pub radii: RadiiOverrides,
+    pub semantic: SemanticOverrides,
+    pub components: ComponentOverrides,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct LocalTheme {
     resolved: Option<Arc<Theme>>,
-    component_patch: Option<ComponentPatch>,
+    component_overrides: Option<ComponentOverrides>,
 }
 
 impl LocalTheme {
-    pub fn with_component_patch(mut self, patch: ComponentPatch) -> Self {
-        self.component_patch = Some(patch);
+    pub fn with_component_overrides(mut self, overrides: ComponentOverrides) -> Self {
+        self.component_overrides = Some(overrides);
         self
     }
 
-    pub fn set_component_patch(&mut self, patch: Option<ComponentPatch>) {
-        self.component_patch = patch;
+    pub fn set_component_overrides(&mut self, overrides: Option<ComponentOverrides>) {
+        self.component_overrides = overrides;
+        self.resolved = None;
+    }
+
+    pub fn update_component_overrides(
+        &mut self,
+        configure: impl FnOnce(ComponentOverrides) -> ComponentOverrides,
+    ) {
+        let current = self.component_overrides.take().unwrap_or_default();
+        self.component_overrides = Some(configure(current));
         self.resolved = None;
     }
 
     pub fn sync_from_provider(&mut self, cx: &gpui::App) {
         let base = crate::provider::CalmProvider::theme_arc_or_default(cx);
-        if let Some(component_patch) = &self.component_patch {
+        if let Some(component_overrides) = &self.component_overrides {
             let mut merged = base.as_ref().clone();
-            merged.components = component_patch.apply(merged.components);
+            merged.components = component_overrides.apply(merged.components);
             self.resolved = Some(Arc::new(merged));
         } else {
             self.resolved = Some(base);
@@ -5173,20 +5185,20 @@ mod tests {
     }
 
     #[test]
-    fn nested_theme_patch_overrides_only_target_fields() {
+    fn nested_theme_overrides_override_only_target_fields() {
         let base = Theme::default();
-        let patch = ThemePatch {
-            semantic: SemanticPatch {
+        let overrides = ThemeOverrides {
+            semantic: SemanticOverrides {
                 text_primary: Some(
                     Rgba::try_from(PaletteCatalog::scale(PaletteKey::Orange)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black()),
                 ),
-                ..SemanticPatch::default()
+                ..SemanticOverrides::default()
             },
-            ..ThemePatch::default()
+            ..ThemeOverrides::default()
         };
-        let next = base.merged(&patch);
+        let next = base.merged(&overrides);
         assert_eq!(
             next.semantic.text_primary,
             (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Orange)[8 as usize])

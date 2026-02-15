@@ -171,7 +171,7 @@ impl IntoElement for ScrollArea {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for ScrollArea {
+impl crate::contracts::ComponentThemeOverridable for ScrollArea {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

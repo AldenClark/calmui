@@ -131,7 +131,7 @@ impl IntoElement for Icon {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Icon {
+impl crate::contracts::ComponentThemeOverridable for Icon {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

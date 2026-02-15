@@ -128,7 +128,7 @@ impl IntoElement for Divider {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Divider {
+impl crate::contracts::ComponentThemeOverridable for Divider {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

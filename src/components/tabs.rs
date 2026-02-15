@@ -320,7 +320,7 @@ impl IntoElement for Tabs {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Tabs {
+impl crate::contracts::ComponentThemeOverridable for Tabs {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

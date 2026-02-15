@@ -1,7 +1,7 @@
 use crate::components::{AppShellWindowConfig, OverlayMaterialCapabilities};
 use crate::motion::MotionConfig;
 use crate::provider::CalmProvider;
-use crate::theme::{Theme, ThemePatch};
+use crate::theme::{Theme, ThemeOverrides};
 
 gpui::actions!(
     calm_application_menu,
@@ -285,8 +285,13 @@ impl CalmApplication {
         self
     }
 
-    pub fn patch_theme(mut self, patch: ThemePatch) -> Self {
-        self.provider = self.provider.patch_theme(patch);
+    pub fn with_theme_overrides(mut self, overrides: ThemeOverrides) -> Self {
+        self.provider = self.provider.with_theme_overrides(overrides);
+        self
+    }
+
+    pub fn theme(mut self, configure: impl FnOnce(ThemeOverrides) -> ThemeOverrides) -> Self {
+        self.provider = self.provider.with_theme(configure);
         self
     }
 

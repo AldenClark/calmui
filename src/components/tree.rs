@@ -540,7 +540,7 @@ impl IntoElement for Tree {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Tree {
+impl crate::contracts::ComponentThemeOverridable for Tree {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

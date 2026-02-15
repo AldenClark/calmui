@@ -489,13 +489,13 @@ pub fn fixed_spacer(width: f32, height: f32) -> impl IntoElement {
     div().w(px(width.max(0.0))).h(px(height.max(0.0)))
 }
 
-impl crate::contracts::ComponentThemePatchable for Flex {
+impl crate::contracts::ComponentThemeOverridable for Flex {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Grid {
+impl crate::contracts::ComponentThemeOverridable for Grid {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

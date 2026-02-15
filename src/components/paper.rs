@@ -132,7 +132,7 @@ impl IntoElement for Paper {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Paper {
+impl crate::contracts::ComponentThemeOverridable for Paper {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

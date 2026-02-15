@@ -376,7 +376,7 @@ impl IntoElement for Pagination {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Pagination {
+impl crate::contracts::ComponentThemeOverridable for Pagination {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

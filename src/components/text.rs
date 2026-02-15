@@ -154,7 +154,7 @@ impl IntoElement for Text {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Text {
+impl crate::contracts::ComponentThemeOverridable for Text {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

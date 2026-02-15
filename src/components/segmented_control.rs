@@ -285,7 +285,7 @@ impl IntoElement for SegmentedControl {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for SegmentedControl {
+impl crate::contracts::ComponentThemeOverridable for SegmentedControl {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

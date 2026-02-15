@@ -490,13 +490,13 @@ impl IntoElement for ModalLayer {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for ToastLayer {
+impl crate::contracts::ComponentThemeOverridable for ToastLayer {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for ModalLayer {
+impl crate::contracts::ComponentThemeOverridable for ModalLayer {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

@@ -438,7 +438,7 @@ impl IntoElement for Progress {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Progress {
+impl crate::contracts::ComponentThemeOverridable for Progress {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

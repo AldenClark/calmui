@@ -490,7 +490,7 @@ impl IntoElement for Stepper {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Stepper {
+impl crate::contracts::ComponentThemeOverridable for Stepper {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

@@ -259,7 +259,7 @@ impl IntoElement for Modal {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Modal {
+impl crate::contracts::ComponentThemeOverridable for Modal {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

@@ -367,7 +367,7 @@ impl IntoElement for Loader {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Loader {
+impl crate::contracts::ComponentThemeOverridable for Loader {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

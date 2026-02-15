@@ -3,7 +3,7 @@ use crate::feedback::ToastManager;
 use crate::icon::IconRegistry;
 use crate::motion::MotionConfig;
 use crate::overlay::ModalManager;
-use crate::theme::{Theme, ThemePatch};
+use crate::theme::{Theme, ThemeOverrides};
 use std::sync::Arc;
 
 pub trait OverlayCapabilityProbe: Send + Sync {
@@ -64,8 +64,13 @@ impl CalmProvider {
         self
     }
 
-    pub fn patch_theme(mut self, patch: ThemePatch) -> Self {
-        self.theme = Arc::new(self.theme.as_ref().merged(&patch));
+    pub fn with_theme_overrides(mut self, overrides: ThemeOverrides) -> Self {
+        self.theme = Arc::new(self.theme.as_ref().merged(&overrides));
+        self
+    }
+
+    pub fn with_theme(mut self, configure: impl FnOnce(ThemeOverrides) -> ThemeOverrides) -> Self {
+        self = self.with_theme_overrides(configure(ThemeOverrides::default()));
         self
     }
 
@@ -179,12 +184,12 @@ impl CalmProvider {
         }
     }
 
-    pub fn patch_theme_global(cx: &mut gpui::App, patch: ThemePatch) {
+    pub fn apply_theme_overrides_global(cx: &mut gpui::App, overrides: ThemeOverrides) {
         if cx.has_global::<ProviderGlobal>() {
             let current = cx.global::<ProviderGlobal>().0.theme.as_ref().clone();
-            cx.global_mut::<ProviderGlobal>().0.theme = Arc::new(current.merged(&patch));
+            cx.global_mut::<ProviderGlobal>().0.theme = Arc::new(current.merged(&overrides));
         } else {
-            Self::new().patch_theme(patch).install(cx);
+            Self::new().with_theme_overrides(overrides).install(cx);
         }
     }
 

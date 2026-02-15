@@ -1070,19 +1070,19 @@ impl IntoElement for AppShell {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for TitleBar {
+impl crate::contracts::ComponentThemeOverridable for TitleBar {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Sidebar {
+impl crate::contracts::ComponentThemeOverridable for Sidebar {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for AppShell {
+impl crate::contracts::ComponentThemeOverridable for AppShell {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

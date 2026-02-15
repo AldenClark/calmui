@@ -1410,13 +1410,13 @@ impl IntoElement for MultiSelect {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Select {
+impl crate::contracts::ComponentThemeOverridable for Select {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for MultiSelect {
+impl crate::contracts::ComponentThemeOverridable for MultiSelect {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

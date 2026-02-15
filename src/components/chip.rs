@@ -569,13 +569,13 @@ impl IntoElement for ChipGroup {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Chip {
+impl crate::contracts::ComponentThemeOverridable for Chip {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for ChipGroup {
+impl crate::contracts::ComponentThemeOverridable for ChipGroup {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

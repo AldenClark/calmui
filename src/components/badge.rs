@@ -160,7 +160,7 @@ impl IntoElement for Badge {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Badge {
+impl crate::contracts::ComponentThemeOverridable for Badge {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

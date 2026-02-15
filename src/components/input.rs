@@ -1008,13 +1008,19 @@ impl IntoElement for PinInput {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for TextInput {
+impl crate::contracts::ComponentThemeOverridable for TextInput {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for PinInput {
+impl crate::contracts::ComponentThemeOverridable for PasswordInput {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.inner.theme
+    }
+}
+
+impl crate::contracts::ComponentThemeOverridable for PinInput {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

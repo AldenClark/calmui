@@ -1150,7 +1150,7 @@ impl IntoElement for Table {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Table {
+impl crate::contracts::ComponentThemeOverridable for Table {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

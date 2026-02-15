@@ -563,7 +563,7 @@ impl IntoElement for Overlay {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Overlay {
+impl crate::contracts::ComponentThemeOverridable for Overlay {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

@@ -538,7 +538,7 @@ impl IntoElement for Slider {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Slider {
+impl crate::contracts::ComponentThemeOverridable for Slider {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

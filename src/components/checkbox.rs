@@ -471,13 +471,13 @@ impl IntoElement for CheckboxGroup {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Checkbox {
+impl crate::contracts::ComponentThemeOverridable for Checkbox {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for CheckboxGroup {
+impl crate::contracts::ComponentThemeOverridable for CheckboxGroup {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

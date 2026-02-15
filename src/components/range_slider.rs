@@ -830,7 +830,7 @@ impl IntoElement for RangeSlider {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for RangeSlider {
+impl crate::contracts::ComponentThemeOverridable for RangeSlider {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

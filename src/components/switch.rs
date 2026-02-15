@@ -219,7 +219,7 @@ impl IntoElement for Switch {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Switch {
+impl crate::contracts::ComponentThemeOverridable for Switch {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

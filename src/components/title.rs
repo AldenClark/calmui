@@ -5,7 +5,6 @@ use gpui::{
 
 use crate::contracts::WithId;
 use crate::id::stable_auto_id;
-use crate::provider::CalmProvider;
 
 use super::primitives::v_stack;
 
@@ -18,6 +17,7 @@ pub struct Title {
     font_size: Option<Pixels>,
     line_height: Option<Pixels>,
     font_weight: Option<FontWeight>,
+    theme: crate::theme::LocalTheme,
     style: gpui::StyleRefinement,
 }
 
@@ -32,6 +32,7 @@ impl Title {
             font_size: None,
             line_height: None,
             font_weight: None,
+            theme: crate::theme::LocalTheme::default(),
             style: gpui::StyleRefinement::default(),
         }
     }
@@ -73,9 +74,9 @@ impl WithId for Title {
 }
 
 impl RenderOnce for Title {
-    fn render(self, _window: &mut Window, cx: &mut gpui::App) -> impl IntoElement {
-        let theme = CalmProvider::theme_arc_or_default(cx);
-        let tokens = &theme.components.title;
+    fn render(mut self, _window: &mut Window, cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(cx);
+        let tokens = &self.theme.components.title;
         let base_level = tokens.level(self.order);
         let headline_size = self.font_size.unwrap_or(base_level.font_size);
         let headline_line_height = self.line_height.unwrap_or(base_level.line_height);
@@ -118,5 +119,11 @@ impl IntoElement for Title {
 impl Styled for Title {
     fn style(&mut self) -> &mut gpui::StyleRefinement {
         &mut self.style
+    }
+}
+
+impl crate::contracts::ComponentThemeOverridable for Title {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
     }
 }

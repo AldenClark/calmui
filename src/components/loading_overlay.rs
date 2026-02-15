@@ -169,7 +169,7 @@ impl IntoElement for LoadingOverlay {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for LoadingOverlay {
+impl crate::contracts::ComponentThemeOverridable for LoadingOverlay {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

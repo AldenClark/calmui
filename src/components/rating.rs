@@ -314,7 +314,7 @@ impl IntoElement for Rating {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Rating {
+impl crate::contracts::ComponentThemeOverridable for Rating {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

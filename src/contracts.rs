@@ -1,6 +1,6 @@
 use crate::motion::MotionConfig;
 use crate::style::{ComponentState, FieldLayout, Radius, Size, StyleMap, Variant};
-use crate::theme::{ComponentPatch, LocalTheme};
+use crate::theme::{ComponentOverrides, LocalTheme};
 use gpui::SharedString;
 
 pub trait StyleRecipe<Props> {
@@ -124,18 +124,58 @@ pub trait MotionAware: Sized {
     fn motion(self, value: MotionConfig) -> Self;
 }
 
-pub trait ComponentThemePatchable: Sized {
+pub trait ComponentThemeOverridable: Sized {
     fn local_theme_mut(&mut self) -> &mut LocalTheme;
 
-    fn with_component_theme_patch(mut self, patch: ComponentPatch) -> Self {
-        self.local_theme_mut().set_component_patch(Some(patch));
+    fn with_theme_overrides(mut self, overrides: ComponentOverrides) -> Self {
+        self.local_theme_mut()
+            .set_component_overrides(Some(overrides));
         self
     }
 
-    fn clear_component_theme_patch(mut self) -> Self {
-        self.local_theme_mut().set_component_patch(None);
+    fn theme(mut self, configure: impl FnOnce(ComponentOverrides) -> ComponentOverrides) -> Self {
+        self.local_theme_mut().update_component_overrides(configure);
         self
     }
+
+    fn clear_theme_overrides(mut self) -> Self {
+        self.local_theme_mut().set_component_overrides(None);
+        self
+    }
+}
+
+pub trait ComponentThemeDsl: ComponentThemeOverridable + Sized {
+    type ThemeOverrides: Default;
+
+    fn component_overrides_mut(overrides: &mut ComponentOverrides) -> &mut Self::ThemeOverrides;
+
+    fn themed(
+        mut self,
+        configure: impl FnOnce(Self::ThemeOverrides) -> Self::ThemeOverrides,
+    ) -> Self {
+        self.local_theme_mut()
+            .update_component_overrides(|mut all| {
+                let current = std::mem::take(Self::component_overrides_mut(&mut all));
+                *Self::component_overrides_mut(&mut all) = configure(current);
+                all
+            });
+        self
+    }
+}
+
+#[macro_export]
+macro_rules! impl_component_theme_dsl {
+    ($type:ty, $field:ident, $overrides:ty) => {
+        impl $crate::contracts::ComponentThemeDsl for $type {
+            type ThemeOverrides = $overrides;
+
+            fn component_overrides_mut(
+                overrides: &mut $crate::theme::ComponentOverrides,
+            ) -> &mut Self::ThemeOverrides {
+                &mut overrides.$field
+            }
+        }
+    };
 }
 
 pub trait WithId: Sized {

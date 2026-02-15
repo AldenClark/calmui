@@ -1082,7 +1082,7 @@ impl IntoElement for Textarea {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Textarea {
+impl crate::contracts::ComponentThemeOverridable for Textarea {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

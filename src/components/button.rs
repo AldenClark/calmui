@@ -526,13 +526,13 @@ impl IntoElement for ButtonGroup {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Button {
+impl crate::contracts::ComponentThemeOverridable for Button {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for ButtonGroup {
+impl crate::contracts::ComponentThemeOverridable for ButtonGroup {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

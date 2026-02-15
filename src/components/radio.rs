@@ -447,13 +447,13 @@ impl IntoElement for RadioGroup {
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for Radio {
+impl crate::contracts::ComponentThemeOverridable for Radio {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }
 }
 
-impl crate::contracts::ComponentThemePatchable for RadioGroup {
+impl crate::contracts::ComponentThemeOverridable for RadioGroup {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }
