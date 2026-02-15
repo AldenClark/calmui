@@ -5136,7 +5136,7 @@ impl LocalTheme {
     }
 
     pub fn sync_from_provider(&mut self, cx: &gpui::App) {
-        let base = crate::provider::CalmProvider::theme_arc_or_default(cx);
+        let base = crate::provider::CalmProvider::theme(cx);
         if let Some(component_overrides) = &self.component_overrides {
             let mut merged = base.as_ref().clone();
             merged.components = component_overrides.apply(merged.components);

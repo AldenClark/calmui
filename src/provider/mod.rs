@@ -1,224 +1,51 @@
-use crate::components::OverlayMaterialCapabilities;
-use crate::feedback::ToastManager;
-use crate::icon::IconRegistry;
-use crate::motion::MotionConfig;
-use crate::overlay::ModalManager;
-use crate::theme::{Theme, ThemeOverrides};
+use crate::theme::Theme;
 use std::sync::Arc;
 
-pub trait OverlayCapabilityProbe: Send + Sync {
-    fn capabilities(&self, window: &gpui::Window, cx: &gpui::App) -> OverlayMaterialCapabilities;
-}
-
-impl<F> OverlayCapabilityProbe for F
-where
-    F: Fn(&gpui::Window, &gpui::App) -> OverlayMaterialCapabilities + Send + Sync,
-{
-    fn capabilities(&self, window: &gpui::Window, cx: &gpui::App) -> OverlayMaterialCapabilities {
-        (self)(window, cx)
-    }
-}
-
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct CalmProvider {
-    theme: Arc<Theme>,
-    motion: MotionConfig,
-    icons: IconRegistry,
-    toast_manager: ToastManager,
-    modal_manager: ModalManager,
-    overlay_capabilities: Option<OverlayMaterialCapabilities>,
-    overlay_capability_probe: Option<Arc<dyn OverlayCapabilityProbe>>,
+    theme: Option<Theme>,
 }
+
+#[derive(Clone)]
+struct ProviderGlobal {
+    theme: Arc<Theme>,
+}
+
+impl gpui::Global for ProviderGlobal {}
 
 impl CalmProvider {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn theme(&self) -> &Theme {
-        self.theme.as_ref()
-    }
-
-    pub fn motion(&self) -> MotionConfig {
-        self.motion
-    }
-
-    pub fn icons(&self) -> &IconRegistry {
-        &self.icons
-    }
-
-    pub fn toast_manager(&self) -> &ToastManager {
-        &self.toast_manager
-    }
-
-    pub fn modal_manager(&self) -> &ModalManager {
-        &self.modal_manager
-    }
-
-    pub fn overlay_capabilities(&self) -> Option<OverlayMaterialCapabilities> {
-        self.overlay_capabilities
-    }
-
-    pub fn set_theme(mut self, theme: Theme) -> Self {
-        self.theme = Arc::new(theme);
+    pub fn set_theme(mut self, configure: impl FnOnce(Theme) -> Theme) -> Self {
+        let current = self.theme.take().unwrap_or_default();
+        self.theme = Some(configure(current));
         self
     }
 
-    pub fn with_theme_overrides(mut self, overrides: ThemeOverrides) -> Self {
-        self.theme = Arc::new(self.theme.as_ref().merged(&overrides));
-        self
+    pub fn init(self, cx: &mut gpui::App) {
+        match (cx.has_global::<ProviderGlobal>(), self.theme) {
+            (true, Some(theme)) => {
+                cx.global_mut::<ProviderGlobal>().theme = Arc::new(theme);
+            }
+            (true, None) => {}
+            (false, Some(theme)) => {
+                cx.set_global(ProviderGlobal {
+                    theme: Arc::new(theme),
+                });
+            }
+            (false, None) => {
+                cx.set_global(ProviderGlobal {
+                    theme: Arc::new(Theme::default()),
+                });
+            }
+        }
     }
 
-    pub fn with_theme(mut self, configure: impl FnOnce(ThemeOverrides) -> ThemeOverrides) -> Self {
-        self = self.with_theme_overrides(configure(ThemeOverrides::default()));
-        self
-    }
-
-    pub fn with_motion(mut self, motion: MotionConfig) -> Self {
-        self.motion = motion;
-        self
-    }
-
-    pub fn with_icons(mut self, icons: IconRegistry) -> Self {
-        self.icons = icons;
-        self
-    }
-
-    pub fn with_toast_manager(mut self, manager: ToastManager) -> Self {
-        self.toast_manager = manager;
-        self
-    }
-
-    pub fn with_modal_manager(mut self, manager: ModalManager) -> Self {
-        self.modal_manager = manager;
-        self
-    }
-
-    pub fn with_overlay_capabilities(mut self, value: OverlayMaterialCapabilities) -> Self {
-        self.overlay_capabilities = Some(value);
-        self
-    }
-
-    pub fn with_overlay_capability_probe(
-        mut self,
-        probe: impl OverlayCapabilityProbe + 'static,
-    ) -> Self {
-        self.overlay_capability_probe = Some(Arc::new(probe));
-        self
-    }
-}
-
-#[derive(Clone)]
-pub struct ProviderGlobal(pub CalmProvider);
-
-impl gpui::Global for ProviderGlobal {}
-
-impl CalmProvider {
-    pub fn install(self, cx: &mut gpui::App) {
-        cx.set_global(ProviderGlobal(self));
-    }
-
-    pub fn read(cx: &gpui::App) -> Self {
-        cx.global::<ProviderGlobal>().0.clone()
-    }
-
-    pub fn try_read(cx: &gpui::App) -> Option<Self> {
+    pub fn theme(cx: &gpui::App) -> Arc<Theme> {
         cx.try_global::<ProviderGlobal>()
-            .map(|global| global.0.clone())
-    }
-
-    pub fn read_or_default(cx: &gpui::App) -> Self {
-        Self::try_read(cx).unwrap_or_default()
-    }
-
-    pub fn theme_arc_or_default(cx: &gpui::App) -> Arc<Theme> {
-        Self::try_read(cx)
-            .map(|provider| provider.theme)
+            .map(|global| global.theme.clone())
             .unwrap_or_else(|| Arc::new(Theme::default()))
-    }
-
-    pub fn motion_or(cx: &gpui::App, fallback: MotionConfig) -> MotionConfig {
-        Self::try_read(cx)
-            .map(|provider| provider.motion)
-            .unwrap_or(fallback)
-    }
-
-    pub fn icons_or(cx: &gpui::App, fallback: IconRegistry) -> IconRegistry {
-        Self::try_read(cx)
-            .map(|provider| provider.icons)
-            .unwrap_or(fallback)
-    }
-
-    pub fn overlay_capabilities_or(
-        cx: &gpui::App,
-        fallback: OverlayMaterialCapabilities,
-    ) -> OverlayMaterialCapabilities {
-        Self::try_read(cx)
-            .and_then(|provider| provider.overlay_capabilities)
-            .unwrap_or(fallback)
-    }
-
-    pub fn overlay_capabilities_for(
-        window: &gpui::Window,
-        cx: &gpui::App,
-        fallback: OverlayMaterialCapabilities,
-    ) -> OverlayMaterialCapabilities {
-        if let Some(provider) = Self::try_read(cx) {
-            if let Some(override_caps) = provider.overlay_capabilities {
-                return override_caps;
-            }
-            if let Some(probe) = provider.overlay_capability_probe.as_ref() {
-                return probe.capabilities(window, cx);
-            }
-            fallback
-        } else {
-            fallback
-        }
-    }
-
-    pub fn set_theme_global(cx: &mut gpui::App, theme: Theme) {
-        if cx.has_global::<ProviderGlobal>() {
-            cx.global_mut::<ProviderGlobal>().0.theme = Arc::new(theme);
-        } else {
-            Self::new().set_theme(theme).install(cx);
-        }
-    }
-
-    pub fn apply_theme_overrides_global(cx: &mut gpui::App, overrides: ThemeOverrides) {
-        if cx.has_global::<ProviderGlobal>() {
-            let current = cx.global::<ProviderGlobal>().0.theme.as_ref().clone();
-            cx.global_mut::<ProviderGlobal>().0.theme = Arc::new(current.merged(&overrides));
-        } else {
-            Self::new().with_theme_overrides(overrides).install(cx);
-        }
-    }
-
-    pub fn set_overlay_capabilities_global(cx: &mut gpui::App, value: OverlayMaterialCapabilities) {
-        if cx.has_global::<ProviderGlobal>() {
-            cx.global_mut::<ProviderGlobal>().0.overlay_capabilities = Some(value);
-        } else {
-            Self::new().with_overlay_capabilities(value).install(cx);
-        }
-    }
-
-    pub fn detect_overlay_capabilities_global(cx: &mut gpui::App) {
-        Self::set_overlay_capabilities_global(cx, OverlayMaterialCapabilities::detect_runtime());
-    }
-
-    pub fn clear_overlay_capabilities_global(cx: &mut gpui::App) {
-        if cx.has_global::<ProviderGlobal>() {
-            cx.global_mut::<ProviderGlobal>().0.overlay_capabilities = None;
-        }
-    }
-
-    pub fn set_overlay_capability_probe_global(
-        cx: &mut gpui::App,
-        probe: impl OverlayCapabilityProbe + 'static,
-    ) {
-        if cx.has_global::<ProviderGlobal>() {
-            cx.global_mut::<ProviderGlobal>().0.overlay_capability_probe = Some(Arc::new(probe));
-        } else {
-            Self::new().with_overlay_capability_probe(probe).install(cx);
-        }
     }
 }

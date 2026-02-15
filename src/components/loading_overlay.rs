@@ -22,6 +22,9 @@ pub struct LoadingOverlay {
     label: Option<SharedString>,
     variant: LoaderVariant,
     size: Size,
+    overlay_opacity: f32,
+    overlay_blur_strength: f32,
+    overlay_readability_boost: f32,
     theme: crate::theme::LocalTheme,
     style: gpui::StyleRefinement,
     motion: MotionConfig,
@@ -38,6 +41,9 @@ impl LoadingOverlay {
             label: None,
             variant: LoaderVariant::Dots,
             size: Size::Md,
+            overlay_opacity: 0.98,
+            overlay_blur_strength: 1.6,
+            overlay_readability_boost: 0.92,
             theme: crate::theme::LocalTheme::default(),
             style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
@@ -63,6 +69,21 @@ impl LoadingOverlay {
 
     pub fn size(mut self, value: Size) -> Self {
         self.size = value;
+        self
+    }
+
+    pub fn overlay_opacity(mut self, value: f32) -> Self {
+        self.overlay_opacity = value.clamp(0.0, 1.0);
+        self
+    }
+
+    pub fn overlay_blur_strength(mut self, value: f32) -> Self {
+        self.overlay_blur_strength = value.clamp(0.0, 2.0);
+        self
+    }
+
+    pub fn overlay_readability_boost(mut self, value: f32) -> Self {
+        self.overlay_readability_boost = value.clamp(0.0, 1.0);
         self
     }
 
@@ -148,6 +169,9 @@ impl RenderOnce for LoadingOverlay {
             .material_mode(OverlayMaterialMode::Auto)
             .motion(self.motion)
             .color(tokens.bg.clone())
+            .opacity(self.overlay_opacity)
+            .blur_strength(self.overlay_blur_strength)
+            .readability_boost(self.overlay_readability_boost)
             .content(
                 div()
                     .size_full()

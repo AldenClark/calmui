@@ -4,7 +4,6 @@ use gpui::{
 };
 
 use crate::icon::{IconRegistry, IconSource};
-use crate::provider::CalmProvider;
 use crate::{contracts::WithId, id::stable_auto_id};
 
 use super::utils::resolve_hsla;
@@ -101,7 +100,6 @@ impl WithId for Icon {
 impl RenderOnce for Icon {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        self.registry = CalmProvider::icons_or(_cx, self.registry);
         let color = self.resolve_color();
         if let Some(path) = self.registry.resolve(&self.source) {
             return svg()

@@ -42,6 +42,7 @@ mod text;
 mod textarea;
 mod timeline;
 mod title;
+mod title_bar;
 mod tooltip;
 mod transition;
 mod tree;
@@ -50,7 +51,7 @@ mod utils;
 pub use accordion::{Accordion, AccordionItem, AccordionItemMeta};
 pub use action_icon::ActionIcon;
 pub use app_shell::AppShellWindowConfig;
-pub use app_shell::{AppShell, AppShellLayout, AppShellTitleSlot};
+pub use app_shell::{AppShell, AppShellLayout};
 pub use badge::Badge;
 pub use breadcrumbs::{BreadcrumbItem, Breadcrumbs};
 pub use button::{Button, ButtonGroup, ButtonGroupItem};
@@ -73,10 +74,7 @@ pub use markdown::Markdown;
 pub use menu::{Menu, MenuItem};
 pub use modal::Modal;
 pub use number_input::NumberInput;
-pub use overlay::{
-    Overlay, OverlayCoverage, OverlayMaterialCapabilities, OverlayMaterialMode,
-    OverlaySystemMaterial,
-};
+pub use overlay::{Overlay, OverlayCoverage, OverlayMaterialMode};
 pub use pagination::Pagination;
 pub use paper::Paper;
 pub use popover::{Popover, PopoverPlacement};
@@ -99,6 +97,7 @@ pub use text::{Text, TextTone};
 pub use textarea::Textarea;
 pub use timeline::{Timeline, TimelineItem};
 pub use title::Title;
+pub use title_bar::TitleBar;
 pub use tooltip::{Tooltip, TooltipPlacement};
 pub use transition::{TransitionExt, TransitionStage};
 pub use tree::{Tree, TreeNode, TreeTogglePosition};

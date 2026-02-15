@@ -7,7 +7,6 @@ use crate::feedback::{ToastEntry, ToastKind, ToastManager, ToastPosition};
 use crate::icon::{IconRegistry, IconSource};
 use crate::motion::{MotionConfig, MotionTransition, TransitionPreset};
 use crate::overlay::{Layer, ModalEntry, ModalManager};
-use crate::provider::CalmProvider;
 use crate::{contracts::WithId, id::stable_auto_id};
 
 use super::icon::Icon;
@@ -271,7 +270,6 @@ impl WithId for ToastLayer {
 impl RenderOnce for ToastLayer {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        self.icons = CalmProvider::icons_or(_cx, self.icons);
         let positions = [
             ToastPosition::TopLeft,
             ToastPosition::TopCenter,
@@ -467,7 +465,6 @@ impl WithId for ModalLayer {
 impl RenderOnce for ModalLayer {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        self.icons = CalmProvider::icons_or(_cx, self.icons);
         let stack = self.manager.list();
         let Some(entry) = stack.last().cloned() else {
             return div().into_any_element();
