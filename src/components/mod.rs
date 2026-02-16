@@ -1,5 +1,6 @@
 mod accordion;
 mod action_icon;
+mod alert;
 mod app_shell;
 mod badge;
 mod breadcrumbs;
@@ -50,6 +51,7 @@ mod utils;
 
 pub use accordion::{Accordion, AccordionItem, AccordionItemMeta};
 pub use action_icon::ActionIcon;
+pub use alert::{Alert, AlertKind};
 pub use app_shell::{AppShell, PaneChrome, PanelMode, Sidebar};
 pub use badge::Badge;
 pub use breadcrumbs::{BreadcrumbItem, Breadcrumbs};

@@ -327,7 +327,6 @@ impl TitleBar {
 
         Some(self.render_window_controls_linux())
     }
-
 }
 
 impl WithId for TitleBar {

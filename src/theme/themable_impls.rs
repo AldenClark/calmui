@@ -1,5 +1,5 @@
 use crate::components::{
-    Accordion, ActionIcon, AppShell, Badge, Breadcrumbs, Button, ButtonGroup, Checkbox,
+    Accordion, ActionIcon, Alert, AppShell, Badge, Breadcrumbs, Button, ButtonGroup, Checkbox,
     CheckboxGroup, Chip, ChipGroup, Divider, Drawer, HoverCard, LoadingOverlay, Menu, Modal,
     ModalLayer, MultiSelect, NumberInput, Overlay, Pagination, Paper, PasswordInput, PinInput,
     Popover, Progress, Radio, RadioGroup, RangeSlider, Rating, ScrollArea, SegmentedControl,
@@ -45,6 +45,7 @@ crate::impl_themable!(MultiSelect, select, SelectOverrides);
 crate::impl_themable!(Modal, modal, ModalOverrides);
 crate::impl_themable!(ModalLayer, modal, ModalOverrides);
 crate::impl_themable!(ToastLayer, toast, super::ToastOverrides);
+crate::impl_themable!(Alert, toast, super::ToastOverrides);
 crate::impl_themable!(Divider, divider, DividerOverrides);
 crate::impl_themable!(ScrollArea, scroll_area, ScrollAreaOverrides);
 crate::impl_themable!(Drawer, drawer, DrawerOverrides);
