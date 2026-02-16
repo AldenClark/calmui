@@ -293,11 +293,10 @@ impl RenderOnce for TitleBar {
             };
 
         let tokens = &self.theme.components.title_bar;
-        let bg_token = if self.immersive && self.background.is_none() {
-            gpui::transparent_black()
-        } else {
-            self.background.clone().unwrap_or_else(|| tokens.bg.clone())
-        };
+        let bg_token = self
+            .background
+            .clone()
+            .unwrap_or_else(gpui::transparent_black);
         let fg = resolve_hsla(&self.theme, &tokens.fg);
         let (padding_left, padding_right) = if cfg!(target_os = "windows") {
             (8.0, 0.0)
@@ -321,6 +320,7 @@ impl RenderOnce for TitleBar {
 
         let mut row = div()
             .id(self.id.clone())
+            .relative()
             .w_full()
             .h(px(self.height_px))
             .pl(px(padding_left))
@@ -533,9 +533,16 @@ impl RenderOnce for TitleBar {
             });
 
         if !self.immersive {
-            root = root
-                .border_1()
-                .border_color(resolve_hsla(&self.theme, &tokens.border));
+            root = root.child(
+                div()
+                    .id(format!("{}-bottom-border", self.id))
+                    .absolute()
+                    .left_0()
+                    .right_0()
+                    .bottom_0()
+                    .h(px(1.0))
+                    .bg(resolve_hsla(&self.theme, &tokens.border)),
+            );
         }
 
         root.into_any_element()

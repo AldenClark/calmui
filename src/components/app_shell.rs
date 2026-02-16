@@ -430,6 +430,9 @@ impl RenderOnce for AppShell {
         let tokens = &self.theme.components.app_shell;
         let macos_fullscreen = cfg!(target_os = "macos") && _window.is_fullscreen();
         let mut title_bar = self.title_bar.take();
+        if let Some(title_bar) = title_bar.as_mut() {
+            title_bar.immersive = self.title_bar_immersive;
+        }
         let hide_title_bar = macos_fullscreen
             && title_bar
                 .as_ref()
