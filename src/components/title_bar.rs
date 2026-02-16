@@ -327,6 +327,7 @@ impl TitleBar {
 
         Some(self.render_window_controls_linux())
     }
+
 }
 
 impl WithId for TitleBar {
@@ -356,6 +357,7 @@ impl RenderOnce for TitleBar {
         if cfg!(target_os = "macos") && fullscreen && !has_slot {
             return div().into_any_element();
         }
+        let immersive = self.immersive;
         let controls = self.render_window_controls(window, fullscreen);
         let controls_width = controls.as_ref().map_or(0.0, |c| c.width_px);
         let macos_controls_reserve =
@@ -605,7 +607,7 @@ impl RenderOnce for TitleBar {
                 window.refresh();
             });
 
-        if !self.immersive {
+        if !immersive {
             root = root.child(
                 div()
                     .id(format!("{}-bottom-border", self.id))

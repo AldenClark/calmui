@@ -642,23 +642,6 @@ impl RenderOnce for AppShell {
                         });
                 }
 
-                if cfg!(any(
-                    target_os = "windows",
-                    target_os = "linux",
-                    target_os = "freebsd"
-                )) {
-                    // Immersive mode should not expose titlebar bottom borders.
-                    overlay = overlay.child(
-                        div()
-                            .absolute()
-                            .left_0()
-                            .right_0()
-                            .bottom_0()
-                            .h(px(1.0))
-                            .bg(body_bg),
-                    );
-                }
-
                 title_bar_overlay = Some(overlay.into_any_element());
             } else {
                 root = root.child(title_region);
