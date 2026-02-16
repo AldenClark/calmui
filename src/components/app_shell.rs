@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, Hsla, InteractiveElement, IntoElement, ParentElement,
-    Refineable, RenderOnce, Styled, Window, div, px,
+    AnyElement, ClickEvent, Component, Hsla, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, Refineable, RenderOnce, Styled, Window, WindowControlArea, div, px,
 };
 
 use crate::contracts::WithId;
@@ -593,17 +593,73 @@ impl RenderOnce for AppShell {
                 .flex_none();
 
             if self.title_bar_immersive {
-                title_bar_overlay = Some(
-                    div()
-                        .id(format!("{}-title-bar-overlay", self.id))
-                        .absolute()
-                        .top_0()
-                        .left_0()
-                        .right_0()
-                        .h(px(self.title_bar_height_px.max(0.0)))
-                        .child(title_region)
-                        .into_any_element(),
-                );
+                let mut overlay = div()
+                    .id(format!("{}-title-bar-overlay", self.id))
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .right_0()
+                    .h(px(self.title_bar_height_px.max(0.0)))
+                    .child(title_region);
+
+                if cfg!(any(
+                    target_os = "windows",
+                    target_os = "linux",
+                    target_os = "freebsd"
+                )) {
+                    overlay = overlay.window_control_area(WindowControlArea::Drag);
+                }
+
+                if cfg!(any(target_os = "linux", target_os = "freebsd")) {
+                    let drag_state_id = format!("{}-titlebar-drag", self.id);
+                    let drag_state_id_move = drag_state_id.clone();
+                    let drag_state_id_up = drag_state_id.clone();
+                    let drag_state_id_up_out = drag_state_id.clone();
+                    overlay = overlay
+                        .on_mouse_down(MouseButton::Left, move |event, window, _| {
+                            if event.click_count >= 2 {
+                                return;
+                            }
+                            control::set_bool_state(&drag_state_id, "pressing", true);
+                            window.refresh();
+                        })
+                        .on_mouse_up(MouseButton::Left, move |_, window, _| {
+                            control::set_bool_state(&drag_state_id_up, "pressing", false);
+                            window.refresh();
+                        })
+                        .on_mouse_up_out(MouseButton::Left, move |_, window, _| {
+                            control::set_bool_state(&drag_state_id_up_out, "pressing", false);
+                            window.refresh();
+                        })
+                        .on_mouse_move(move |_, window, _| {
+                            let pressing =
+                                control::bool_state(&drag_state_id_move, "pressing", None, false);
+                            if pressing {
+                                control::set_bool_state(&drag_state_id_move, "pressing", false);
+                                window.start_window_move();
+                                window.refresh();
+                            }
+                        });
+                }
+
+                if cfg!(any(
+                    target_os = "windows",
+                    target_os = "linux",
+                    target_os = "freebsd"
+                )) {
+                    // Immersive mode should not expose titlebar bottom borders.
+                    overlay = overlay.child(
+                        div()
+                            .absolute()
+                            .left_0()
+                            .right_0()
+                            .bottom_0()
+                            .h(px(1.0))
+                            .bg(body_bg),
+                    );
+                }
+
+                title_bar_overlay = Some(overlay.into_any_element());
             } else {
                 root = root.child(title_region);
             }
