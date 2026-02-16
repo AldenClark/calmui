@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, ClickEvent, Component, Hsla, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, Styled, Window, WindowOptions, div, px,
+    Refineable, RenderOnce, Styled, Window, div, px,
 };
 
 use crate::contracts::WithId;
@@ -10,407 +10,351 @@ use crate::id::stable_auto_id;
 
 use super::control;
 use super::overlay::{Overlay, OverlayMaterialMode};
-use super::scroll_area::{ScrollArea, ScrollDirection};
-use super::title_bar::{TitleBar, default_title_bar_height};
 use super::utils::resolve_hsla;
 
-#[derive(Clone, Debug)]
-pub struct AppShellWindowConfig {
-    macos_traffic_light_position: Option<gpui::Point<gpui::Pixels>>,
-}
+/// AppShell 内部用于存储“侧边栏 overlay 开关”的状态 key。
+const SIDEBAR_OVERLAY_STATE_SLOT: &str = "sidebar-overlay-opened";
+/// AppShell 内部用于存储“属性面板 overlay 开关”的状态 key。
+const INSPECTOR_OVERLAY_STATE_SLOT: &str = "inspector-overlay-opened";
 
-impl Default for AppShellWindowConfig {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl AppShellWindowConfig {
-    pub fn new() -> Self {
-        Self {
-            macos_traffic_light_position: None,
-        }
-    }
-
-    pub fn macos_traffic_light_position(mut self, value: gpui::Point<gpui::Pixels>) -> Self {
-        self.macos_traffic_light_position = Some(value);
-        self
-    }
-
-    pub fn apply_to_window_options(&self, mut options: WindowOptions) -> WindowOptions {
-        if cfg!(target_os = "macos") {
-            let mut titlebar = options.titlebar.unwrap_or_default();
-            titlebar.appears_transparent = true;
-            titlebar.title = None;
-            titlebar.traffic_light_position = self.macos_traffic_light_position;
-            options.titlebar = Some(titlebar);
-            return options;
-        }
-
-        if cfg!(target_os = "windows") {
-            let mut titlebar = options.titlebar.unwrap_or_default();
-            titlebar.appears_transparent = true;
-            options.titlebar = Some(titlebar);
-            return options;
-        }
-
-        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-        {
-            options.window_decorations = Some(gpui::WindowDecorations::Client);
-        }
-
-        options
-    }
-}
-
+/// AppShell 区域插槽渲染器。
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
-type OverlaySidebarChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
+/// AppShell overlay 区域开关变化回调。
+type OverlayOpenChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
 
+/// 侧边区域的展示模式。
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum SidebarPosition {
-    Left,
-    Right,
+pub enum PanelMode {
+    /// 内联模式：区域参与主布局占位。
+    Inline,
+    /// 浮层模式：区域悬浮在内容之上。
+    Overlay,
 }
 
-struct Sidebar {
-    id: String,
-    width_px: f32,
-    position: SidebarPosition,
+/// 区域容器的基础外观配置。
+#[derive(Clone, Debug)]
+pub struct PaneChrome {
+    /// 背景色；`None` 时使用区域默认背景策略。
     background: Option<Hsla>,
-    header: Option<SlotRenderer>,
-    content: Option<SlotRenderer>,
-    footer: Option<SlotRenderer>,
-    theme: crate::theme::LocalTheme,
-    style: gpui::StyleRefinement,
+    /// 是否绘制 1px 边框。
+    bordered: bool,
+    /// 区域圆角半径（像素）；`None` 表示不设置。
+    radius_px: Option<f32>,
 }
 
-impl Sidebar {
-    #[track_caller]
-    pub fn new() -> Self {
+impl Default for PaneChrome {
+    fn default() -> Self {
         Self {
-            id: stable_auto_id("sidebar"),
-            width_px: 248.0,
-            position: SidebarPosition::Left,
             background: None,
-            header: None,
-            content: None,
-            footer: None,
-            theme: crate::theme::LocalTheme::default(),
-            style: gpui::StyleRefinement::default(),
+            bordered: false,
+            radius_px: None,
         }
     }
+}
 
-    fn position(mut self, value: SidebarPosition) -> Self {
-        self.position = value;
+impl PaneChrome {
+    /// 创建默认外观配置。
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// 覆盖背景色。
+    pub fn background(mut self, value: impl Into<Hsla>) -> Self {
+        self.background = Some(value.into());
+        self
+    }
+
+    /// 将背景设置为透明。
+    pub fn transparent(mut self) -> Self {
+        self.background = Some(gpui::transparent_black());
+        self
+    }
+
+    /// 控制边框显示。
+    pub fn bordered(mut self, value: bool) -> Self {
+        self.bordered = value;
+        self
+    }
+
+    /// 设置圆角半径（像素）。
+    pub fn radius(mut self, value: f32) -> Self {
+        self.radius_px = Some(value.max(0.0));
         self
     }
 }
 
-impl WithId for Sidebar {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
-    }
-}
-
-impl RenderOnce for Sidebar {
-    fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
-        self.theme.sync_from_provider(_cx);
-        let sidebar_id = self.id.clone();
-        let tokens = &self.theme.components.sidebar;
-        let bg_token = self.background.clone().unwrap_or_else(|| tokens.bg.clone());
-
-        let mut root = div()
-            .id(sidebar_id.clone())
-            .w(px(self.width_px))
-            .h_full()
-            .flex()
-            .flex_col()
-            .bg(resolve_hsla(&self.theme, &bg_token))
-            .border_1()
-            .border_color(resolve_hsla(&self.theme, &tokens.border));
-
-        if let Some(header) = self.header {
-            root = root.child(
-                div()
-                    .p_3()
-                    .text_color(resolve_hsla(&self.theme, &tokens.header_fg))
-                    .child(header()),
-            );
-        }
-
-        if let Some(content) = self.content {
-            root = root.child(
-                div()
-                    .id(format!("{}-sidebar-content", sidebar_id))
-                    .flex_1()
-                    .min_h_0()
-                    .text_color(resolve_hsla(&self.theme, &tokens.content_fg))
-                    .child(
-                        ScrollArea::new()
-                            .with_id(format!("{}-sidebar-scroll", sidebar_id))
-                            .direction(ScrollDirection::Vertical)
-                            .bordered(false)
-                            .padding(crate::style::Size::Md)
-                            .child(content()),
-                    ),
-            );
-        } else {
-            root = root.child(div().flex_1().min_h_0());
-        }
-
-        if let Some(footer) = self.footer {
-            root = root.child(
-                div()
-                    .p_3()
-                    .text_sm()
-                    .text_color(resolve_hsla(&self.theme, &tokens.footer_fg))
-                    .child(footer()),
-            );
-        }
-
-        root.into_any_element()
-    }
-}
-
-impl IntoElement for Sidebar {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AppShellLayout {
-    Standard,
-    SidebarOverlay,
-    DualSidebar,
-    Inspector,
-    SplitView,
-    Focus,
-}
-
+/// 应用级壳层布局组件。
+///
+/// 设计目标：
+/// 1) 只负责区域编排与 overlay 行为；
+/// 2) 各区域内容由调用方自行提供（例如 `TitleBar` / `Sidebar` / 自定义组件）；
+/// 3) 提供少量高频基础样式能力（尺寸、背景、边框、圆角）。
 pub struct AppShell {
+    /// 组件唯一 id，用于受控/非受控状态 key。
     id: String,
-    layout: AppShellLayout,
-    title_bar: Option<TitleBar>,
-    title_bar_immersive: bool,
-    sidebar: Option<Sidebar>,
-    secondary_sidebar: Option<Sidebar>,
-    content: Option<SlotRenderer>,
-    secondary_content: Option<SlotRenderer>,
-    split_secondary_width_px: f32,
-    overlay_sidebar_opened: Option<bool>,
-    overlay_sidebar_default_opened: bool,
-    on_overlay_sidebar_change: Option<OverlaySidebarChangeHandler>,
+    /// 顶部区域内容。
+    title_bar: Option<SlotRenderer>,
+    /// 左侧区域内容。
+    sidebar: Option<SlotRenderer>,
+    /// 中央主内容区域（必填）。
+    content: SlotRenderer,
+    /// 右侧属性面板内容。
+    inspector: Option<SlotRenderer>,
+    /// 内容区底部面板。
+    bottom_panel: Option<SlotRenderer>,
+    /// 顶部区域高度。
+    title_bar_height_px: f32,
+    /// 左侧区域宽度。
+    sidebar_width_px: f32,
+    /// 右侧属性面板宽度。
+    inspector_width_px: f32,
+    /// 底部面板高度。
+    bottom_panel_height_px: f32,
+    /// 左侧区域展示模式。
+    sidebar_mode: PanelMode,
+    /// 右侧属性面板展示模式。
+    inspector_mode: PanelMode,
+    /// 左侧 overlay 开关（受控值）。
+    sidebar_overlay_opened: Option<bool>,
+    /// 左侧 overlay 开关（非受控初始值）。
+    sidebar_overlay_default_opened: bool,
+    /// 左侧 overlay 开关变化回调。
+    on_sidebar_overlay_open_change: Option<OverlayOpenChangeHandler>,
+    /// 右侧 overlay 开关（受控值）。
+    inspector_overlay_opened: Option<bool>,
+    /// 右侧 overlay 开关（非受控初始值）。
+    inspector_overlay_default_opened: bool,
+    /// 右侧 overlay 开关变化回调。
+    on_inspector_overlay_open_change: Option<OverlayOpenChangeHandler>,
+    /// 顶部区域外观。
+    title_bar_chrome: PaneChrome,
+    /// 左侧区域外观。
+    sidebar_chrome: PaneChrome,
+    /// 右侧属性面板外观。
+    inspector_chrome: PaneChrome,
+    /// 底部面板外观。
+    bottom_panel_chrome: PaneChrome,
+    /// 局部主题（用于读取 token 以及组件级主题覆盖）。
     theme: crate::theme::LocalTheme,
+    /// 通用样式精修。
     style: gpui::StyleRefinement,
 }
 
 impl AppShell {
+    /// 创建 AppShell。`content` 为必填区域。
     #[track_caller]
-    pub fn new() -> Self {
+    pub fn new(content: impl IntoElement + 'static) -> Self {
         Self {
             id: stable_auto_id("app-shell"),
-            layout: AppShellLayout::Standard,
             title_bar: None,
-            title_bar_immersive: false,
             sidebar: None,
-            secondary_sidebar: None,
-            content: None,
-            secondary_content: None,
-            split_secondary_width_px: 320.0,
-            overlay_sidebar_opened: None,
-            overlay_sidebar_default_opened: false,
-            on_overlay_sidebar_change: None,
+            content: Box::new(|| content.into_any_element()),
+            inspector: None,
+            bottom_panel: None,
+            title_bar_height_px: 44.0,
+            sidebar_width_px: 260.0,
+            inspector_width_px: 320.0,
+            bottom_panel_height_px: 180.0,
+            sidebar_mode: PanelMode::Inline,
+            inspector_mode: PanelMode::Inline,
+            sidebar_overlay_opened: None,
+            sidebar_overlay_default_opened: false,
+            on_sidebar_overlay_open_change: None,
+            inspector_overlay_opened: None,
+            inspector_overlay_default_opened: false,
+            on_inspector_overlay_open_change: None,
+            title_bar_chrome: PaneChrome::default(),
+            sidebar_chrome: PaneChrome::default(),
+            inspector_chrome: PaneChrome::default(),
+            bottom_panel_chrome: PaneChrome::default(),
             theme: crate::theme::LocalTheme::default(),
             style: gpui::StyleRefinement::default(),
         }
     }
 
-    pub fn layout(mut self, value: AppShellLayout) -> Self {
-        self.layout = value;
-        self
-    }
-
-    pub fn title_bar_immersive(mut self, value: bool) -> Self {
-        self.title_bar_immersive = value;
-        self
-    }
-
-    pub fn show_title_bar(mut self, value: bool) -> Self {
-        if value {
-            self.ensure_title_bar();
-        } else {
-            self.title_bar = None;
-        }
-        self
-    }
-
-    pub fn title_bar_visible(mut self, value: bool) -> Self {
-        self.ensure_title_bar().visible = value;
-        self
-    }
-
-    pub fn title_bar_title(mut self, value: impl Into<SharedString>) -> Self {
-        self.ensure_title_bar().title = Some(value.into());
-        self
-    }
-
-    pub fn title_bar_clear_title(mut self) -> Self {
-        self.ensure_title_bar().title = None;
-        self
-    }
-
-    pub fn title_bar_height(mut self, value: f32) -> Self {
-        self.ensure_title_bar().height_px = value.max(20.0);
-        self
-    }
-
-    pub fn title_bar_background(mut self, value: impl Into<Hsla>) -> Self {
-        self.ensure_title_bar().background = Some(value.into());
-        self
-    }
-
-    pub fn title_bar_show_window_controls(mut self, value: bool) -> Self {
-        self.ensure_title_bar().show_window_controls = value;
-        self
-    }
-
-    pub fn title_bar_slot(mut self, content: impl IntoElement + 'static) -> Self {
-        self.ensure_title_bar().slot = Some(Box::new(|| content.into_any_element()));
-        self
-    }
-
-    pub fn title_bar_clear_slot(mut self) -> Self {
-        self.ensure_title_bar().slot = None;
-        self
-    }
-
-    pub fn show_sidebar(mut self, value: bool) -> Self {
-        if value {
-            self.ensure_sidebar();
-        } else {
-            self.sidebar = None;
-        }
-        self
-    }
-
-    pub fn sidebar_width(mut self, value: f32) -> Self {
-        self.ensure_sidebar().width_px = value.max(140.0);
-        self
-    }
-
-    pub fn sidebar_background(mut self, value: impl Into<Hsla>) -> Self {
-        self.ensure_sidebar().background = Some(value.into());
-        self
-    }
-
-    pub fn sidebar_header(mut self, content: impl IntoElement + 'static) -> Self {
-        self.ensure_sidebar().header = Some(Box::new(|| content.into_any_element()));
-        self
-    }
-
-    pub fn sidebar_content(mut self, content: impl IntoElement + 'static) -> Self {
-        self.ensure_sidebar().content = Some(Box::new(|| content.into_any_element()));
-        self
-    }
-
-    pub fn sidebar_footer(mut self, content: impl IntoElement + 'static) -> Self {
-        self.ensure_sidebar().footer = Some(Box::new(|| content.into_any_element()));
-        self
-    }
-
-    pub fn show_secondary_sidebar(mut self, value: bool) -> Self {
-        if value {
-            self.ensure_secondary_sidebar();
-        } else {
-            self.secondary_sidebar = None;
-        }
-        self
-    }
-
-    pub fn secondary_sidebar_width(mut self, value: f32) -> Self {
-        self.ensure_secondary_sidebar().width_px = value.max(140.0);
-        self
-    }
-
-    pub fn secondary_sidebar_background(mut self, value: impl Into<Hsla>) -> Self {
-        self.ensure_secondary_sidebar().background = Some(value.into());
-        self
-    }
-
-    pub fn secondary_sidebar_header(mut self, content: impl IntoElement + 'static) -> Self {
-        self.ensure_secondary_sidebar().header = Some(Box::new(|| content.into_any_element()));
-        self
-    }
-
-    pub fn secondary_sidebar_content(mut self, content: impl IntoElement + 'static) -> Self {
-        self.ensure_secondary_sidebar().content = Some(Box::new(|| content.into_any_element()));
-        self
-    }
-
-    pub fn secondary_sidebar_footer(mut self, content: impl IntoElement + 'static) -> Self {
-        self.ensure_secondary_sidebar().footer = Some(Box::new(|| content.into_any_element()));
-        self
-    }
-
+    /// 替换主内容区域。
     pub fn content(mut self, value: impl IntoElement + 'static) -> Self {
-        self.content = Some(Box::new(|| value.into_any_element()));
+        self.content = Box::new(|| value.into_any_element());
         self
     }
 
-    pub fn secondary_content(mut self, value: impl IntoElement + 'static) -> Self {
-        self.secondary_content = Some(Box::new(|| value.into_any_element()));
+    /// 设置顶部区域内容。
+    pub fn title_bar(mut self, value: impl IntoElement + 'static) -> Self {
+        self.title_bar = Some(Box::new(|| value.into_any_element()));
         self
     }
 
-    pub fn split_secondary_width(mut self, value: f32) -> Self {
-        self.split_secondary_width_px = value.max(160.0);
+    /// 设置左侧区域内容。
+    pub fn sidebar(mut self, value: impl IntoElement + 'static) -> Self {
+        self.sidebar = Some(Box::new(|| value.into_any_element()));
         self
     }
 
-    pub fn overlay_sidebar_opened(mut self, value: bool) -> Self {
-        self.overlay_sidebar_opened = Some(value);
+    /// 设置右侧属性面板内容。
+    pub fn inspector(mut self, value: impl IntoElement + 'static) -> Self {
+        self.inspector = Some(Box::new(|| value.into_any_element()));
         self
     }
 
-    pub fn overlay_sidebar_default_opened(mut self, value: bool) -> Self {
-        self.overlay_sidebar_default_opened = value;
+    /// 设置底部面板内容。
+    pub fn bottom_panel(mut self, value: impl IntoElement + 'static) -> Self {
+        self.bottom_panel = Some(Box::new(|| value.into_any_element()));
         self
     }
 
-    pub fn on_overlay_sidebar_change(
+    /// 设置顶部区域高度。
+    pub fn title_bar_height(mut self, value: f32) -> Self {
+        self.title_bar_height_px = value.max(0.0);
+        self
+    }
+
+    /// 设置左侧区域宽度。
+    pub fn sidebar_width(mut self, value: f32) -> Self {
+        self.sidebar_width_px = value.max(120.0);
+        self
+    }
+
+    /// 设置右侧属性面板宽度。
+    pub fn inspector_width(mut self, value: f32) -> Self {
+        self.inspector_width_px = value.max(120.0);
+        self
+    }
+
+    /// 设置底部面板高度。
+    pub fn bottom_panel_height(mut self, value: f32) -> Self {
+        self.bottom_panel_height_px = value.max(80.0);
+        self
+    }
+
+    /// 设置左侧区域展示模式。
+    pub fn sidebar_mode(mut self, value: PanelMode) -> Self {
+        self.sidebar_mode = value;
+        self
+    }
+
+    /// 设置右侧属性面板展示模式。
+    pub fn inspector_mode(mut self, value: PanelMode) -> Self {
+        self.inspector_mode = value;
+        self
+    }
+
+    /// 设置左侧 overlay 开关（受控）。
+    pub fn sidebar_overlay_opened(mut self, value: bool) -> Self {
+        self.sidebar_overlay_opened = Some(value);
+        self
+    }
+
+    /// 设置左侧 overlay 开关默认值（非受控）。
+    pub fn sidebar_overlay_default_opened(mut self, value: bool) -> Self {
+        self.sidebar_overlay_default_opened = value;
+        self
+    }
+
+    /// 监听左侧 overlay 开关变化。
+    pub fn on_sidebar_overlay_open_change(
         mut self,
         handler: impl Fn(bool, &mut Window, &mut gpui::App) + 'static,
     ) -> Self {
-        self.on_overlay_sidebar_change = Some(Rc::new(handler));
+        self.on_sidebar_overlay_open_change = Some(Rc::new(handler));
         self
     }
 
-    fn ensure_title_bar(&mut self) -> &mut TitleBar {
-        self.title_bar.get_or_insert_with(TitleBar::new)
+    /// 设置右侧 overlay 开关（受控）。
+    pub fn inspector_overlay_opened(mut self, value: bool) -> Self {
+        self.inspector_overlay_opened = Some(value);
+        self
     }
 
-    fn ensure_sidebar(&mut self) -> &mut Sidebar {
-        self.sidebar.get_or_insert_with(Sidebar::new)
+    /// 设置右侧 overlay 开关默认值（非受控）。
+    pub fn inspector_overlay_default_opened(mut self, value: bool) -> Self {
+        self.inspector_overlay_default_opened = value;
+        self
     }
 
-    fn ensure_secondary_sidebar(&mut self) -> &mut Sidebar {
-        self.secondary_sidebar.get_or_insert_with(Sidebar::new)
+    /// 监听右侧 overlay 开关变化。
+    pub fn on_inspector_overlay_open_change(
+        mut self,
+        handler: impl Fn(bool, &mut Window, &mut gpui::App) + 'static,
+    ) -> Self {
+        self.on_inspector_overlay_open_change = Some(Rc::new(handler));
+        self
     }
 
-    fn resolved_overlay_sidebar_opened(&self) -> bool {
+    /// 配置顶部区域基础外观。
+    pub fn title_bar_chrome(mut self, configure: impl FnOnce(PaneChrome) -> PaneChrome) -> Self {
+        self.title_bar_chrome = configure(self.title_bar_chrome);
+        self
+    }
+
+    /// 配置左侧区域基础外观。
+    pub fn sidebar_chrome(mut self, configure: impl FnOnce(PaneChrome) -> PaneChrome) -> Self {
+        self.sidebar_chrome = configure(self.sidebar_chrome);
+        self
+    }
+
+    /// 配置右侧属性面板基础外观。
+    pub fn inspector_chrome(mut self, configure: impl FnOnce(PaneChrome) -> PaneChrome) -> Self {
+        self.inspector_chrome = configure(self.inspector_chrome);
+        self
+    }
+
+    /// 配置底部面板基础外观。
+    pub fn bottom_panel_chrome(mut self, configure: impl FnOnce(PaneChrome) -> PaneChrome) -> Self {
+        self.bottom_panel_chrome = configure(self.bottom_panel_chrome);
+        self
+    }
+
+    /// 解析左侧 overlay 的最终可见状态。
+    fn resolved_sidebar_overlay_opened(&self) -> bool {
         control::bool_state(
             &self.id,
-            "overlay-sidebar-opened",
-            self.overlay_sidebar_opened,
-            self.overlay_sidebar_default_opened,
+            SIDEBAR_OVERLAY_STATE_SLOT,
+            self.sidebar_overlay_opened,
+            self.sidebar_overlay_default_opened,
         )
+    }
+
+    /// 解析右侧 overlay 的最终可见状态。
+    fn resolved_inspector_overlay_opened(&self) -> bool {
+        control::bool_state(
+            &self.id,
+            INSPECTOR_OVERLAY_STATE_SLOT,
+            self.inspector_overlay_opened,
+            self.inspector_overlay_default_opened,
+        )
+    }
+
+    /// 为区域容器应用背景和圆角。
+    fn apply_surface<T: Styled>(mut node: T, chrome: &PaneChrome, default_bg: Hsla) -> T {
+        let bg = chrome.background.unwrap_or(default_bg);
+        node = node.bg(bg);
+
+        if let Some(radius_px) = chrome.radius_px {
+            node = node.rounded(px(radius_px));
+        }
+
+        node
+    }
+
+    /// 将一个区域包装为统一的容器结构。
+    fn wrap_region(
+        &self,
+        id: String,
+        content: AnyElement,
+        chrome: &PaneChrome,
+        default_bg: Hsla,
+    ) -> gpui::Stateful<gpui::Div> {
+        let mut region =
+            Self::apply_surface(div().id(id).size_full(), chrome, default_bg).child(content);
+
+        if chrome.bordered {
+            region = region.border_1().border_color(resolve_hsla(
+                &self.theme,
+                &self.theme.semantic.border_subtle,
+            ));
+        }
+
+        region
     }
 }
 
@@ -427,40 +371,23 @@ impl WithId for AppShell {
 impl RenderOnce for AppShell {
     fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let tokens = &self.theme.components.app_shell;
-        let macos_fullscreen = cfg!(target_os = "macos") && _window.is_fullscreen();
-        let mut title_bar = self.title_bar.take();
-        if let Some(title_bar) = title_bar.as_mut() {
-            title_bar.immersive = self.title_bar_immersive;
-        }
-        let hide_title_bar = macos_fullscreen
-            && title_bar
-                .as_ref()
-                .is_some_and(|title_bar| !title_bar.has_slot_content());
-        let titlebar_height_px = title_bar
-            .as_ref()
-            .map(TitleBar::height_px)
-            .unwrap_or_else(default_title_bar_height);
-        let show_title_bar = title_bar.is_some() && !hide_title_bar;
-        let content_top_padding = if show_title_bar && !self.title_bar_immersive {
-            titlebar_height_px
-        } else {
-            0.0
-        };
 
-        if !show_title_bar {
-            title_bar = None;
-        }
+        let app_tokens = &self.theme.components.app_shell;
+        let title_tokens = &self.theme.components.title_bar;
+        let body_bg = resolve_hsla(&self.theme, &app_tokens.bg);
+        let text_color = resolve_hsla(&self.theme, &self.theme.semantic.text_primary);
 
-        let content = self
-            .content
-            .take()
-            .map(|content| content())
-            .unwrap_or_else(|| div().into_any_element());
+        let has_sidebar = self.sidebar.is_some();
+        let has_inspector = self.inspector.is_some();
 
-        let body_text = self.theme.resolve_hsla(&self.theme.semantic.text_primary);
-        let body_bg = resolve_hsla(&self.theme, &tokens.bg);
+        let sidebar_overlay_visible = has_sidebar
+            && self.sidebar_mode == PanelMode::Overlay
+            && self.resolved_sidebar_overlay_opened();
+        let inspector_overlay_visible = has_inspector
+            && self.inspector_mode == PanelMode::Overlay
+            && self.resolved_inspector_overlay_opened();
 
+        // 根容器：固定为“顶部 + 主体”的结构。
         let mut root = div()
             .id(self.id.clone())
             .size_full()
@@ -468,131 +395,226 @@ impl RenderOnce for AppShell {
             .flex_col()
             .relative()
             .bg(body_bg)
-            .text_color(body_text);
+            .text_color(text_color);
 
-        let mut body = div()
+        // 顶部区域（可选）。
+        if let Some(title_bar) = self.title_bar.take() {
+            let title_default_bg = resolve_hsla(&self.theme, &title_tokens.bg);
+            let title_region = self
+                .wrap_region(
+                    format!("{}-title-bar", self.id),
+                    title_bar(),
+                    &self.title_bar_chrome,
+                    title_default_bg,
+                )
+                .h(px(self.title_bar_height_px.max(0.0)))
+                .w_full()
+                .flex_none();
+
+            root = root.child(title_region);
+        }
+
+        // 主体容器：用于承载 inline 布局与 overlay 浮层。
+        let mut body_host = div()
             .id(format!("{}-body", self.id))
             .flex_1()
             .min_h_0()
             .w_full()
-            .pt(px(content_top_padding));
+            .relative();
 
-        match self.layout {
-            AppShellLayout::Focus => {
-                body = body.child(div().size_full().child(content));
-            }
-            AppShellLayout::Standard => {
-                let mut row = div().size_full().flex().flex_row().min_h_0();
-                if let Some(sidebar) = self.sidebar.take() {
-                    row = row.child(sidebar);
-                }
-                row = row.child(div().flex_1().min_w_0().min_h_0().child(content));
-                body = body.child(row);
-            }
-            AppShellLayout::DualSidebar => {
-                let mut row = div().size_full().flex().flex_row().min_h_0();
-                if let Some(sidebar) = self.sidebar.take() {
-                    row = row.child(sidebar);
-                }
-                row = row.child(div().flex_1().min_w_0().min_h_0().child(content));
-                if let Some(sidebar) = self.secondary_sidebar.take() {
-                    row = row.child(sidebar);
-                }
-                body = body.child(row);
-            }
-            AppShellLayout::Inspector => {
-                let mut row = div().size_full().flex().flex_row().min_h_0();
-                if let Some(sidebar) = self.sidebar.take() {
-                    row = row.child(sidebar);
-                }
-                row = row.child(div().flex_1().min_w_0().min_h_0().child(content));
-                if let Some(inspector) = self.secondary_sidebar.take() {
-                    row = row.child(inspector.position(SidebarPosition::Right));
-                }
-                body = body.child(row);
-            }
-            AppShellLayout::SplitView => {
-                let mut row = div().size_full().flex().flex_row().min_h_0();
-                row = row.child(div().flex_1().min_w_0().min_h_0().child(content));
-                if let Some(secondary) = self.secondary_content.take() {
-                    row = row.child(
-                        div()
-                            .w(px(self.split_secondary_width_px))
-                            .h_full()
-                            .border_1()
-                            .border_color(resolve_hsla(
-                                &self.theme,
-                                &self.theme.semantic.border_subtle,
-                            ))
-                            .bg(resolve_hsla(&self.theme, &self.theme.semantic.bg_surface))
-                            .child(secondary()),
-                    );
-                }
-                body = body.child(row);
-            }
-            AppShellLayout::SidebarOverlay => {
-                let opened = self.resolved_overlay_sidebar_opened();
-                let is_controlled = self.overlay_sidebar_opened.is_some();
-                let handler = self.on_overlay_sidebar_change.clone();
-                let id_for_overlay = self.id.clone();
+        // 主体行布局：sidebar(可选) + 中心列(content 必填 + bottom_panel 可选) + inspector(可选)。
+        let mut row = div()
+            .id(format!("{}-row", self.id))
+            .size_full()
+            .flex()
+            .flex_row()
+            .min_h_0();
 
-                let mut host = div()
-                    .id(format!("{}-overlay-host", self.id))
-                    .relative()
-                    .size_full()
-                    .child(div().size_full().child(content));
-
-                if opened {
-                    if self.sidebar.is_some() {
-                        host = host.child(
-                            Overlay::new()
-                                .with_id(format!("{}-sidebar-overlay-mask", self.id))
-                                .material_mode(OverlayMaterialMode::TintOnly)
-                                .frosted(false)
-                                .opacity(1.0)
-                                .on_click(
-                                    move |_: &ClickEvent,
-                                          window: &mut Window,
-                                          cx: &mut gpui::App| {
-                                        if !is_controlled {
-                                            control::set_bool_state(
-                                                &id_for_overlay,
-                                                "overlay-sidebar-opened",
-                                                false,
-                                            );
-                                            window.refresh();
-                                        }
-                                        if let Some(on_change) = handler.as_ref() {
-                                            (on_change)(false, window, cx);
-                                        }
-                                    },
-                                ),
-                        );
-                    }
-
-                    if let Some(sidebar) = self.sidebar.take() {
-                        host =
-                            host.child(div().absolute().top_0().left_0().h_full().child(sidebar));
-                    }
-                }
-
-                body = body.child(host);
+        if self.sidebar_mode == PanelMode::Inline {
+            if let Some(sidebar) = self.sidebar.take() {
+                let sidebar_default_bg = resolve_hsla(&self.theme, &self.theme.semantic.bg_soft);
+                let sidebar_region = self
+                    .wrap_region(
+                        format!("{}-sidebar-inline", self.id),
+                        sidebar(),
+                        &self.sidebar_chrome,
+                        sidebar_default_bg,
+                    )
+                    .w(px(self.sidebar_width_px))
+                    .h_full()
+                    .flex_none();
+                row = row.child(sidebar_region);
             }
         }
 
-        if let Some(title_bar) = title_bar {
-            root = root.child(body).child(
-                div()
-                    .id(format!("{}-titlebar-overlay", self.id))
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .right_0()
-                    .child(title_bar),
+        let mut center = div()
+            .id(format!("{}-center", self.id))
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .flex()
+            .flex_col();
+
+        // `content` 为 `FnOnce`，这里先取出再调用，避免对 `self` 产生部分移动。
+        let content_renderer =
+            std::mem::replace(&mut self.content, Box::new(|| div().into_any_element()));
+        let content_element = content_renderer();
+
+        center = center.child(
+            div()
+                .id(format!("{}-content", self.id))
+                .flex_1()
+                .min_h_0()
+                .min_w_0()
+                .child(content_element),
+        );
+
+        if let Some(bottom_panel) = self.bottom_panel.take() {
+            let bottom_default_bg = resolve_hsla(&self.theme, &self.theme.semantic.bg_surface);
+            let bottom_region = self
+                .wrap_region(
+                    format!("{}-bottom-panel", self.id),
+                    bottom_panel(),
+                    &self.bottom_panel_chrome,
+                    bottom_default_bg,
+                )
+                .h(px(self.bottom_panel_height_px))
+                .w_full()
+                .flex_none();
+            center = center.child(bottom_region);
+        }
+
+        row = row.child(center);
+
+        if self.inspector_mode == PanelMode::Inline {
+            if let Some(inspector) = self.inspector.take() {
+                let inspector_default_bg = resolve_hsla(&self.theme, &self.theme.semantic.bg_soft);
+                let inspector_region = self
+                    .wrap_region(
+                        format!("{}-inspector-inline", self.id),
+                        inspector(),
+                        &self.inspector_chrome,
+                        inspector_default_bg,
+                    )
+                    .w(px(self.inspector_width_px))
+                    .h_full()
+                    .flex_none();
+                row = row.child(inspector_region);
+            }
+        }
+
+        body_host = body_host.child(row);
+
+        // overlay 模式：如果任一区域开启，则绘制统一遮罩。
+        if sidebar_overlay_visible || inspector_overlay_visible {
+            let shell_id = self.id.clone();
+            let sidebar_controlled = self.sidebar_overlay_opened.is_some();
+            let inspector_controlled = self.inspector_overlay_opened.is_some();
+            let on_sidebar_change = self.on_sidebar_overlay_open_change.clone();
+            let on_inspector_change = self.on_inspector_overlay_open_change.clone();
+
+            body_host = body_host.child(
+                Overlay::new()
+                    .with_id(format!("{}-panels-overlay", self.id))
+                    .material_mode(OverlayMaterialMode::TintOnly)
+                    .frosted(false)
+                    .opacity(1.0)
+                    .on_click(
+                        move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
+                            let mut need_refresh = false;
+
+                            if sidebar_overlay_visible {
+                                if !sidebar_controlled {
+                                    control::set_bool_state(
+                                        &shell_id,
+                                        SIDEBAR_OVERLAY_STATE_SLOT,
+                                        false,
+                                    );
+                                    need_refresh = true;
+                                }
+                                if let Some(handler) = on_sidebar_change.as_ref() {
+                                    (handler)(false, window, cx);
+                                }
+                            }
+
+                            if inspector_overlay_visible {
+                                if !inspector_controlled {
+                                    control::set_bool_state(
+                                        &shell_id,
+                                        INSPECTOR_OVERLAY_STATE_SLOT,
+                                        false,
+                                    );
+                                    need_refresh = true;
+                                }
+                                if let Some(handler) = on_inspector_change.as_ref() {
+                                    (handler)(false, window, cx);
+                                }
+                            }
+
+                            if need_refresh {
+                                window.refresh();
+                            }
+                        },
+                    ),
             );
-        } else {
-            root = root.child(body);
         }
+
+        // overlay 左侧区域。
+        if self.sidebar_mode == PanelMode::Overlay && sidebar_overlay_visible {
+            if let Some(sidebar) = self.sidebar.take() {
+                let sidebar_default_bg = gpui::transparent_black();
+                let sidebar_region = self
+                    .wrap_region(
+                        format!("{}-sidebar-overlay", self.id),
+                        sidebar(),
+                        &self.sidebar_chrome,
+                        sidebar_default_bg,
+                    )
+                    .w(px(self.sidebar_width_px))
+                    .h_full()
+                    .flex_none();
+
+                body_host = body_host.child(
+                    div()
+                        .id(format!("{}-sidebar-overlay-host", self.id))
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .h_full()
+                        .child(sidebar_region),
+                );
+            }
+        }
+
+        // overlay 右侧属性面板。
+        if self.inspector_mode == PanelMode::Overlay && inspector_overlay_visible {
+            if let Some(inspector) = self.inspector.take() {
+                let inspector_default_bg = gpui::transparent_black();
+                let inspector_region = self
+                    .wrap_region(
+                        format!("{}-inspector-overlay", self.id),
+                        inspector(),
+                        &self.inspector_chrome,
+                        inspector_default_bg,
+                    )
+                    .w(px(self.inspector_width_px))
+                    .h_full()
+                    .flex_none();
+
+                body_host = body_host.child(
+                    div()
+                        .id(format!("{}-inspector-overlay-host", self.id))
+                        .absolute()
+                        .top_0()
+                        .right_0()
+                        .h_full()
+                        .child(inspector_region),
+                );
+            }
+        }
+
+        root = root.child(body_host);
+        root.style().refine(&self.style);
 
         root.into_any_element()
     }
@@ -606,12 +628,6 @@ impl IntoElement for AppShell {
     }
 }
 
-impl crate::contracts::ComponentThemeOverridable for Sidebar {
-    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
-        &mut self.theme
-    }
-}
-
 impl crate::contracts::ComponentThemeOverridable for AppShell {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
@@ -619,12 +635,6 @@ impl crate::contracts::ComponentThemeOverridable for AppShell {
 }
 
 impl gpui::Styled for AppShell {
-    fn style(&mut self) -> &mut gpui::StyleRefinement {
-        &mut self.style
-    }
-}
-
-impl gpui::Styled for Sidebar {
     fn style(&mut self) -> &mut gpui::StyleRefinement {
         &mut self.style
     }
