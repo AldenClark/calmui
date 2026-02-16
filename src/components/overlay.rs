@@ -59,8 +59,8 @@ impl Overlay {
             _material_mode: OverlayMaterialMode::Auto,
             color: None,
             opacity: 1.0,
-            blur_strength: 1.3,
-            readability_boost: 0.78,
+            blur_strength: 1.45,
+            readability_boost: 0.64,
             theme: crate::theme::LocalTheme::default(),
             style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
@@ -166,28 +166,31 @@ impl RenderOnce for Overlay {
             .unwrap_or_else(|| self.theme.components.overlay.bg.clone());
         let raw_bg = resolve_hsla(&self.theme, &token);
 
-        // Three-layer strategy inspired by Acrylic/Fluent/Material:
-        // 1) real backdrop blur, 2) chroma guard tint, 3) contrast scrim for readability stability.
         let opacity = self.opacity.clamp(0.0, 1.0);
         let blur_strength = self.blur_strength.clamp(0.0, 2.0);
         let readability = self.readability_boost.clamp(0.0, 1.0);
-        let dark_backdrop_target = raw_bg.l <= 0.5;
-
-        let base_alpha =
-            ((raw_bg.a * 0.28) + ((0.18 + (0.14 * blur_strength)) * 0.72)).clamp(0.14, 0.56);
-        let bg = raw_bg.opacity((base_alpha * (0.42 + (0.58 * opacity))).clamp(0.10, 0.74));
-        let chroma_guard_alpha =
-            ((0.06 + (0.14 * readability)) * (0.58 + (0.42 * opacity))).clamp(0.04, 0.26);
-        let chroma_guard = raw_bg.opacity(chroma_guard_alpha);
-        let neutral_scrim_alpha =
-            ((0.12 + (0.22 * readability)) * (0.60 + (0.40 * opacity))).clamp(0.10, 0.40);
-        let neutral_scrim = if dark_backdrop_target {
-            gpui::black().opacity(neutral_scrim_alpha)
-        } else {
-            gpui::white().opacity(neutral_scrim_alpha)
+        let neutral_target = match self.theme.color_scheme {
+            crate::theme::ColorScheme::Light => gpui::white(),
+            crate::theme::ColorScheme::Dark => gpui::black(),
         };
 
-        let mut root = div().id(self.id.clone()).relative().bg(bg);
+        // Keep overlay component lightweight: it only tunes blur/tint parameters for renderer pass.
+        let base_scrim_alpha =
+            ((0.07 + (0.15 * readability)) * (0.34 + (0.66 * opacity))).clamp(0.06, 0.24);
+        let fallback_scrim = neutral_target.opacity(base_scrim_alpha);
+
+        let blur_radius =
+            px((22.0 + (70.0 * blur_strength) + (16.0 * readability)).clamp(22.0, 128.0));
+        let tint_base = raw_bg.grayscale().blend(neutral_target.opacity(0.18));
+        let backdrop_tint_alpha =
+            ((0.03 + (0.08 * blur_strength)) * (0.30 + (0.70 * opacity))).clamp(0.02, 0.16);
+        let backdrop_tint = tint_base.opacity(backdrop_tint_alpha);
+
+        let veil_alpha =
+            ((0.10 + (0.18 * readability)) * (0.36 + (0.64 * opacity))).clamp(0.08, 0.30);
+        let neutral_veil = neutral_target.opacity(veil_alpha);
+
+        let mut root = div().id(self.id.clone()).relative().bg(fallback_scrim);
 
         if self.cover_parent {
             root = root.size_full();
@@ -202,11 +205,6 @@ impl RenderOnce for Overlay {
                 (handler)(event, window, cx);
             });
         }
-
-        let blur_radius = px((14.0 + (40.0 * blur_strength)).clamp(14.0, 64.0));
-        let backdrop_tint_alpha =
-            ((0.08 + (0.14 * blur_strength)) * (0.56 + (0.44 * opacity))).clamp(0.06, 0.34);
-        let backdrop_tint = raw_bg.opacity(backdrop_tint_alpha);
 
         root = root.child(
             canvas(
@@ -231,15 +229,7 @@ impl RenderOnce for Overlay {
                 .top_0()
                 .left_0()
                 .size_full()
-                .bg(chroma_guard),
-        );
-        root = root.child(
-            div()
-                .absolute()
-                .top_0()
-                .left_0()
-                .size_full()
-                .bg(neutral_scrim),
+                .bg(neutral_veil),
         );
 
         if let Some(content) = self.content {
