@@ -103,6 +103,73 @@ impl TitleBar {
         }
     }
 
+    /// 设置标题栏可见性。
+    ///
+    /// 说明：
+    /// - `false` 时直接不渲染标题栏内容；
+    /// - 适合在某些页面模式下彻底隐藏标题栏区域。
+    pub fn visible(mut self, value: bool) -> Self {
+        self.visible = value;
+        self
+    }
+
+    /// 设置标题栏文本。
+    ///
+    /// 说明：
+    /// - 若未设置则不显示文本；
+    /// - macOS 全屏且存在 `slot` 时会自动隐藏该文本，避免与沉浸式内容冲突。
+    pub fn title(mut self, value: impl Into<SharedString>) -> Self {
+        self.title = Some(value.into());
+        self
+    }
+
+    /// 设置标题栏高度（像素）。
+    ///
+    /// 说明：
+    /// - 仅影响 `TitleBar` 组件自身高度；
+    /// - 如果放入 `AppShell` 中，建议同时通过 `AppShell::title_bar_height(...)`
+    ///   保持外层区域高度一致。
+    pub fn height(mut self, value: f32) -> Self {
+        self.height_px = value.max(0.0);
+        self
+    }
+
+    /// 设置标题栏是否为沉浸模式。
+    ///
+    /// 说明：
+    /// - `true` 时不绘制标题栏底部边框；
+    /// - `false` 时绘制 1px 底部分割线。
+    pub fn immersive(mut self, value: bool) -> Self {
+        self.immersive = value;
+        self
+    }
+
+    /// 设置标题栏背景色。
+    ///
+    /// 说明：
+    /// - `None` 时使用透明背景（由主题与容器共同决定视觉效果）；
+    /// - 传入后将强制覆盖默认背景。
+    pub fn background(mut self, value: impl Into<Hsla>) -> Self {
+        self.background = Some(value.into());
+        self
+    }
+
+    /// 控制是否显示窗口控制按钮（交通灯 / 最小化最大化关闭）。
+    pub fn show_window_controls(mut self, value: bool) -> Self {
+        self.show_window_controls = value;
+        self
+    }
+
+    /// 设置标题栏右侧（或平台对应位置）slot 内容。
+    ///
+    /// 说明：
+    /// - 常用于放置工具按钮、搜索框、状态信息等；
+    /// - macOS 全屏时，若存在 slot，标题文本会自动隐藏以保留操作空间。
+    pub fn slot(mut self, value: impl IntoElement + 'static) -> Self {
+        self.slot = Some(Box::new(|| value.into_any_element()));
+        self
+    }
+
     pub fn height_px(&self) -> f32 {
         self.height_px
     }
@@ -283,6 +350,12 @@ impl RenderOnce for TitleBar {
 
         let fullscreen = cfg!(target_os = "macos") && window.is_fullscreen();
         let has_slot = self.slot.is_some();
+        // macOS 全屏下，如果没有 slot 操作区，则整条标题栏不再渲染：
+        // 1) 避免只剩一条空白条带；
+        // 2) 与原生沉浸式体验对齐（交通灯也已由系统隐藏）。
+        if cfg!(target_os = "macos") && fullscreen && !has_slot {
+            return div().into_any_element();
+        }
         let controls = self.render_window_controls(window, fullscreen);
         let controls_width = controls.as_ref().map_or(0.0, |c| c.width_px);
         let macos_controls_reserve =

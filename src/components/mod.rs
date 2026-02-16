@@ -50,7 +50,7 @@ mod utils;
 
 pub use accordion::{Accordion, AccordionItem, AccordionItemMeta};
 pub use action_icon::ActionIcon;
-pub use app_shell::{AppShell, PaneChrome, PanelMode};
+pub use app_shell::{AppShell, PaneChrome, PanelMode, Sidebar};
 pub use badge::Badge;
 pub use breadcrumbs::{BreadcrumbItem, Breadcrumbs};
 pub use button::{Button, ButtonGroup, ButtonGroupItem};

@@ -10,6 +10,7 @@ use crate::id::stable_auto_id;
 
 use super::control;
 use super::overlay::{Overlay, OverlayMaterialMode};
+use super::scroll_area::{ScrollArea, ScrollDirection};
 use super::utils::resolve_hsla;
 
 /// AppShell 内部用于存储“侧边栏 overlay 开关”的状态 key。
@@ -21,6 +22,172 @@ const INSPECTOR_OVERLAY_STATE_SLOT: &str = "inspector-overlay-opened";
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 /// AppShell overlay 区域开关变化回调。
 type OverlayOpenChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
+
+/// 侧边栏容器组件。
+///
+/// 该组件用于承载“顶部 / 主体 / 底部”三个区域，并提供统一主题 token。
+/// `AppShell` 只负责摆放该组件，不关心它的内部内容结构。
+pub struct Sidebar {
+    /// 组件唯一 id。
+    id: String,
+    /// 侧边栏固定宽度（像素）。
+    /// `None` 表示占满父容器宽度（推荐与 `AppShell.sidebar_width` 搭配）。
+    width_px: Option<f32>,
+    /// 自定义背景色；`None` 时使用 `theme.components.sidebar.bg`。
+    background: Option<Hsla>,
+    /// 顶部区域内容。
+    header: Option<SlotRenderer>,
+    /// 主体内容区域。
+    content: Option<SlotRenderer>,
+    /// 底部区域内容。
+    footer: Option<SlotRenderer>,
+    /// 局部主题（用于读取 token 以及组件级主题覆盖）。
+    theme: crate::theme::LocalTheme,
+    /// 通用样式精修。
+    style: gpui::StyleRefinement,
+}
+
+impl Sidebar {
+    /// 创建侧边栏组件。
+    #[track_caller]
+    pub fn new() -> Self {
+        Self {
+            id: stable_auto_id("sidebar"),
+            width_px: None,
+            background: None,
+            header: None,
+            content: None,
+            footer: None,
+            theme: crate::theme::LocalTheme::default(),
+            style: gpui::StyleRefinement::default(),
+        }
+    }
+
+    /// 设置侧边栏宽度。
+    pub fn width(mut self, value: f32) -> Self {
+        self.width_px = Some(value.max(120.0));
+        self
+    }
+
+    /// 设置侧边栏背景色。
+    pub fn background(mut self, value: impl Into<Hsla>) -> Self {
+        self.background = Some(value.into());
+        self
+    }
+
+    /// 设置顶部区域内容。
+    pub fn header(mut self, value: impl IntoElement + 'static) -> Self {
+        self.header = Some(Box::new(|| value.into_any_element()));
+        self
+    }
+
+    /// 设置主体区域内容。
+    pub fn content(mut self, value: impl IntoElement + 'static) -> Self {
+        self.content = Some(Box::new(|| value.into_any_element()));
+        self
+    }
+
+    /// 设置底部区域内容。
+    pub fn footer(mut self, value: impl IntoElement + 'static) -> Self {
+        self.footer = Some(Box::new(|| value.into_any_element()));
+        self
+    }
+}
+
+impl WithId for Sidebar {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn id_mut(&mut self) -> &mut String {
+        &mut self.id
+    }
+}
+
+impl RenderOnce for Sidebar {
+    fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
+        let tokens = &self.theme.components.sidebar;
+        let bg_token = self.background.unwrap_or_else(|| tokens.bg.clone());
+
+        let mut root = div()
+            .id(self.id.clone())
+            .h_full()
+            .flex()
+            .flex_col()
+            .bg(resolve_hsla(&self.theme, &bg_token))
+            .border_1()
+            .border_color(resolve_hsla(&self.theme, &tokens.border));
+
+        root = if let Some(width_px) = self.width_px {
+            root.w(px(width_px))
+        } else {
+            root.w_full()
+        };
+
+        if let Some(header) = self.header.take() {
+            root = root.child(
+                div()
+                    .p_3()
+                    .text_color(resolve_hsla(&self.theme, &tokens.header_fg))
+                    .child(header()),
+            );
+        }
+
+        if let Some(content) = self.content.take() {
+            root = root.child(
+                div()
+                    .id(format!("{}-content", self.id))
+                    .flex_1()
+                    .min_h_0()
+                    .text_color(resolve_hsla(&self.theme, &tokens.content_fg))
+                    .child(
+                        ScrollArea::new()
+                            .with_id(format!("{}-scroll", self.id))
+                            .direction(ScrollDirection::Vertical)
+                            .bordered(false)
+                            .padding(crate::style::Size::Md)
+                            .child(content()),
+                    ),
+            );
+        } else {
+            root = root.child(div().flex_1().min_h_0());
+        }
+
+        if let Some(footer) = self.footer.take() {
+            root = root.child(
+                div()
+                    .p_3()
+                    .text_sm()
+                    .text_color(resolve_hsla(&self.theme, &tokens.footer_fg))
+                    .child(footer()),
+            );
+        }
+
+        root.style().refine(&self.style);
+        root
+    }
+}
+
+impl IntoElement for Sidebar {
+    type Element = Component<Self>;
+
+    fn into_element(self) -> Self::Element {
+        Component::new(self)
+    }
+}
+
+impl crate::contracts::ComponentThemeOverridable for Sidebar {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
+    }
+}
+
+impl gpui::Styled for Sidebar {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
+    }
+}
 
 /// 侧边区域的展示模式。
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -94,6 +261,10 @@ pub struct AppShell {
     id: String,
     /// 顶部区域内容。
     title_bar: Option<SlotRenderer>,
+    /// 顶部区域是否采用沉浸模式。
+    /// `true` 时标题栏悬浮在主体上方，不为主体留出高度。
+    /// `false` 时标题栏占据普通布局高度。
+    title_bar_immersive: bool,
     /// 左侧区域内容。
     sidebar: Option<SlotRenderer>,
     /// 中央主内容区域（必填）。
@@ -147,6 +318,7 @@ impl AppShell {
         Self {
             id: stable_auto_id("app-shell"),
             title_bar: None,
+            title_bar_immersive: false,
             sidebar: None,
             content: Box::new(|| content.into_any_element()),
             inspector: None,
@@ -181,6 +353,12 @@ impl AppShell {
     /// 设置顶部区域内容。
     pub fn title_bar(mut self, value: impl IntoElement + 'static) -> Self {
         self.title_bar = Some(Box::new(|| value.into_any_element()));
+        self
+    }
+
+    /// 设置顶部区域是否为沉浸模式。
+    pub fn title_bar_immersive(mut self, value: bool) -> Self {
+        self.title_bar_immersive = value;
         self
     }
 
@@ -398,6 +576,9 @@ impl RenderOnce for AppShell {
             .text_color(text_color);
 
         // 顶部区域（可选）。
+        // - 非沉浸：标题栏参与正常布局，占据固定高度。
+        // - 沉浸：标题栏悬浮在主体上层，不占据主体高度。
+        let mut title_bar_overlay: Option<AnyElement> = None;
         if let Some(title_bar) = self.title_bar.take() {
             let title_default_bg = resolve_hsla(&self.theme, &title_tokens.bg);
             let title_region = self
@@ -411,7 +592,21 @@ impl RenderOnce for AppShell {
                 .w_full()
                 .flex_none();
 
-            root = root.child(title_region);
+            if self.title_bar_immersive {
+                title_bar_overlay = Some(
+                    div()
+                        .id(format!("{}-title-bar-overlay", self.id))
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .right_0()
+                        .h(px(self.title_bar_height_px.max(0.0)))
+                        .child(title_region)
+                        .into_any_element(),
+                );
+            } else {
+                root = root.child(title_region);
+            }
         }
 
         // 主体容器：用于承载 inline 布局与 overlay 浮层。
@@ -614,6 +809,9 @@ impl RenderOnce for AppShell {
         }
 
         root = root.child(body_host);
+        if let Some(title_bar_overlay) = title_bar_overlay {
+            root = root.child(title_bar_overlay);
+        }
         root.style().refine(&self.style);
 
         root.into_any_element()
