@@ -916,7 +916,7 @@ impl RenderOnce for Table {
                         .py_1()
                         .text_sm()
                         .rounded_sm()
-                        .border_1()
+                        .border(super::utils::quantized_stroke_px(window, 1.0))
                         .border_color(resolve_hsla(&self.theme, &tokens.row_border))
                         .bg(if is_active {
                             resolve_hsla(&self.theme, &tokens.header_bg)

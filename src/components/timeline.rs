@@ -159,7 +159,7 @@ impl MotionAware for Timeline {
 }
 
 impl RenderOnce for Timeline {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = self.theme.components.timeline.clone();
         let theme = self.theme.clone();
@@ -196,7 +196,7 @@ impl RenderOnce for Timeline {
                 .items_center()
                 .justify_center()
                 .rounded_full()
-                .border_1()
+                .border(super::utils::quantized_stroke_px(window, 1.0))
                 .border_color(if is_active_marker {
                     resolve_hsla(&theme, &tokens.bullet_active_border)
                 } else {
@@ -280,7 +280,7 @@ impl RenderOnce for Timeline {
                 let mut content_wrap = div()
                     .mt_1()
                     .p_2()
-                    .border_1()
+                    .border(super::utils::quantized_stroke_px(window, 1.0))
                     .border_color(resolve_hsla(&theme, &tokens.card_border))
                     .bg(resolve_hsla(&theme, &tokens.card_bg))
                     .child(content());

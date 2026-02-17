@@ -339,7 +339,7 @@ impl WithId for Markdown {
 }
 
 impl RenderOnce for Markdown {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let blocks = cached_blocks(self.source.as_ref());
         let mut root = Stack::vertical().id(self.id.clone()).w_full();
@@ -360,7 +360,7 @@ impl RenderOnce for Markdown {
                     .w_full()
                     .pl_3()
                     .py_1()
-                    .border_1()
+                    .border(super::utils::quantized_stroke_px(window, 1.0))
                     .border_color(resolve_hsla(
                         &self.theme,
                         &self.theme.semantic.border_subtle,
@@ -429,7 +429,7 @@ impl RenderOnce for Markdown {
                 MarkdownBlock::Rule => div()
                     .id(format!("{}-rule-{index}", self.id))
                     .w_full()
-                    .h(gpui::px(1.0))
+                    .h(super::utils::hairline_px(window))
                     .bg(resolve_hsla(
                         &self.theme,
                         &self.theme.semantic.border_subtle,

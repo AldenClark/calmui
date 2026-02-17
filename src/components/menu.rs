@@ -161,7 +161,7 @@ impl Menu {
             .unwrap_or(220.0)
     }
 
-    fn render_dropdown(&self, is_controlled: bool) -> AnyElement {
+    fn render_dropdown(&self, is_controlled: bool, window: &gpui::Window) -> AnyElement {
         let tokens = &self.theme.components.menu;
         let on_item_click = self.on_item_click.clone();
         let on_open_change = self.on_open_change.clone();
@@ -244,7 +244,7 @@ impl Menu {
             .p_1p5()
             .gap_1()
             .rounded_md()
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.dropdown_border))
             .bg(resolve_hsla(&self.theme, &tokens.dropdown_bg))
             .shadow_sm()
@@ -293,7 +293,7 @@ impl MotionAware for Menu {
 }
 
 impl RenderOnce for Menu {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let opened = if self.disabled {
             false
@@ -350,7 +350,7 @@ impl RenderOnce for Menu {
         }
 
         if opened {
-            let dropdown = self.render_dropdown(is_controlled);
+            let dropdown = self.render_dropdown(is_controlled, window);
             let anchor_host = div()
                 .id(format!("{}-anchor-host", self.id))
                 .absolute()

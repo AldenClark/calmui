@@ -315,7 +315,13 @@ impl TreeRenderCtx {
         current
     }
 
-    fn render_node(&self, node: TreeNode, depth: usize, path: String) -> AnyElement {
+    fn render_node(
+        &self,
+        window: &gpui::Window,
+        node: TreeNode,
+        depth: usize,
+        path: String,
+    ) -> AnyElement {
         let value_key = node.value.to_string();
         let has_children = !node.children.is_empty();
         let is_expanded = self.expanded.contains(value_key.as_str());
@@ -333,7 +339,7 @@ impl TreeRenderCtx {
             .pl(px(depth as f32 * self.indent_px))
             .pr(px(6.0))
             .py(px(4.0))
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(if is_selected {
                 resolve_hsla(&self.theme, &self.tokens.row_selected_fg)
             } else {
@@ -410,7 +416,7 @@ impl TreeRenderCtx {
                 div()
                     .id(format!("{}-line-h-{path}", self.tree_id))
                     .w(px(8.0))
-                    .h(px(1.0))
+                    .h(super::utils::hairline_px(window))
                     .bg(resolve_hsla(&self.theme, &self.tokens.line))
                     .into_any_element(),
             )
@@ -481,13 +487,17 @@ impl TreeRenderCtx {
                             .left_0()
                             .top_0()
                             .h_full()
-                            .w(px(1.0))
+                            .w(super::utils::hairline_px(window))
                             .bg(resolve_hsla(&self.theme, &self.tokens.line)),
                     );
             }
             for (index, child) in node.children.into_iter().enumerate() {
-                child_list =
-                    child_list.child(self.render_node(child, depth + 1, format!("{path}-{index}")));
+                child_list = child_list.child(self.render_node(
+                    window,
+                    child,
+                    depth + 1,
+                    format!("{path}-{index}"),
+                ));
             }
             wrapper = wrapper.child(child_list);
         }
@@ -497,7 +507,7 @@ impl TreeRenderCtx {
 }
 
 impl RenderOnce for Tree {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let expanded_values = self
             .resolved_expanded()
@@ -524,7 +534,7 @@ impl RenderOnce for Tree {
 
         let mut root = Stack::vertical().id(self.id.clone()).w_full().gap_0p5();
         for (index, node) in self.nodes.into_iter().enumerate() {
-            root = root.child(ctx.render_node(node, 0, index.to_string()));
+            root = root.child(ctx.render_node(window, node, 0, index.to_string()));
         }
 
         gpui::Refineable::refine(gpui::Styled::style(&mut root), &self.style);

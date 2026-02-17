@@ -181,7 +181,7 @@ impl MotionAware for Accordion {
 }
 
 impl RenderOnce for Accordion {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.accordion;
         let active_value = self.resolved_value();
@@ -204,7 +204,7 @@ impl RenderOnce for Accordion {
                     .id(item_id.clone())
                     .w_full()
                     .bg(resolve_hsla(&self.theme, &tokens.item_bg))
-                    .border_1()
+                    .border(super::utils::quantized_stroke_px(window, 1.0))
                     .border_color(resolve_hsla(&self.theme, &tokens.item_border));
                 root = apply_radius(&self.theme, root, self.radius);
 

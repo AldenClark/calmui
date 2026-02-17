@@ -430,7 +430,7 @@ impl NumberInput {
             .w_full()
             .bg(resolve_hsla(&self.theme, &tokens.bg))
             .text_color(resolve_hsla(&self.theme, &tokens.fg))
-            .border_1();
+            .border(super::utils::quantized_stroke_px(window, 1.0));
 
         input = apply_input_size(input, self.size);
         input = apply_radius(&self.theme, input, self.radius);
@@ -519,7 +519,7 @@ impl NumberInput {
                 div()
                     .id(format!("{}-caret", self.id))
                     .flex_none()
-                    .w(px(1.5))
+                    .w(super::utils::quantized_stroke_px(window, 1.5))
                     .h(px(self.caret_height_px()))
                     .bg(resolve_hsla(&self.theme, &tokens.fg))
                     .rounded_sm()
@@ -560,7 +560,7 @@ impl NumberInput {
                 .justify_center()
                 .bg(controls_bg)
                 .text_color(controls_fg)
-                .border_1()
+                .border(super::utils::quantized_stroke_px(window, 1.0))
                 .border_color(controls_border)
                 .child(
                     Icon::named_outline("chevron-up")
@@ -578,7 +578,7 @@ impl NumberInput {
                 .justify_center()
                 .bg(controls_bg)
                 .text_color(controls_fg)
-                .border_1()
+                .border(super::utils::quantized_stroke_px(window, 1.0))
                 .border_color(controls_border)
                 .child(
                     Icon::named_outline("chevron-down")

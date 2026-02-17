@@ -158,7 +158,7 @@ impl WithId for Alert {
 }
 
 impl RenderOnce for Alert {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let visible = control::bool_state(&self.id, "visible", self.visible, self.default_visible);
         if !visible {
@@ -198,7 +198,7 @@ impl RenderOnce for Alert {
             .items_center()
             .justify_center()
             .rounded_full()
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(fg.opacity(0.32))
             .bg(fg.opacity(0.08))
             .cursor_pointer()
@@ -236,7 +236,7 @@ impl RenderOnce for Alert {
             .max_w_full()
             .p_3()
             .rounded_md()
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(
                 &self.theme,
                 &self.theme.semantic.border_subtle,

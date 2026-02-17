@@ -227,7 +227,7 @@ impl MotionAware for Pagination {
 }
 
 impl RenderOnce for Pagination {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = self.theme.components.pagination.clone();
         let theme = self.theme.clone();
@@ -242,7 +242,7 @@ impl RenderOnce for Pagination {
         let make_item = |id_suffix: String, label: String, target: usize, disabled: bool| {
             let mut item = div()
                 .id(id_suffix)
-                .border_1()
+                .border(super::utils::quantized_stroke_px(window, 1.0))
                 .border_color(resolve_hsla(&theme, &tokens.item_border))
                 .bg(resolve_hsla(&theme, &tokens.item_bg))
                 .text_color(if disabled {
@@ -296,7 +296,7 @@ impl RenderOnce for Pagination {
                     let is_active = page == current;
                     let mut page_item = div()
                         .id(format!("{}-page-{index}", self.id))
-                        .border_1()
+                        .border(super::utils::quantized_stroke_px(window, 1.0))
                         .border_color(resolve_hsla(&theme, &tokens.item_border))
                         .bg(if is_active {
                             active_bg

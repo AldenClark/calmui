@@ -137,7 +137,7 @@ impl MotionAware for Checkbox {
 }
 
 impl RenderOnce for Checkbox {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let checked = self.resolved_checked();
         let is_controlled = self.checked.is_some();
@@ -159,7 +159,7 @@ impl RenderOnce for Checkbox {
         let mut control = div()
             .w(px(size))
             .h(px(size))
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(border)
             .bg(bg)
             .flex()

@@ -117,7 +117,7 @@ impl MotionAware for Modal {
 }
 
 impl RenderOnce for Modal {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let opened = self.resolved_opened();
         if !opened {
@@ -158,7 +158,7 @@ impl RenderOnce for Modal {
                 .w(px(26.0))
                 .h(px(26.0))
                 .rounded_full()
-                .border_1()
+                .border(super::utils::quantized_stroke_px(window, 1.0))
                 .border_color(resolve_hsla(
                     &self.theme,
                     &self.theme.semantic.border_subtle,
@@ -203,7 +203,7 @@ impl RenderOnce for Modal {
             .w(px(self.width_px))
             .max_w_full()
             .rounded_lg()
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.panel_border))
             .bg(resolve_hsla(&self.theme, &tokens.panel_bg))
             .p_4()

@@ -128,7 +128,7 @@ impl MotionAware for Switch {
 }
 
 impl RenderOnce for Switch {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let checked = self.resolved_checked();
         let is_controlled = self.checked.is_some();
@@ -162,7 +162,7 @@ impl RenderOnce for Switch {
             .relative()
             .w(px(track_w))
             .h(px(track_h))
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(track_bg)
             .bg(track_bg)
             .child(thumb);

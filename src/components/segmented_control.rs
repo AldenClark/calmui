@@ -182,7 +182,7 @@ impl MotionAware for SegmentedControl {
 }
 
 impl RenderOnce for SegmentedControl {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = self.theme.components.segmented_control.clone();
         let selected = self.resolved_value();
@@ -267,7 +267,7 @@ impl RenderOnce for SegmentedControl {
             .gap_1()
             .p_1()
             .bg(resolve_hsla(&theme, &tokens.bg))
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&theme, &tokens.border))
             .children(items);
 

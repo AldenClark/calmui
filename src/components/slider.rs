@@ -254,7 +254,7 @@ impl MotionAware for Slider {
 }
 
 impl RenderOnce for Slider {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.slider;
         let value = self.resolved_value();
@@ -282,7 +282,7 @@ impl RenderOnce for Slider {
                 .w(px(track_height))
                 .h(px(track_len))
                 .overflow_hidden()
-                .border_1()
+                .border(super::utils::quantized_stroke_px(window, 1.0))
                 .border_color(resolve_hsla(&self.theme, &tokens.track_bg))
                 .bg(resolve_hsla(&self.theme, &tokens.track_bg));
             track = apply_radius(&self.theme, track, self.radius);
@@ -307,7 +307,7 @@ impl RenderOnce for Slider {
                 .w(px(thumb_size))
                 .h(px(thumb_size))
                 .cursor_pointer()
-                .border_1()
+                .border(super::utils::quantized_stroke_px(window, 1.0))
                 .border_color(resolve_hsla(&self.theme, &tokens.thumb_border))
                 .bg(resolve_hsla(&self.theme, &tokens.thumb_bg));
             thumb = apply_radius(&self.theme, thumb, Radius::Pill);
@@ -412,7 +412,7 @@ impl RenderOnce for Slider {
             .w(px(self.width_px))
             .h(px(track_height))
             .overflow_hidden()
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.track_bg));
         track = apply_radius(&self.theme, track, self.radius);
 
@@ -457,7 +457,7 @@ impl RenderOnce for Slider {
             .w(px(thumb_size))
             .h(px(thumb_size))
             .cursor_pointer()
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.thumb_border))
             .bg(resolve_hsla(&self.theme, &tokens.thumb_bg));
         thumb = apply_radius(&self.theme, thumb, Radius::Pill);

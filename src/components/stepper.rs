@@ -227,7 +227,7 @@ pub enum StepperContentPosition {
 }
 
 impl RenderOnce for Stepper {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = self.theme.components.stepper.clone();
         let theme = self.theme.clone();
@@ -293,7 +293,7 @@ impl RenderOnce for Stepper {
                     .items_center()
                     .justify_center()
                     .rounded_full()
-                    .border_1()
+                    .border(super::utils::quantized_stroke_px(window, 1.0))
                     .border_color(indicator_border)
                     .bg(indicator_bg)
                     .text_color(indicator_fg)
@@ -445,7 +445,7 @@ impl RenderOnce for Stepper {
             .w_full()
             .mt_2()
             .p_3()
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&theme, &tokens.panel_border))
             .bg(resolve_hsla(&theme, &tokens.panel_bg))
             .text_color(resolve_hsla(&theme, &tokens.panel_fg));

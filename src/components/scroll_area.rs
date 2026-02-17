@@ -119,7 +119,7 @@ impl WithId for ScrollArea {
 }
 
 impl RenderOnce for ScrollArea {
-    fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.scroll_area;
         let mut viewport = div().id(format!("{}-viewport", self.id)).w_full().min_h_0();
@@ -155,7 +155,7 @@ impl RenderOnce for ScrollArea {
 
         if self.bordered {
             root = root
-                .border_1()
+                .border(super::utils::quantized_stroke_px(window, 1.0))
                 .border_color(resolve_hsla(&self.theme, &tokens.border));
         }
 

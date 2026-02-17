@@ -189,7 +189,7 @@ impl MotionAware for Tabs {
 }
 
 impl RenderOnce for Tabs {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = self.theme.components.tabs.clone();
         let selected = self.resolved_value();
@@ -224,7 +224,7 @@ impl RenderOnce for Tabs {
                 .id(format!("{}-tab-{index}", self.id))
                 .min_w_0()
                 .cursor_pointer()
-                .border_1()
+                .border(super::utils::quantized_stroke_px(window, 1.0))
                 .border_color(if is_active {
                     resolve_hsla(&theme, &tokens.list_border)
                 } else {
@@ -285,7 +285,7 @@ impl RenderOnce for Tabs {
             .w_full()
             .gap_0p5()
             .p_0p5()
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .bg(resolve_hsla(&theme, &tokens.list_bg))
             .border_color(resolve_hsla(&theme, &tokens.list_border))
             .children(triggers);
@@ -294,7 +294,7 @@ impl RenderOnce for Tabs {
         let mut panel = div()
             .id(format!("{}-panel", self.id))
             .w_full()
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&theme, &tokens.panel_border))
             .bg(resolve_hsla(&theme, &tokens.panel_bg))
             .text_color(resolve_hsla(&theme, &tokens.panel_fg))

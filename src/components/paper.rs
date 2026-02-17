@@ -98,7 +98,7 @@ impl ParentElement for Paper {
 }
 
 impl RenderOnce for Paper {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.paper;
         let root_id = self.id.clone();
@@ -112,7 +112,7 @@ impl RenderOnce for Paper {
 
         if self.bordered {
             root = root
-                .border_1()
+                .border(super::utils::quantized_stroke_px(window, 1.0))
                 .border_color(resolve_hsla(&self.theme, &tokens.border));
         }
 

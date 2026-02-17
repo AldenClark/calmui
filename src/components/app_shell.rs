@@ -105,7 +105,7 @@ impl WithId for Sidebar {
 }
 
 impl RenderOnce for Sidebar {
-    fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.sidebar;
         let bg_token = self.background.unwrap_or_else(|| tokens.bg.clone());
@@ -116,7 +116,7 @@ impl RenderOnce for Sidebar {
             .flex()
             .flex_col()
             .bg(resolve_hsla(&self.theme, &bg_token))
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.border));
 
         root = if let Some(width_px) = self.width_px {
@@ -517,6 +517,7 @@ impl AppShell {
     /// 将一个区域包装为统一的容器结构。
     fn wrap_region(
         &self,
+        window: &Window,
         id: String,
         content: AnyElement,
         chrome: &PaneChrome,
@@ -526,7 +527,7 @@ impl AppShell {
             Self::apply_surface(div().id(id).size_full(), chrome, default_bg).child(content);
 
         if chrome.bordered {
-            region = region.border_1().border_color(resolve_hsla(
+            region = region.border(super::utils::quantized_stroke_px(window, 1.0)).border_color(resolve_hsla(
                 &self.theme,
                 &self.theme.semantic.border_subtle,
             ));
@@ -547,7 +548,7 @@ impl WithId for AppShell {
 }
 
 impl RenderOnce for AppShell {
-    fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
 
         let app_tokens = &self.theme.components.app_shell;
@@ -583,6 +584,7 @@ impl RenderOnce for AppShell {
             let title_default_bg = resolve_hsla(&self.theme, &title_tokens.bg);
             let title_region = self
                 .wrap_region(
+                    window,
                     format!("{}-title-bar", self.id),
                     title_bar(),
                     &self.title_bar_chrome,
@@ -669,6 +671,7 @@ impl RenderOnce for AppShell {
                 let sidebar_default_bg = resolve_hsla(&self.theme, &self.theme.semantic.bg_soft);
                 let sidebar_region = self
                     .wrap_region(
+                        window,
                         format!("{}-sidebar-inline", self.id),
                         sidebar(),
                         &self.sidebar_chrome,
@@ -707,6 +710,7 @@ impl RenderOnce for AppShell {
             let bottom_default_bg = resolve_hsla(&self.theme, &self.theme.semantic.bg_surface);
             let bottom_region = self
                 .wrap_region(
+                    window,
                     format!("{}-bottom-panel", self.id),
                     bottom_panel(),
                     &self.bottom_panel_chrome,
@@ -725,6 +729,7 @@ impl RenderOnce for AppShell {
                 let inspector_default_bg = resolve_hsla(&self.theme, &self.theme.semantic.bg_soft);
                 let inspector_region = self
                     .wrap_region(
+                        window,
                         format!("{}-inspector-inline", self.id),
                         inspector(),
                         &self.inspector_chrome,
@@ -799,6 +804,7 @@ impl RenderOnce for AppShell {
                 let sidebar_default_bg = gpui::transparent_black();
                 let sidebar_region = self
                     .wrap_region(
+                        window,
                         format!("{}-sidebar-overlay", self.id),
                         sidebar(),
                         &self.sidebar_chrome,
@@ -826,6 +832,7 @@ impl RenderOnce for AppShell {
                 let inspector_default_bg = gpui::transparent_black();
                 let inspector_region = self
                     .wrap_region(
+                        window,
                         format!("{}-inspector-overlay", self.id),
                         inspector(),
                         &self.inspector_chrome,

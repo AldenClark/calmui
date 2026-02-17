@@ -142,7 +142,7 @@ impl HoverCard {
         }
     }
 
-    fn render_card(&mut self, is_controlled: bool) -> AnyElement {
+    fn render_card(&mut self, is_controlled: bool, window: &gpui::Window) -> AnyElement {
         let tokens = &self.theme.components.hover_card;
         let panel_width = if self.match_trigger_width {
             panel_width_px(&self.id, 260.0).max(120.0)
@@ -156,7 +156,7 @@ impl HoverCard {
             .max_w_full()
             .p_3()
             .rounded_md()
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.border))
             .bg(resolve_hsla(&self.theme, &tokens.bg))
             .child(
@@ -244,7 +244,7 @@ impl MotionAware for HoverCard {
 }
 
 impl RenderOnce for HoverCard {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let opened = if self.disabled {
             false
@@ -326,7 +326,7 @@ impl RenderOnce for HoverCard {
         }
 
         if opened {
-            let card = self.render_card(is_controlled);
+            let card = self.render_card(is_controlled, window);
             let floating = card;
             let anchor_corner = match self.placement {
                 HoverCardPlacement::Top => Corner::BottomLeft,

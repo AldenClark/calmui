@@ -337,7 +337,7 @@ impl Select {
         block.into_any_element()
     }
 
-    fn render_control(&mut self) -> AnyElement {
+    fn render_control(&mut self, window: &gpui::Window) -> AnyElement {
         let tokens = &self.theme.components.select;
         let opened = self.resolved_opened();
         let value = self.resolved_value();
@@ -355,7 +355,7 @@ impl Select {
                 self.variant,
             ))
             .text_color(resolve_hsla(&self.theme, &tokens.fg))
-            .border_1();
+            .border(super::utils::quantized_stroke_px(window, 1.0));
 
         control = apply_input_size(control, self.size);
         control = apply_radius(&self.theme, control, self.radius);
@@ -469,7 +469,7 @@ impl Select {
             .into_any_element()
     }
 
-    fn render_dropdown(&mut self) -> AnyElement {
+    fn render_dropdown(&mut self, window: &gpui::Window) -> AnyElement {
         let tokens = &self.theme.components.select;
         let current_value = self.resolved_value();
 
@@ -575,7 +575,7 @@ impl Select {
             .id(format!("{}-dropdown", self.id))
             .w(px(SelectRuntime::dropdown_width_px(&self.id)))
             .rounded_md()
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.dropdown_border))
             .bg(resolve_hsla(&self.theme, &tokens.dropdown_bg))
             .shadow_sm()
@@ -672,7 +672,7 @@ impl MotionAware for Select {
 }
 
 impl RenderOnce for Select {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let opened = self.resolved_opened();
         let dropdown_upward = control::bool_state(&self.id, "dropdown-upward", None, false);
@@ -691,10 +691,10 @@ impl RenderOnce for Select {
             .id(format!("{}-trigger", self.id))
             .relative()
             .w_full()
-            .child(self.render_control());
+            .child(self.render_control(window));
 
         if opened {
-            let floating = self.render_dropdown();
+            let floating = self.render_dropdown(window);
             let anchor_host = if dropdown_upward {
                 div()
                     .id(format!("{}-anchor-host", self.id))
@@ -995,7 +995,7 @@ impl MultiSelect {
         block.into_any_element()
     }
 
-    fn render_control(&mut self) -> AnyElement {
+    fn render_control(&mut self, window: &gpui::Window) -> AnyElement {
         let tokens = &self.theme.components.select;
         let opened = self.resolved_opened();
 
@@ -1012,7 +1012,7 @@ impl MultiSelect {
                 tokens,
                 self.variant,
             ))
-            .border_1();
+            .border(super::utils::quantized_stroke_px(window, 1.0));
 
         control = apply_input_size(control, self.size);
         control = apply_radius(&self.theme, control, self.radius);
@@ -1089,7 +1089,7 @@ impl MultiSelect {
                     .py(gpui::px(3.0))
                     .text_xs()
                     .rounded_full()
-                    .border_1()
+                    .border(super::utils::quantized_stroke_px(window, 1.0))
                     .border_color(resolve_hsla(&self.theme, &tokens.tag_border))
                     .bg(resolve_hsla(&self.theme, &tokens.tag_bg))
                     .text_color(resolve_hsla(&self.theme, &tokens.tag_fg))
@@ -1142,7 +1142,7 @@ impl MultiSelect {
             .into_any_element()
     }
 
-    fn render_dropdown(&mut self) -> AnyElement {
+    fn render_dropdown(&mut self, window: &gpui::Window) -> AnyElement {
         let tokens = &self.theme.components.select;
         let current_values = self.resolved_values();
 
@@ -1237,7 +1237,7 @@ impl MultiSelect {
             .id(format!("{}-dropdown", self.id))
             .w(px(SelectRuntime::dropdown_width_px(&self.id)))
             .rounded_md()
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.dropdown_border))
             .bg(resolve_hsla(&self.theme, &tokens.dropdown_bg))
             .shadow_sm()
@@ -1334,7 +1334,7 @@ impl MotionAware for MultiSelect {
 }
 
 impl RenderOnce for MultiSelect {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let opened = self.resolved_opened();
         let dropdown_upward = control::bool_state(&self.id, "dropdown-upward", None, false);
@@ -1352,10 +1352,10 @@ impl RenderOnce for MultiSelect {
             .id(format!("{}-trigger", self.id))
             .relative()
             .w_full()
-            .child(self.render_control());
+            .child(self.render_control(window));
 
         if opened {
-            let floating = self.render_dropdown();
+            let floating = self.render_dropdown(window);
             let anchor_host = if dropdown_upward {
                 div()
                     .id(format!("{}-anchor-host", self.id))

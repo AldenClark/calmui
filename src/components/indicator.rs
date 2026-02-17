@@ -161,7 +161,7 @@ impl WithId for Indicator {
 }
 
 impl RenderOnce for Indicator {
-    fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let bg = self
             .color
@@ -186,7 +186,7 @@ impl RenderOnce for Indicator {
             .font_weight(gpui::FontWeight::SEMIBOLD);
 
         if self.with_border {
-            badge = badge.border_1().border_color(border);
+            badge = badge.border(super::utils::quantized_stroke_px(window, 1.0)).border_color(border);
         }
 
         if self.disabled {
@@ -208,7 +208,7 @@ impl RenderOnce for Indicator {
                     .absolute()
                     .size_full()
                     .rounded_full()
-                    .border_1()
+                    .border(super::utils::quantized_stroke_px(window, 1.0))
                     .border_color(bg)
                     .with_animation(
                         format!("{}-pulse-anim", self.id),

@@ -88,7 +88,7 @@ impl ToastLayer {
         }
     }
 
-    fn render_toast_card(&self, entry: ToastEntry) -> AnyElement {
+    fn render_toast_card(&self, entry: ToastEntry, window: &gpui::Window) -> AnyElement {
         let (bg, fg) = self.toast_colors(&entry);
         let manager = self.manager.clone();
         let toast_id = entry.id;
@@ -108,7 +108,7 @@ impl ToastLayer {
             .items_center()
             .justify_center()
             .rounded_full()
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(fg.opacity(0.32))
             .bg(fg.opacity(0.08))
             .cursor_pointer()
@@ -154,7 +154,7 @@ impl ToastLayer {
             .max_w_full()
             .p_3()
             .rounded_md()
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(
                 &self.theme,
                 &self.theme.semantic.border_subtle,
@@ -268,7 +268,7 @@ impl WithId for ToastLayer {
 }
 
 impl RenderOnce for ToastLayer {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let positions = [
             ToastPosition::TopLeft,
@@ -294,7 +294,7 @@ impl RenderOnce for ToastLayer {
 
             let cards = toasts
                 .into_iter()
-                .map(|entry| self.render_toast_card(entry))
+                .map(|entry| self.render_toast_card(entry, window))
                 .collect::<Vec<_>>();
 
             root = root.child(Self::anchor_for(position).children(cards));
@@ -349,7 +349,7 @@ impl ModalLayer {
         self
     }
 
-    fn render_modal(&self, entry: ModalEntry) -> AnyElement {
+    fn render_modal(&self, entry: ModalEntry, window: &gpui::Window) -> AnyElement {
         let panel_bg = resolve_hsla(&self.theme, &self.theme.components.modal.panel_bg);
         let panel_border = resolve_hsla(&self.theme, &self.theme.components.modal.panel_border);
         let title_color = resolve_hsla(&self.theme, &self.theme.components.modal.title);
@@ -381,7 +381,7 @@ impl ModalLayer {
             .w_96()
             .max_w_full()
             .bg(panel_bg)
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(panel_border)
             .rounded_lg()
             .p_4()
@@ -463,7 +463,7 @@ impl WithId for ModalLayer {
 }
 
 impl RenderOnce for ModalLayer {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let stack = self.manager.list();
         let Some(entry) = stack.last().cloned() else {
@@ -472,7 +472,7 @@ impl RenderOnce for ModalLayer {
 
         match entry.layer {
             Layer::Modal | Layer::Popover | Layer::Dropdown | Layer::Tooltip | Layer::Toast => {
-                self.render_modal(entry)
+                self.render_modal(entry, window)
             }
             Layer::Base | Layer::DragPreview => div().into_any_element(),
         }

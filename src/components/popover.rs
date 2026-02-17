@@ -111,13 +111,13 @@ impl Popover {
         control::bool_state(&self.id, "opened", self.opened, self.default_opened)
     }
 
-    fn render_panel(&mut self, is_controlled: bool) -> AnyElement {
+    fn render_panel(&mut self, is_controlled: bool, window: &gpui::Window) -> AnyElement {
         let tokens = &self.theme.components.popover;
         let mut panel = Stack::vertical()
             .id(format!("{}-panel", self.id))
             .gap_2()
             .bg(resolve_hsla(&self.theme, &tokens.bg))
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.border))
             .text_color(resolve_hsla(&self.theme, &tokens.body))
             .rounded_md()
@@ -170,7 +170,7 @@ impl MotionAware for Popover {
 }
 
 impl RenderOnce for Popover {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let opened = if self.disabled {
             false
@@ -216,7 +216,7 @@ impl RenderOnce for Popover {
         }
 
         if opened {
-            let panel = self.render_panel(is_controlled);
+            let panel = self.render_panel(is_controlled, window);
             let floating = panel;
 
             let anchor_corner = match self.placement {

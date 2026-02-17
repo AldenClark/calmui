@@ -103,7 +103,7 @@ impl Tooltip {
         control::bool_state(&self.id, "opened", self.opened, self.default_opened)
     }
 
-    fn render_bubble(&self) -> AnyElement {
+    fn render_bubble(&self, window: &gpui::Window) -> AnyElement {
         let tokens = &self.theme.components.tooltip;
         div()
             .id(format!("{}-bubble", self.id))
@@ -111,7 +111,7 @@ impl Tooltip {
             .px(px(8.0))
             .py(px(5.0))
             .rounded_md()
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.border))
             .bg(resolve_hsla(&self.theme, &tokens.bg))
             .text_color(resolve_hsla(&self.theme, &tokens.fg))
@@ -139,7 +139,7 @@ impl MotionAware for Tooltip {
 }
 
 impl RenderOnce for Tooltip {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let opened = if self.disabled {
             false
@@ -203,7 +203,7 @@ impl RenderOnce for Tooltip {
         }
 
         if opened {
-            let bubble = self.render_bubble();
+            let bubble = self.render_bubble(window);
             let floating = bubble;
             let anchor_corner = match self.placement {
                 TooltipPlacement::Top => Corner::BottomLeft,

@@ -149,7 +149,7 @@ impl MotionAware for ActionIcon {
 }
 
 impl RenderOnce for ActionIcon {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let (bg_token, fg_token, border_token) = self.variant_tokens();
         let bg = resolve_hsla(&self.theme, &bg_token);
@@ -173,7 +173,7 @@ impl RenderOnce for ActionIcon {
             .h(px(size_px))
             .bg(bg)
             .text_color(fg)
-            .border_1()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
             .child(content);
 
         root = apply_radius(&self.theme, root, self.radius);
