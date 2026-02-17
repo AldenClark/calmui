@@ -10,7 +10,7 @@ use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
-use super::primitives::h_stack;
+use super::Stack;
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
 
@@ -202,7 +202,7 @@ impl Progress {
                 .into_any_element()
         });
 
-        let primary_band = h_stack()
+        let primary_band = Stack::horizontal()
             .id(format!("{key}-band-primary"))
             .absolute()
             .top_0()
@@ -211,7 +211,7 @@ impl Progress {
             .w(px(primary_band_width))
             .children(primary_stripes);
 
-        let secondary_band = h_stack()
+        let secondary_band = Stack::horizontal()
             .id(format!("{key}-band-secondary"))
             .absolute()
             .top_0()
@@ -409,7 +409,7 @@ impl RenderOnce for Progress {
         let mut root = div().id(self.id.clone()).flex().flex_col().gap_1p5();
 
         if self.label.is_some() || self.show_value {
-            let mut header = h_stack()
+            let mut header = Stack::horizontal()
                 .justify_between()
                 .items_center()
                 .w(px(self.width_px))

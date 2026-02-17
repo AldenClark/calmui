@@ -10,8 +10,8 @@ use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
 
+use super::Stack;
 use super::control;
-use super::primitives::{h_stack, v_stack};
 use super::transition::TransitionExt;
 use super::utils::{apply_button_size, apply_radius, resolve_hsla, variant_text_weight};
 
@@ -182,7 +182,7 @@ impl RenderOnce for Chip {
         let fg = resolve_hsla(&self.theme, &fg_token);
         let border = resolve_hsla(&self.theme, &border_token);
 
-        let mut chip = h_stack()
+        let mut chip = Stack::horizontal()
             .id(self.id.clone())
             .items_center()
             .gap_1()
@@ -192,7 +192,7 @@ impl RenderOnce for Chip {
             .border_1()
             .border_color(border)
             .child({
-                let mut content = h_stack().items_center().gap_1();
+                let mut content = Stack::horizontal().items_center().gap_1();
                 if checked {
                     content = content.child(div().text_sm().child("✓"));
                 }
@@ -542,7 +542,7 @@ impl RenderOnce for ChipGroup {
             .collect::<Vec<_>>();
 
         match self.orientation {
-            GroupOrientation::Horizontal => h_stack()
+            GroupOrientation::Horizontal => Stack::horizontal()
                 .id(self.id.clone())
                 .group(self.id.clone())
                 .tab_group()
@@ -550,7 +550,7 @@ impl RenderOnce for ChipGroup {
                 .flex_wrap()
                 .children(chips)
                 .into_any_element(),
-            GroupOrientation::Vertical => v_stack()
+            GroupOrientation::Vertical => Stack::vertical()
                 .id(self.id.clone())
                 .group(self.id.clone())
                 .tab_group()

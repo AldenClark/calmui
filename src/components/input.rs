@@ -17,8 +17,8 @@ use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
 
+use super::Stack;
 use super::control;
-use super::primitives::{h_stack, v_stack};
 use super::transition::TransitionExt;
 use super::utils::{apply_input_size, apply_radius, resolve_hsla};
 
@@ -474,10 +474,10 @@ impl TextInput {
             return div().into_any_element();
         }
 
-        let mut block = v_stack().gap_1();
+        let mut block = Stack::vertical().gap_1();
 
         if let Some(label) = &self.label {
-            let mut label_row = h_stack().gap_1().child(
+            let mut label_row = Stack::horizontal().gap_1().child(
                 div()
                     .font_weight(gpui::FontWeight::MEDIUM)
                     .text_color(resolve_hsla(
@@ -591,12 +591,12 @@ impl RenderOnce for TextInput {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         match self.layout {
-            FieldLayout::Vertical => v_stack()
+            FieldLayout::Vertical => Stack::vertical()
                 .gap_2()
                 .child(self.render_label_block())
                 .child(self.render_input_box(window))
                 .into_any_element(),
-            FieldLayout::Horizontal => h_stack()
+            FieldLayout::Horizontal => Stack::horizontal()
                 .items_start()
                 .gap_3()
                 .child(div().w(gpui::px(168.0)).child(self.render_label_block()))
@@ -900,7 +900,7 @@ impl RenderOnce for PinInput {
         };
         let caret_color = resolve_hsla(&self.theme, &self.theme.components.input.fg);
 
-        let mut root = h_stack()
+        let mut root = Stack::horizontal()
             .id(self.id.clone())
             .focusable()
             .gap_2()

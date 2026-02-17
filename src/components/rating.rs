@@ -10,9 +10,9 @@ use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
+use super::Stack;
 use super::control;
 use super::icon::Icon;
-use super::primitives::h_stack;
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
 
@@ -297,7 +297,7 @@ impl RenderOnce for Rating {
             })
             .collect::<Vec<_>>();
 
-        h_stack()
+        Stack::horizontal()
             .id(self.id.clone())
             .items_center()
             .gap_1()

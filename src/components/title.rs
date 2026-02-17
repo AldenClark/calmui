@@ -6,7 +6,7 @@ use gpui::{
 use crate::contracts::WithId;
 use crate::id::stable_auto_id;
 
-use super::primitives::v_stack;
+use super::Stack;
 
 #[derive(Debug)]
 pub struct Title {
@@ -88,7 +88,7 @@ impl RenderOnce for Title {
             .font_weight(headline_weight)
             .text_color(tokens.fg);
 
-        let mut root = v_stack()
+        let mut root = Stack::vertical()
             .id(self.id)
             .gap(tokens.gap)
             .child(headline.child(self.text));

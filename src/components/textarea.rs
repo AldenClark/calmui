@@ -11,8 +11,8 @@ use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
 
+use super::Stack;
 use super::control;
-use super::primitives::{h_stack, v_stack};
 use super::transition::TransitionExt;
 use super::utils::{apply_input_size, apply_radius, resolve_hsla};
 
@@ -497,10 +497,10 @@ impl Textarea {
         }
 
         let tokens = &self.theme.components.textarea;
-        let mut block = v_stack().gap_1();
+        let mut block = Stack::vertical().gap_1();
 
         if let Some(label) = &self.label {
-            let mut label_row = h_stack().gap_1().child(
+            let mut label_row = Stack::horizontal().gap_1().child(
                 div()
                     .font_weight(gpui::FontWeight::MEDIUM)
                     .text_color(resolve_hsla(&self.theme, &tokens.label))
@@ -862,7 +862,7 @@ impl Textarea {
                     .collect()
             };
 
-            let mut content = v_stack().w_full().gap_0();
+            let mut content = Stack::vertical().w_full().gap_0();
             let (caret_line, caret_col) = Self::line_col_from_char(&current_value, current_caret);
             let selection_bg =
                 resolve_hsla(&self.theme, &self.theme.semantic.focus_ring).alpha(0.28);
@@ -1061,11 +1061,11 @@ impl RenderOnce for Textarea {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         match self.layout {
-            FieldLayout::Vertical => v_stack()
+            FieldLayout::Vertical => Stack::vertical()
                 .gap_2()
                 .child(self.render_label_block())
                 .child(self.render_input_box(window)),
-            FieldLayout::Horizontal => h_stack()
+            FieldLayout::Horizontal => Stack::horizontal()
                 .items_start()
                 .gap_3()
                 .child(div().w(px(168.0)).child(self.render_label_block()))

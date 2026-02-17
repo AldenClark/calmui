@@ -10,8 +10,8 @@ use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
 
+use super::Stack;
 use super::control;
-use super::primitives::{h_stack, v_stack};
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
 
@@ -305,7 +305,7 @@ impl RenderOnce for Stepper {
                     .child(indicator_text);
                 indicator = apply_radius(&self.theme, indicator, Radius::Pill);
 
-                let mut text_block = v_stack().gap_0p5().child(
+                let mut text_block = Stack::vertical().gap_0p5().child(
                     div()
                         .text_color(resolve_hsla(&theme, &tokens.label))
                         .font_weight(if is_active {
@@ -326,7 +326,7 @@ impl RenderOnce for Stepper {
 
                 let mut item = match self.orientation {
                     GroupOrientation::Horizontal => match self.content_position {
-                        StepperContentPosition::Below => v_stack()
+                        StepperContentPosition::Below => Stack::vertical()
                             .id(format!("{}-step-{index}", self.id))
                             .items_center()
                             .gap_1()
@@ -335,7 +335,7 @@ impl RenderOnce for Stepper {
                             .min_w_0()
                             .child(indicator)
                             .child(text_block),
-                        StepperContentPosition::Right => h_stack()
+                        StepperContentPosition::Right => Stack::horizontal()
                             .id(format!("{}-step-{index}", self.id))
                             .items_center()
                             .gap_2()
@@ -345,7 +345,7 @@ impl RenderOnce for Stepper {
                             .child(indicator)
                             .child(text_block.min_w_0()),
                     },
-                    GroupOrientation::Vertical => h_stack()
+                    GroupOrientation::Vertical => Stack::horizontal()
                         .id(format!("{}-step-{index}", self.id))
                         .items_start()
                         .gap_2()
@@ -384,7 +384,7 @@ impl RenderOnce for Stepper {
         let step_count = step_nodes.len();
         let mut steps_view = match self.orientation {
             GroupOrientation::Horizontal => {
-                let mut row = h_stack()
+                let mut row = Stack::horizontal()
                     .id(format!("{}-steps-row", self.id))
                     .w_full()
                     .items_start();
@@ -408,7 +408,7 @@ impl RenderOnce for Stepper {
                 row.into_any_element()
             }
             GroupOrientation::Vertical => {
-                let mut col = v_stack()
+                let mut col = Stack::vertical()
                     .id(format!("{}-steps-col", self.id))
                     .w_full()
                     .gap_1p5();
@@ -452,7 +452,7 @@ impl RenderOnce for Stepper {
         panel = apply_radius(&self.theme, panel, self.radius);
         panel = panel.child(panel_content.unwrap_or_else(|| {
             if let Some((label, description)) = active_step_meta.clone() {
-                let mut fallback = v_stack()
+                let mut fallback = Stack::vertical()
                     .gap_1()
                     .child(div().font_weight(gpui::FontWeight::MEDIUM).child(label));
                 if let Some(description) = description {
@@ -472,7 +472,7 @@ impl RenderOnce for Stepper {
             }
         }));
 
-        v_stack()
+        Stack::vertical()
             .id(self.id.clone())
             .w_full()
             .gap_1p5()

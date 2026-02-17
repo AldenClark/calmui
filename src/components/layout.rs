@@ -1,5 +1,5 @@
 use gpui::{
-    AnyElement, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled,
+    AnyElement, Component, Div, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled,
     Window, div, px,
 };
 
@@ -7,252 +7,17 @@ use crate::contracts::WithId;
 use crate::id::stable_auto_id;
 use crate::style::Size;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FlexDirection {
-    Row,
-    Column,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FlexJustify {
-    Start,
-    Center,
-    Between,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FlexAlign {
-    Start,
-    Center,
-}
-
-pub struct Flex {
-    id: String,
-    direction: FlexDirection,
-    justify: FlexJustify,
-    align: FlexAlign,
-    wrap: bool,
-    gap: Size,
-    theme: crate::theme::LocalTheme,
-    style: gpui::StyleRefinement,
-    children: Vec<AnyElement>,
-}
-
-impl Flex {
-    #[track_caller]
-    pub fn new() -> Self {
-        Self {
-            id: stable_auto_id("flex"),
-            direction: FlexDirection::Row,
-            justify: FlexJustify::Start,
-            align: FlexAlign::Start,
-            wrap: false,
-            gap: Size::Md,
-            theme: crate::theme::LocalTheme::default(),
-            style: gpui::StyleRefinement::default(),
-            children: Vec::new(),
-        }
-    }
-
-    pub fn direction(mut self, direction: FlexDirection) -> Self {
-        self.direction = direction;
-        self
-    }
-
-    pub fn justify(mut self, justify: FlexJustify) -> Self {
-        self.justify = justify;
-        self
-    }
-
-    pub fn align(mut self, align: FlexAlign) -> Self {
-        self.align = align;
-        self
-    }
-
-    pub fn wrap(mut self, wrap: bool) -> Self {
-        self.wrap = wrap;
-        self
-    }
-
-    pub fn gap(mut self, gap: Size) -> Self {
-        self.gap = gap;
-        self
-    }
-
-    pub fn child(mut self, content: impl IntoElement + 'static) -> Self {
-        self.children.push(content.into_any_element());
-        self
-    }
-
-    pub fn children<I, E>(mut self, children: I) -> Self
-    where
-        I: IntoIterator<Item = E>,
-        E: IntoElement + 'static,
-    {
-        self.children
-            .extend(children.into_iter().map(IntoElement::into_any_element));
-        self
-    }
-
-    fn apply_gap<T: Styled>(node: T, gap: Size) -> T {
-        match gap {
-            Size::Xs => node.gap_1(),
-            Size::Sm => node.gap_1p5(),
-            Size::Md => node.gap_2(),
-            Size::Lg => node.gap_3(),
-            Size::Xl => node.gap_4(),
-        }
-    }
-}
-
-impl ParentElement for Flex {
-    fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
-        self.children.extend(elements);
-    }
-}
-
-impl WithId for Flex {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
-    }
-}
-
-impl RenderOnce for Flex {
-    fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
-        self.theme.sync_from_provider(_cx);
-        let mut root = div().id(self.id.clone()).flex();
-
-        root = match self.direction {
-            FlexDirection::Row => root.flex_row(),
-            FlexDirection::Column => root.flex_col(),
-        };
-
-        if self.wrap {
-            root = root.flex_wrap();
-        }
-
-        root = Self::apply_gap(root, self.gap);
-
-        root = match self.justify {
-            FlexJustify::Start => root,
-            FlexJustify::Center => root.justify_center(),
-            FlexJustify::Between => root.justify_between(),
-        };
-
-        root = match self.align {
-            FlexAlign::Start => root,
-            FlexAlign::Center => root.items_center(),
-        };
-
-        root.text_color(self.theme.resolve_hsla(&self.theme.semantic.text_primary))
-            .children(self.children)
-    }
-}
-
-impl IntoElement for Flex {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum StackDirection {
-    Vertical,
-    Horizontal,
-}
-
-pub struct Stack {
-    inner: Flex,
-    style: gpui::StyleRefinement,
-}
+pub struct Stack;
 
 impl Stack {
     #[track_caller]
-    pub fn new() -> Self {
-        Self {
-            inner: Flex::new().direction(FlexDirection::Column),
-            style: gpui::StyleRefinement::default(),
-        }
+    pub fn vertical() -> Div {
+        div().flex().flex_col()
     }
 
-    pub fn direction(mut self, direction: StackDirection) -> Self {
-        self.inner = self.inner.direction(match direction {
-            StackDirection::Vertical => FlexDirection::Column,
-            StackDirection::Horizontal => FlexDirection::Row,
-        });
-        self
-    }
-
-    pub fn justify(mut self, justify: FlexJustify) -> Self {
-        self.inner = self.inner.justify(justify);
-        self
-    }
-
-    pub fn align(mut self, align: FlexAlign) -> Self {
-        self.inner = self.inner.align(align);
-        self
-    }
-
-    pub fn wrap(mut self, wrap: bool) -> Self {
-        self.inner = self.inner.wrap(wrap);
-        self
-    }
-
-    pub fn gap(mut self, gap: Size) -> Self {
-        self.inner = self.inner.gap(gap);
-        self
-    }
-
-    pub fn child(mut self, content: impl IntoElement + 'static) -> Self {
-        self.inner = self.inner.child(content);
-        self
-    }
-
-    pub fn children<I, E>(mut self, children: I) -> Self
-    where
-        I: IntoIterator<Item = E>,
-        E: IntoElement + 'static,
-    {
-        self.inner = self.inner.children(children);
-        self
-    }
-}
-
-impl WithId for Stack {
-    fn id(&self) -> &str {
-        self.inner.id()
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        self.inner.id_mut()
-    }
-}
-
-impl RenderOnce for Stack {
-    fn render(self, window: &mut Window, cx: &mut gpui::App) -> impl IntoElement {
-        let mut inner = self.inner;
-        gpui::Refineable::refine(gpui::Styled::style(&mut inner), &self.style);
-        inner.render(window, cx)
-    }
-}
-
-impl IntoElement for Stack {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
-    }
-}
-
-impl ParentElement for Stack {
-    fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
-        self.inner.extend(elements);
+    #[track_caller]
+    pub fn horizontal() -> Div {
+        div().flex().flex_row().items_center()
     }
 }
 
@@ -473,26 +238,20 @@ impl ParentElement for SimpleGrid {
     }
 }
 
-pub fn stack() -> Stack {
-    Stack::new().direction(StackDirection::Vertical)
+pub fn stack() -> Div {
+    Stack::vertical()
 }
 
-pub fn h_stack_layout() -> Stack {
-    Stack::new().direction(StackDirection::Horizontal)
+pub fn h_stack_layout() -> Div {
+    Stack::horizontal()
 }
 
-pub fn v_stack_layout() -> Stack {
-    Stack::new().direction(StackDirection::Vertical)
+pub fn v_stack_layout() -> Div {
+    Stack::vertical()
 }
 
 pub fn fixed_spacer(width: f32, height: f32) -> impl IntoElement {
     div().w(px(width.max(0.0))).h(px(height.max(0.0)))
-}
-
-impl crate::contracts::ComponentThemeOverridable for Flex {
-    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
-        &mut self.theme
-    }
 }
 
 impl crate::contracts::ComponentThemeOverridable for Grid {
@@ -501,19 +260,7 @@ impl crate::contracts::ComponentThemeOverridable for Grid {
     }
 }
 
-impl gpui::Styled for Flex {
-    fn style(&mut self) -> &mut gpui::StyleRefinement {
-        &mut self.style
-    }
-}
-
 impl gpui::Styled for Grid {
-    fn style(&mut self) -> &mut gpui::StyleRefinement {
-        &mut self.style
-    }
-}
-
-impl gpui::Styled for Stack {
     fn style(&mut self) -> &mut gpui::StyleRefinement {
         &mut self.style
     }

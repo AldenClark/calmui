@@ -10,9 +10,9 @@ use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
+use super::Stack;
 use super::control;
 use super::icon::Icon;
-use super::primitives::v_stack;
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
 
@@ -200,7 +200,7 @@ impl RenderOnce for Accordion {
                 let chevron_id = format!("{item_id}-chevron");
                 let panel_id = format!("{item_id}-panel");
 
-                let mut root = v_stack()
+                let mut root = Stack::vertical()
                     .id(item_id.clone())
                     .w_full()
                     .bg(resolve_hsla(&self.theme, &tokens.item_bg))
@@ -225,7 +225,7 @@ impl RenderOnce for Accordion {
                     .px(gpui::px(12.0))
                     .py(gpui::px(10.0))
                     .child(
-                        v_stack()
+                        Stack::vertical()
                             .gap_0p5()
                             .child(
                                 size_text
@@ -297,7 +297,7 @@ impl RenderOnce for Accordion {
                 root = root.child(header);
 
                 if is_open {
-                    let mut body = v_stack()
+                    let mut body = Stack::vertical()
                         .id(panel_id.clone())
                         .gap_1()
                         .px(gpui::px(12.0))
@@ -320,7 +320,7 @@ impl RenderOnce for Accordion {
             })
             .collect::<Vec<_>>();
 
-        v_stack()
+        Stack::vertical()
             .id(self.id.clone())
             .gap_2()
             .w_full()

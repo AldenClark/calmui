@@ -10,9 +10,9 @@ use crate::contracts::{MotionAware, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 
+use super::Stack;
 use super::control;
 use super::icon::Icon;
-use super::primitives::v_stack;
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
 
@@ -237,7 +237,7 @@ impl Menu {
             })
             .collect::<Vec<_>>();
 
-        let mut dropdown = v_stack()
+        let mut dropdown = Stack::vertical()
             .id(format!("{}-dropdown", self.id))
             .w(px(Self::dropdown_width_px(&self.id)))
             .max_w_full()

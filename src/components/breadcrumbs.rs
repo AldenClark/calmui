@@ -10,7 +10,7 @@ use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::Size;
 
-use super::primitives::h_stack;
+use super::Stack;
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
 
@@ -229,7 +229,7 @@ impl RenderOnce for Breadcrumbs {
             }
         }
 
-        h_stack()
+        Stack::horizontal()
             .id(self.id.clone())
             .items_center()
             .gap_1()

@@ -10,9 +10,9 @@ use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size};
 
+use super::Stack;
 use super::control;
 use super::pagination::Pagination;
-use super::primitives::v_stack;
 use super::scroll_area::{ScrollArea, ScrollDirection};
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
@@ -672,7 +672,7 @@ impl RenderOnce for Table {
             control::set_text_state(&table_id, "virtual-scroll-y", scroll_y.to_string());
         }
 
-        let mut root = v_stack()
+        let mut root = Stack::vertical()
             .id(table_id.clone())
             .w_full()
             .gap_0()
@@ -755,7 +755,10 @@ impl RenderOnce for Table {
         } else {
             0.0
         };
-        let mut rows_root = v_stack().id(format!("{}-rows", table_id)).w_full().gap_0();
+        let mut rows_root = Stack::vertical()
+            .id(format!("{}-rows", table_id))
+            .w_full()
+            .gap_0();
         if top_spacer_height > 0.0 {
             rows_root = rows_root.child(
                 div()
@@ -1023,7 +1026,7 @@ impl RenderOnce for Table {
                 }
             }
 
-            let mut scroll_content = v_stack()
+            let mut scroll_content = Stack::vertical()
                 .id(format!("{}-scroll-content", table_id))
                 .w_full()
                 .gap_0();

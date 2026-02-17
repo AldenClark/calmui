@@ -10,8 +10,8 @@ use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
+use super::Stack;
 use super::control;
-use super::primitives::{h_stack, v_stack};
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
 
@@ -280,7 +280,7 @@ impl RenderOnce for Tabs {
                 .into_any_element()
         });
 
-        let mut list = h_stack()
+        let mut list = Stack::horizontal()
             .id(format!("{}-list", self.id))
             .w_full()
             .gap_0p5()
@@ -302,7 +302,7 @@ impl RenderOnce for Tabs {
             .child(panel_content);
         panel = apply_radius(&self.theme, panel, self.radius);
 
-        v_stack()
+        Stack::vertical()
             .id(self.id.clone())
             .w_full()
             .gap_2()

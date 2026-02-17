@@ -10,9 +10,9 @@ use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
+use super::Stack;
 use super::control;
 use super::icon::Icon;
-use super::primitives::v_stack;
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
 
@@ -459,14 +459,14 @@ impl TreeRenderCtx {
             row = row.opacity(0.55).cursor_default();
         }
 
-        let mut wrapper = v_stack()
+        let mut wrapper = Stack::vertical()
             .id(format!("{}-node-{path}", self.tree_id))
             .w_full()
             .gap_0()
             .child(row);
 
         if has_children && is_expanded {
-            let mut child_list = v_stack()
+            let mut child_list = Stack::vertical()
                 .id(format!("{}-children-{path}", self.tree_id))
                 .w_full()
                 .gap_0();
@@ -522,7 +522,7 @@ impl RenderOnce for Tree {
             on_expanded_change: self.on_expanded_change.clone(),
         };
 
-        let mut root = v_stack().id(self.id.clone()).w_full().gap_0p5();
+        let mut root = Stack::vertical().id(self.id.clone()).w_full().gap_0p5();
         for (index, node) in self.nodes.into_iter().enumerate() {
             root = root.child(ctx.render_node(node, 0, index.to_string()));
         }

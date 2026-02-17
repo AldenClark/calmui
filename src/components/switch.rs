@@ -10,8 +10,8 @@ use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
+use super::Stack;
 use super::control;
-use super::primitives::{h_stack, v_stack};
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
 
@@ -168,24 +168,27 @@ impl RenderOnce for Switch {
             .child(thumb);
         track = apply_radius(&self.theme, track, self.radius);
 
-        let mut row = h_stack().id(self.id.clone()).cursor_pointer().child(
-            v_stack()
-                .gap_0p5()
-                .child(
-                    h_stack()
-                        .items_center()
-                        .gap_2()
-                        .child(track)
-                        .child(div().text_color(label_fg).child(self.label)),
-                )
-                .children(self.description.map(|description| {
-                    div()
-                        .ml(px(track_w + 8.0))
-                        .text_sm()
-                        .text_color(description_fg)
-                        .child(description)
-                })),
-        );
+        let mut row = Stack::horizontal()
+            .id(self.id.clone())
+            .cursor_pointer()
+            .child(
+                Stack::vertical()
+                    .gap_0p5()
+                    .child(
+                        Stack::horizontal()
+                            .items_center()
+                            .gap_2()
+                            .child(track)
+                            .child(div().text_color(label_fg).child(self.label)),
+                    )
+                    .children(self.description.map(|description| {
+                        div()
+                            .ml(px(track_w + 8.0))
+                            .text_sm()
+                            .text_color(description_fg)
+                            .child(description)
+                    })),
+            );
 
         if self.disabled {
             row = row.cursor_default().opacity(0.55);

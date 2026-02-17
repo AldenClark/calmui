@@ -8,8 +8,8 @@ use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
+use super::Stack;
 use super::icon::Icon;
-use super::primitives::{h_stack, v_stack};
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
 
@@ -170,7 +170,7 @@ impl RenderOnce for Timeline {
         let active = self.active.min(total_items.saturating_sub(1));
 
         if total_items == 0 {
-            return v_stack()
+            return Stack::vertical()
                 .id(self.id.clone())
                 .w_full()
                 .child(
@@ -181,7 +181,7 @@ impl RenderOnce for Timeline {
                 .with_enter_transition(format!("{}-enter", self.id), self.motion);
         }
 
-        let mut rows = v_stack().id(self.id.clone()).w_full().gap_0();
+        let mut rows = Stack::vertical().id(self.id.clone()).w_full().gap_0();
         for (index, mut item) in self.items.into_iter().enumerate() {
             let is_done = index < active;
             let is_current = index == active;
@@ -254,7 +254,7 @@ impl RenderOnce for Timeline {
                 );
             }
 
-            let mut right_col = v_stack().gap_1().min_w_0().child(
+            let mut right_col = Stack::vertical().gap_1().min_w_0().child(
                 div()
                     .text_color(if is_current {
                         resolve_hsla(&theme, &tokens.title_active)
@@ -289,7 +289,7 @@ impl RenderOnce for Timeline {
             }
 
             rows = rows.child(
-                h_stack()
+                Stack::horizontal()
                     .id(format!("{}-item-{index}", self.id))
                     .items_start()
                     .gap_2()

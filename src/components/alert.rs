@@ -9,9 +9,9 @@ use crate::contracts::WithId;
 use crate::icon::{IconRegistry, IconSource};
 use crate::id::stable_auto_id;
 
+use super::Stack;
 use super::control;
 use super::icon::Icon;
-use super::primitives::v_stack;
 use super::utils::resolve_hsla;
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
@@ -252,7 +252,7 @@ impl RenderOnce for Alert {
                     .child(icon_badge)
                     .child(
                         div().flex_1().overflow_hidden().child(
-                            v_stack()
+                            Stack::vertical()
                                 .gap_1()
                                 .child(
                                     div()

@@ -10,8 +10,8 @@ use crate::contracts::{MotionAware, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 
+use super::Stack;
 use super::control;
-use super::primitives::v_stack;
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
 
@@ -149,7 +149,7 @@ impl HoverCard {
         } else {
             260.0
         };
-        let mut card = v_stack()
+        let mut card = Stack::vertical()
             .id(format!("{}-card", self.id))
             .gap_1p5()
             .w(px(panel_width))

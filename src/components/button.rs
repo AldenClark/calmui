@@ -11,9 +11,9 @@ use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
 
+use super::Stack;
 use super::control;
 use super::loader::{Loader, LoaderElement, LoaderVariant};
-use super::primitives::h_stack;
 use super::transition::TransitionExt;
 use super::utils::{apply_button_size, apply_radius, resolve_hsla, variant_text_weight};
 
@@ -145,7 +145,7 @@ impl Button {
                     .into_any_element()
             };
 
-            let mut placeholder = h_stack().gap_2();
+            let mut placeholder = Stack::horizontal().gap_2();
             if let Some(left) = self.left_slot.take() {
                 placeholder = placeholder.child(div().text_color(fg).child(left()));
             }
@@ -177,7 +177,7 @@ impl Button {
                 .into_any_element();
         }
 
-        let mut row = h_stack().gap_2();
+        let mut row = Stack::horizontal().gap_2();
         if let Some(left) = self.left_slot.take() {
             row = row.child(div().text_color(fg).child(left()));
         }
@@ -497,7 +497,7 @@ impl RenderOnce for ButtonGroup {
             .collect::<Vec<_>>();
 
         let root = match self.orientation {
-            GroupOrientation::Horizontal => h_stack()
+            GroupOrientation::Horizontal => Stack::horizontal()
                 .id(self.id.clone())
                 .group(self.id.clone())
                 .tab_group()

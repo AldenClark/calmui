@@ -10,8 +10,8 @@ use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
+use super::Stack;
 use super::control;
-use super::primitives::{h_stack, v_stack};
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
 
@@ -542,9 +542,12 @@ impl RenderOnce for RangeSlider {
                     });
             }
 
-            let mut container = v_stack().id(self.id.clone()).gap_1p5().items_center();
+            let mut container = Stack::vertical()
+                .id(self.id.clone())
+                .gap_1p5()
+                .items_center();
             if self.label.is_some() || self.show_value {
-                let mut header = v_stack()
+                let mut header = Stack::vertical()
                     .items_center()
                     .gap_0p5()
                     .text_sm()
@@ -795,9 +798,9 @@ impl RenderOnce for RangeSlider {
                 });
         }
 
-        let mut container = v_stack().id(self.id.clone()).gap_1p5();
+        let mut container = Stack::vertical().id(self.id.clone()).gap_1p5();
         if self.label.is_some() || self.show_value {
-            let mut header = h_stack()
+            let mut header = Stack::horizontal()
                 .justify_between()
                 .items_center()
                 .w(px(self.width_px))

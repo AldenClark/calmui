@@ -8,9 +8,9 @@ use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::Size;
 
+use super::Stack;
 use super::loader::{Loader, LoaderElement, LoaderVariant};
 use super::overlay::{Overlay, OverlayMaterialMode};
-use super::primitives::v_stack;
 use super::utils::resolve_hsla;
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
@@ -154,7 +154,7 @@ impl RenderOnce for LoadingOverlay {
                 .into_any_element()
         };
 
-        let mut content = v_stack()
+        let mut content = Stack::vertical()
             .items_center()
             .gap_2()
             .child(loader)

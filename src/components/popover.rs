@@ -9,8 +9,8 @@ use crate::contracts::{MotionAware, WithId};
 use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 
+use super::Stack;
 use super::control;
-use super::primitives::v_stack;
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
 
@@ -113,7 +113,7 @@ impl Popover {
 
     fn render_panel(&mut self, is_controlled: bool) -> AnyElement {
         let tokens = &self.theme.components.popover;
-        let mut panel = v_stack()
+        let mut panel = Stack::vertical()
             .id(format!("{}-panel", self.id))
             .gap_2()
             .bg(resolve_hsla(&self.theme, &tokens.bg))

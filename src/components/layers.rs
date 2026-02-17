@@ -9,9 +9,9 @@ use crate::motion::{MotionConfig, MotionTransition, TransitionPreset};
 use crate::overlay::{Layer, ModalEntry, ModalManager};
 use crate::{contracts::WithId, id::stable_auto_id};
 
+use super::Stack;
 use super::icon::Icon;
 use super::overlay::{Overlay, OverlayCoverage, OverlayMaterialMode};
-use super::primitives::v_stack;
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
 
@@ -170,7 +170,7 @@ impl ToastLayer {
                     .child(icon_badge)
                     .child(
                         div().flex_1().overflow_hidden().child(
-                            v_stack()
+                            Stack::vertical()
                                 .gap_1()
                                 .child(
                                     div()

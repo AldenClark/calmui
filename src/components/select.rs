@@ -12,9 +12,9 @@ use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
 use crate::theme::{SelectTokens, Theme};
 
+use super::Stack;
 use super::control;
 use super::icon::Icon;
-use super::primitives::{h_stack, v_stack};
 use super::transition::TransitionExt;
 use super::utils::{apply_input_size, apply_radius, resolve_hsla};
 
@@ -297,9 +297,9 @@ impl Select {
         }
 
         let tokens = &self.theme.components.select;
-        let mut block = v_stack().gap_1();
+        let mut block = Stack::vertical().gap_1();
         if let Some(label) = self.label.clone() {
-            let mut label_row = h_stack().gap_1().child(
+            let mut label_row = Stack::horizontal().gap_1().child(
                 div()
                     .font_weight(gpui::FontWeight::MEDIUM)
                     .text_color(resolve_hsla(&self.theme, &tokens.label))
@@ -499,7 +499,7 @@ impl Select {
                     .bg(row_bg)
                     .hover(move |style| style.bg(hover_bg))
                     .child(
-                        h_stack()
+                        Stack::horizontal()
                             .w_full()
                             .justify_between()
                             .items_center()
@@ -582,7 +582,7 @@ impl Select {
             .max_h(px(280.0))
             .overflow_y_scroll()
             .p_1p5()
-            .child(v_stack().gap_1().children(items));
+            .child(Stack::vertical().gap_1().children(items));
 
         if self.close_on_click_outside {
             if let Some(on_open_change) = self.on_open_change.clone() {
@@ -676,13 +676,17 @@ impl RenderOnce for Select {
         self.theme.sync_from_provider(_cx);
         let opened = self.resolved_opened();
         let dropdown_upward = control::bool_state(&self.id, "dropdown-upward", None, false);
-        let mut container = v_stack().id(self.id.clone()).gap_2().relative().w_full();
+        let mut container = Stack::vertical()
+            .id(self.id.clone())
+            .gap_2()
+            .relative()
+            .w_full();
 
         if self.layout == FieldLayout::Vertical {
             container = container.child(self.render_label_block());
         }
 
-        let mut field = v_stack().gap_1();
+        let mut field = Stack::vertical().gap_1();
         let mut trigger = div()
             .id(format!("{}-trigger", self.id))
             .relative()
@@ -734,7 +738,7 @@ impl RenderOnce for Select {
 
         match self.layout {
             FieldLayout::Vertical => container.child(field).into_any_element(),
-            FieldLayout::Horizontal => h_stack()
+            FieldLayout::Horizontal => Stack::horizontal()
                 .id(self.id.clone())
                 .items_start()
                 .gap_3()
@@ -950,10 +954,10 @@ impl MultiSelect {
         }
 
         let tokens = &self.theme.components.select;
-        let mut block = v_stack().gap_1();
+        let mut block = Stack::vertical().gap_1();
 
         if let Some(label) = self.label.clone() {
-            let mut label_row = h_stack().gap_1().child(
+            let mut label_row = Stack::horizontal().gap_1().child(
                 div()
                     .font_weight(gpui::FontWeight::MEDIUM)
                     .text_color(resolve_hsla(&self.theme, &tokens.label))
@@ -1094,7 +1098,7 @@ impl MultiSelect {
             });
 
             control = control.child(
-                h_stack()
+                Stack::horizontal()
                     .flex_1()
                     .min_w_0()
                     .gap_1()
@@ -1165,7 +1169,7 @@ impl MultiSelect {
                     .bg(row_bg)
                     .hover(move |style| style.bg(hover_bg))
                     .child(
-                        h_stack()
+                        Stack::horizontal()
                             .w_full()
                             .justify_between()
                             .items_center()
@@ -1240,7 +1244,7 @@ impl MultiSelect {
             .max_h(px(280.0))
             .overflow_y_scroll()
             .p_1p5()
-            .child(v_stack().gap_1().children(rows));
+            .child(Stack::vertical().gap_1().children(rows));
 
         if self.close_on_click_outside {
             if let Some(on_open_change) = self.on_open_change.clone() {
@@ -1334,12 +1338,16 @@ impl RenderOnce for MultiSelect {
         self.theme.sync_from_provider(_cx);
         let opened = self.resolved_opened();
         let dropdown_upward = control::bool_state(&self.id, "dropdown-upward", None, false);
-        let mut container = v_stack().id(self.id.clone()).gap_2().relative().w_full();
+        let mut container = Stack::vertical()
+            .id(self.id.clone())
+            .gap_2()
+            .relative()
+            .w_full();
         if self.layout == FieldLayout::Vertical {
             container = container.child(self.render_label_block());
         }
 
-        let mut field = v_stack().gap_1();
+        let mut field = Stack::vertical().gap_1();
         let mut trigger = div()
             .id(format!("{}-trigger", self.id))
             .relative()
@@ -1391,7 +1399,7 @@ impl RenderOnce for MultiSelect {
 
         match self.layout {
             FieldLayout::Vertical => container.child(field).into_any_element(),
-            FieldLayout::Horizontal => h_stack()
+            FieldLayout::Horizontal => Stack::horizontal()
                 .id(self.id.clone())
                 .items_start()
                 .gap_3()

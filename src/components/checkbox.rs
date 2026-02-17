@@ -10,8 +10,8 @@ use crate::id::stable_auto_id;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
 
+use super::Stack;
 use super::control;
-use super::primitives::{h_stack, v_stack};
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
 
@@ -176,24 +176,27 @@ impl RenderOnce for Checkbox {
             );
         }
 
-        let mut row = h_stack().id(self.id.clone()).cursor_pointer().child(
-            v_stack()
-                .gap_0p5()
-                .child(
-                    h_stack()
-                        .items_center()
-                        .gap_2()
-                        .child(control)
-                        .child(div().text_color(fg).child(self.label)),
-                )
-                .children(self.description.map(|description| {
-                    div()
-                        .ml(px(size + 8.0))
-                        .text_sm()
-                        .text_color(muted)
-                        .child(description)
-                })),
-        );
+        let mut row = Stack::horizontal()
+            .id(self.id.clone())
+            .cursor_pointer()
+            .child(
+                Stack::vertical()
+                    .gap_0p5()
+                    .child(
+                        Stack::horizontal()
+                            .items_center()
+                            .gap_2()
+                            .child(control)
+                            .child(div().text_color(fg).child(self.label)),
+                    )
+                    .children(self.description.map(|description| {
+                        div()
+                            .ml(px(size + 8.0))
+                            .text_sm()
+                            .text_color(muted)
+                            .child(description)
+                    })),
+            );
 
         if self.disabled {
             row = row.cursor_default().opacity(0.55);
@@ -453,7 +456,7 @@ impl RenderOnce for CheckboxGroup {
                 .gap_3()
                 .flex_wrap()
                 .children(items),
-            GroupOrientation::Vertical => v_stack()
+            GroupOrientation::Vertical => Stack::vertical()
                 .id(self.id.clone())
                 .group(self.id.clone())
                 .tab_group()

@@ -9,7 +9,7 @@ use crate::motion::{MotionConfig, MotionTransition, TransitionPreset};
 use crate::style::Size;
 use crate::{contracts::WithId, id::stable_auto_id};
 
-use super::primitives::h_stack;
+use super::Stack;
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
 
@@ -150,7 +150,7 @@ impl Loader {
                 .into_any_element()
         });
 
-        let mut row = h_stack().items_center().gap_1().children(dots);
+        let mut row = Stack::horizontal().items_center().gap_1().children(dots);
         if let Some(label) = self.label {
             row = row
                 .gap_2()
@@ -194,7 +194,7 @@ impl Loader {
                     .start_opacity_pct(20),
             );
 
-        let mut row = h_stack().gap_2().child(
+        let mut row = Stack::horizontal().gap_2().child(
             div()
                 .relative()
                 .w(px(dot + 4.0))
@@ -261,7 +261,7 @@ impl Loader {
                 .into_any_element()
         });
 
-        let mut row = h_stack().items_end().gap_1().children(bars);
+        let mut row = Stack::horizontal().items_end().gap_1().children(bars);
         if let Some(label) = self.label {
             row = row.child(div().text_sm().text_color(color).child(label));
         }
@@ -319,7 +319,7 @@ impl Loader {
                 .children(segments),
         );
 
-        let mut row = h_stack().gap_2().items_center().child(oval);
+        let mut row = Stack::horizontal().gap_2().items_center().child(oval);
         if let Some(label) = self.label {
             row = row.child(div().text_sm().text_color(color).child(label));
         }

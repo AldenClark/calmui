@@ -12,8 +12,8 @@ use crate::contracts::WithId;
 use crate::id::stable_auto_id;
 use crate::style::{Radius, Size};
 
+use super::Stack;
 use super::paper::Paper;
-use super::primitives::v_stack;
 use super::text::{Text, TextTone};
 use super::title::Title;
 use super::utils::resolve_hsla;
@@ -342,7 +342,7 @@ impl RenderOnce for Markdown {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let blocks = cached_blocks(self.source.as_ref());
-        let mut root = v_stack().id(self.id.clone()).w_full();
+        let mut root = Stack::vertical().id(self.id.clone()).w_full();
         root = if self.compact {
             root.gap_1p5()
         } else {
@@ -369,7 +369,7 @@ impl RenderOnce for Markdown {
                     .child(Text::new(text).tone(TextTone::Secondary))
                     .into_any_element(),
                 MarkdownBlock::Code { lang, code } => {
-                    let mut content = v_stack().gap_1();
+                    let mut content = Stack::vertical().gap_1();
                     if let Some(lang) = lang {
                         content = content.child(
                             Text::new(lang)
@@ -395,7 +395,7 @@ impl RenderOnce for Markdown {
                         .into_any_element()
                 }
                 MarkdownBlock::BulletList(items) => {
-                    let mut list = v_stack().gap_1();
+                    let mut list = Stack::vertical().gap_1();
                     for item in items {
                         list = list.child(
                             div()
@@ -410,7 +410,7 @@ impl RenderOnce for Markdown {
                     list.into_any_element()
                 }
                 MarkdownBlock::OrderedList(items) => {
-                    let mut list = v_stack().gap_1();
+                    let mut list = Stack::vertical().gap_1();
                     for (order, item) in items.into_iter().enumerate() {
                         list = list.child(
                             div()

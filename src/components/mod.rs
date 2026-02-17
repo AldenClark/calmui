@@ -26,7 +26,6 @@ mod overlay;
 mod pagination;
 mod paper;
 mod popover;
-mod primitives;
 mod progress;
 mod radio;
 mod range_slider;
@@ -65,10 +64,7 @@ pub use icon::Icon;
 pub use indicator::{Indicator, IndicatorPosition};
 pub use input::{PasswordInput, PinInput, TextInput};
 pub use layers::{ModalLayer, ToastLayer};
-pub use layout::{
-    FlexAlign, FlexJustify, Grid, SimpleGrid, Stack, StackDirection, fixed_spacer, h_stack_layout,
-    stack, v_stack_layout,
-};
+pub use layout::{Grid, SimpleGrid, Stack, fixed_spacer, h_stack_layout, stack, v_stack_layout};
 pub use loader::{Loader, LoaderElement, LoaderVariant};
 pub use loading_overlay::LoadingOverlay;
 pub use markdown::Markdown;
@@ -79,7 +75,6 @@ pub use overlay::{Overlay, OverlayCoverage, OverlayMaterialMode};
 pub use pagination::Pagination;
 pub use paper::Paper;
 pub use popover::{Popover, PopoverPlacement};
-pub use primitives::{h_stack, v_stack};
 pub use progress::{Progress, ProgressSection};
 pub use radio::{Radio, RadioGroup, RadioOption};
 pub use range_slider::{RangeSlider, RangeSliderOrientation};
