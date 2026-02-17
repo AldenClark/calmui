@@ -20,7 +20,7 @@ use crate::style::{FieldLayout, Radius, Size, Variant};
 use super::Stack;
 use super::control;
 use super::transition::TransitionExt;
-use super::utils::{apply_input_size, apply_radius, resolve_hsla};
+use super::utils::{apply_input_size, apply_radius, quantized_stroke_px, resolve_hsla};
 
 type ChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
 type SubmitHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
@@ -309,7 +309,7 @@ impl TextInput {
             .w_full()
             .bg(resolve_hsla(&self.theme, &tokens.bg))
             .text_color(resolve_hsla(&self.theme, &tokens.fg))
-            .border_1();
+            .border(quantized_stroke_px(window, 1.0));
 
         input = apply_input_size(input, self.size);
         input = apply_radius(&self.theme, input, self.radius);
@@ -439,7 +439,7 @@ impl TextInput {
                 div()
                     .id(format!("{}-caret", self.id))
                     .flex_none()
-                    .w(px(1.5))
+                    .w(quantized_stroke_px(window, 1.5))
                     .h(px(self.caret_height_px()))
                     .bg(caret_color)
                     .rounded_sm()
@@ -959,7 +959,7 @@ impl RenderOnce for PinInput {
             let mut cell = div()
                 .w(gpui::px(34.0))
                 .h(gpui::px(40.0))
-                .border_1()
+                .border(quantized_stroke_px(window, 1.0))
                 .border_color(resolve_hsla(
                     &self.theme,
                     &self.theme.components.input.border,
@@ -978,7 +978,7 @@ impl RenderOnce for PinInput {
                 cell = cell.child(
                     div()
                         .id(format!("{}-caret-{index}", self.id))
-                        .w(px(1.5))
+                        .w(quantized_stroke_px(window, 1.5))
                         .h(px(caret_height))
                         .bg(caret_color)
                         .rounded_sm()

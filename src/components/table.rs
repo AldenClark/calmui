@@ -15,7 +15,7 @@ use super::control;
 use super::pagination::Pagination;
 use super::scroll_area::{ScrollArea, ScrollDirection};
 use super::transition::TransitionExt;
-use super::utils::{apply_radius, resolve_hsla};
+use super::utils::{apply_radius, hairline_px, resolve_hsla};
 
 type CellRenderer = Box<dyn FnOnce() -> AnyElement>;
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
@@ -428,9 +428,6 @@ impl Table {
         }
     }
 
-    fn separator_height_px() -> f32 {
-        1.0
-    }
 }
 
 impl WithId for Table {
@@ -451,9 +448,11 @@ impl MotionAware for Table {
 }
 
 impl RenderOnce for Table {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = self.theme.components.table.clone();
+        let line_thickness = hairline_px(window);
+        let line_thickness_px = f32::from(line_thickness);
         let column_count = self.column_count();
         let size = self.size;
         let table_id = self.id.clone();
@@ -484,7 +483,7 @@ impl RenderOnce for Table {
         let separator = || {
             div()
                 .w_full()
-                .h(px(1.0))
+                .h(line_thickness)
                 .bg(resolve_hsla(&self.theme, &tokens.row_border))
         };
 
@@ -608,7 +607,7 @@ impl RenderOnce for Table {
         let default_row_extent = self
             .virtual_row_height_px
             .unwrap_or_else(|| Self::default_row_height_px(size))
-            + Self::separator_height_px();
+            + line_thickness_px;
         let measured_row_height = control::text_state(
             &table_id,
             "virtual-row-height",
@@ -621,7 +620,7 @@ impl RenderOnce for Table {
         .unwrap_or_else(|| Self::default_row_height_px(size));
         let row_extent = if auto_virtualization_enabled {
             (self.virtual_row_height_px.unwrap_or(measured_row_height)
-                + Self::separator_height_px())
+                + line_thickness_px)
             .max(1.0)
         } else {
             default_row_extent
@@ -630,7 +629,7 @@ impl RenderOnce for Table {
         let scroll_height_for_virtual = resolved_scroll_height.unwrap_or(0.0);
         let max_scroll_y = if auto_virtualization_enabled {
             ((total_rows as f32 * row_extent)
-                - Self::separator_height_px()
+                - line_thickness_px
                 - scroll_height_for_virtual)
                 .max(0.0)
         } else {
@@ -680,7 +679,7 @@ impl RenderOnce for Table {
 
         if self.with_outer_border {
             root = root
-                .border_1()
+                .border(line_thickness)
                 .border_color(resolve_hsla(&self.theme, &tokens.row_border));
             root = apply_radius(&self.theme, root, self.radius);
         }
@@ -712,7 +711,7 @@ impl RenderOnce for Table {
                 if index > 0 && with_column_borders {
                     header_row = header_row.child(
                         div()
-                            .w(px(1.0))
+                            .w(line_thickness)
                             .h_full()
                             .bg(resolve_hsla(&self.theme, &tokens.row_border)),
                     );
@@ -834,7 +833,7 @@ impl RenderOnce for Table {
                 if column > 0 && with_column_borders {
                     row_node = row_node.child(
                         div()
-                            .w(px(1.0))
+                            .w(line_thickness)
                             .h_full()
                             .bg(resolve_hsla(&self.theme, &tokens.row_border)),
                     );

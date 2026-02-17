@@ -6,7 +6,7 @@ use gpui::{
 use crate::contracts::WithId;
 use crate::id::stable_auto_id;
 
-use super::utils::resolve_hsla;
+use super::utils::{hairline_px, resolve_hsla};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DividerOrientation {
@@ -70,14 +70,15 @@ impl WithId for Divider {
 }
 
 impl RenderOnce for Divider {
-    fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.divider;
         let line = resolve_hsla(&self.theme, &tokens.line);
         let label_color = resolve_hsla(&self.theme, &tokens.label);
+        let line_thickness = hairline_px(window);
 
         match self.orientation {
-            DividerOrientation::Vertical => div().id(self.id).w(px(1.0)).h_full().bg(line),
+            DividerOrientation::Vertical => div().id(self.id).w(line_thickness).h_full().bg(line),
             DividerOrientation::Horizontal => {
                 if let Some(label) = self.label {
                     let left_flex = match self.label_position {
@@ -92,14 +93,14 @@ impl RenderOnce for Divider {
                     };
 
                     let left_line = if left_flex == 0.0 {
-                        div().w(px(16.0)).h(px(1.0)).bg(line)
+                        div().w(px(16.0)).h(line_thickness).bg(line)
                     } else {
-                        div().flex_1().h(px(1.0)).bg(line)
+                        div().flex_1().h(line_thickness).bg(line)
                     };
                     let right_line = if right_flex == 0.0 {
-                        div().w(px(16.0)).h(px(1.0)).bg(line)
+                        div().w(px(16.0)).h(line_thickness).bg(line)
                     } else {
-                        div().flex_1().h(px(1.0)).bg(line)
+                        div().flex_1().h(line_thickness).bg(line)
                     };
 
                     div()
@@ -113,7 +114,7 @@ impl RenderOnce for Divider {
                         .child(div().text_xs().text_color(label_color).child(label))
                         .child(right_line)
                 } else {
-                    div().id(self.id).w_full().h(px(1.0)).bg(line)
+                    div().id(self.id).w_full().h(line_thickness).bg(line)
                 }
             }
         }

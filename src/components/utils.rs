@@ -1,4 +1,4 @@
-use gpui::{FontWeight, Hsla, Pixels, Styled, px};
+use gpui::{FontWeight, Hsla, Pixels, Styled, Window, px};
 
 use crate::style::{Radius, Size, Variant};
 use crate::theme::{ResolveWithTheme, SemanticRadiusToken, Theme};
@@ -55,4 +55,32 @@ pub fn variant_text_weight(variant: Variant) -> FontWeight {
 pub fn offset_with_progress(offset_px: i16, progress: f32) -> f32 {
     let full = offset_px as f32;
     full * (1.0 - progress)
+}
+
+fn scale_factor(window: &Window) -> f32 {
+    window.scale_factor().max(f32::EPSILON)
+}
+
+pub fn snap_px(window: &Window, logical_px: f32) -> Pixels {
+    if !logical_px.is_finite() {
+        return px(0.0);
+    }
+    let scale = scale_factor(window);
+    px((logical_px * scale).round() / scale)
+}
+
+pub fn hairline_px(window: &Window) -> Pixels {
+    px(1.0 / scale_factor(window))
+}
+
+pub fn quantized_stroke_px(window: &Window, logical_px: f32) -> Pixels {
+    if !logical_px.is_finite() || logical_px <= 0.0 {
+        return px(0.0);
+    }
+    let snapped = snap_px(window, logical_px);
+    if f32::from(snapped) > 0.0 {
+        snapped
+    } else {
+        hairline_px(window)
+    }
 }

@@ -12,7 +12,7 @@ use crate::id::stable_auto_id;
 use crate::theme::ColorScheme;
 
 use super::control;
-use super::utils::resolve_hsla;
+use super::utils::{hairline_px, resolve_hsla};
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 type WindowCloseHandler = std::rc::Rc<dyn Fn(&gpui::ClickEvent, &mut Window, &mut gpui::App)>;
@@ -392,6 +392,7 @@ impl RenderOnce for TitleBar {
             };
 
         let tokens = &self.theme.components.title_bar;
+        let line_thickness = hairline_px(window);
         let bg_token = self
             .background
             .clone()
@@ -639,7 +640,7 @@ impl RenderOnce for TitleBar {
                     .left_0()
                     .right_0()
                     .bottom_0()
-                    .h(px(1.0))
+                    .h(line_thickness)
                     .bg(resolve_hsla(&self.theme, &tokens.border)),
             );
         }
