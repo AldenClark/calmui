@@ -13,8 +13,8 @@ pub struct CalmProvider {
 #[derive(Clone)]
 struct ProviderGlobal {
     theme: Arc<Theme>,
-    toast_manager: ToastManager,
-    modal_manager: ModalManager,
+    toast_manager: Option<ToastManager>,
+    modal_manager: Option<ModalManager>,
 }
 
 impl gpui::Global for ProviderGlobal {}
@@ -35,9 +35,17 @@ impl CalmProvider {
         self
     }
 
+    pub fn enable_toast_manager(self) -> Self {
+        self.set_toast_manager(ToastManager::default())
+    }
+
     pub fn set_modal_manager(mut self, manager: ModalManager) -> Self {
         self.modal_manager = Some(manager);
         self
+    }
+
+    pub fn enable_modal_manager(self) -> Self {
+        self.set_modal_manager(ModalManager::default())
     }
 
     pub fn init(self, cx: &mut gpui::App) {
@@ -47,18 +55,18 @@ impl CalmProvider {
                 global.theme = Arc::new(theme);
             }
             if let Some(manager) = self.toast_manager {
-                global.toast_manager = manager;
+                global.toast_manager = Some(manager);
             }
             if let Some(manager) = self.modal_manager {
-                global.modal_manager = manager;
+                global.modal_manager = Some(manager);
             }
             return;
         }
 
         cx.set_global(ProviderGlobal {
             theme: Arc::new(self.theme.unwrap_or_default()),
-            toast_manager: self.toast_manager.unwrap_or_default(),
-            modal_manager: self.modal_manager.unwrap_or_default(),
+            toast_manager: self.toast_manager,
+            modal_manager: self.modal_manager,
         });
     }
 
@@ -68,15 +76,13 @@ impl CalmProvider {
             .unwrap_or_else(|| Arc::new(Theme::default()))
     }
 
-    pub fn toast(cx: &gpui::App) -> ToastManager {
+    pub fn toast(cx: &gpui::App) -> Option<ToastManager> {
         cx.try_global::<ProviderGlobal>()
-            .map(|global| global.toast_manager.clone())
-            .unwrap_or_default()
+            .and_then(|global| global.toast_manager.clone())
     }
 
-    pub fn modal(cx: &gpui::App) -> ModalManager {
+    pub fn modal(cx: &gpui::App) -> Option<ModalManager> {
         cx.try_global::<ProviderGlobal>()
-            .map(|global| global.modal_manager.clone())
-            .unwrap_or_default()
+            .and_then(|global| global.modal_manager.clone())
     }
 }
