@@ -3,7 +3,8 @@ use std::time::Duration;
 
 use gpui::{
     AnyElement, Component, Hsla, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div, px, rgb,
+    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, WindowControlArea, div,
+    px, rgb,
 };
 
 use crate::contracts::WithId;
@@ -189,13 +190,6 @@ impl TitleBar {
     }
 
     fn render_window_controls_windows(&self, window: &mut Window) -> WindowControls {
-        #[derive(Clone, Copy)]
-        enum WindowsWindowAction {
-            Minimize,
-            Zoom,
-            Close,
-        }
-
         let fg = resolve_hsla(&self.theme, &self.theme.components.title_bar.fg);
         let (neutral_hover_bg, neutral_active_bg) = match self.theme.color_scheme {
             ColorScheme::Dark => (gpui::white().opacity(0.14), gpui::white().opacity(0.22)),
@@ -207,52 +201,46 @@ impl TitleBar {
             "\u{e922}"
         };
 
-        let on_close_window = self.on_close_window.clone();
-        let button =
-            move |id: String, text: &'static str, action: WindowsWindowAction, close: bool| {
-                let (hover_bg, active_bg, hover_fg) = if close {
-                    let close_bg: gpui::Hsla = rgb(0xe81123).into();
-                    (close_bg, close_bg.opacity(0.85), gpui::white())
-                } else {
-                    (neutral_hover_bg, neutral_active_bg, fg)
-                };
-                div()
-                    .id(id)
-                    .w(px(45.0))
-                    .h(px(self.height_px))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .font_family("Segoe MDL2 Assets")
-                    .text_size(px(10.0))
-                    .bg(gpui::transparent_black())
-                    .text_color(fg)
-                    .cursor_pointer()
-                    .hover(move |style| style.bg(hover_bg).text_color(hover_fg))
-                    .active(move |style| style.bg(active_bg).text_color(hover_fg))
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                        window.prevent_default();
-                        cx.stop_propagation();
-                    })
-                    .on_click({
-                        let on_close_window = on_close_window.clone();
-                        move |event, window, cx| {
-                            cx.stop_propagation();
-                            match action {
-                                WindowsWindowAction::Minimize => window.minimize_window(),
-                                WindowsWindowAction::Zoom => window.zoom_window(),
-                                WindowsWindowAction::Close => {
-                                    if let Some(handler) = on_close_window.as_ref() {
-                                        (handler)(event, window, cx);
-                                    } else {
-                                        window.remove_window();
-                                    }
-                                }
-                            }
-                        }
-                    })
-                    .child(text)
+        let button = move |id: String, text: &'static str, close: bool| {
+            let (hover_bg, active_bg, hover_fg) = if close {
+                let close_bg: gpui::Hsla = rgb(0xe81123).into();
+                (close_bg, close_bg.opacity(0.85), gpui::white())
+            } else {
+                (neutral_hover_bg, neutral_active_bg, fg)
             };
+            div()
+                .id(id)
+                .w(px(45.0))
+                .h(px(self.height_px))
+                .flex()
+                .items_center()
+                .justify_center()
+                .font_family("Segoe MDL2 Assets")
+                .text_size(px(10.0))
+                .bg(gpui::transparent_black())
+                .text_color(fg)
+                .cursor_pointer()
+                .hover(move |style| style.bg(hover_bg).text_color(hover_fg))
+                .active(move |style| style.bg(active_bg).text_color(hover_fg))
+                .child(text)
+        };
+
+        let close = if let Some(on_close_window) = self.on_close_window.clone() {
+            button(format!("{}-win-close", self.id), "\u{e8bb}", true)
+                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                    window.prevent_default();
+                    cx.stop_propagation();
+                })
+                .on_click(move |event, window, cx| {
+                    cx.stop_propagation();
+                    (on_close_window)(event, window, cx);
+                })
+                .into_any_element()
+        } else {
+            button(format!("{}-win-close", self.id), "\u{e8bb}", true)
+                .window_control_area(WindowControlArea::Close)
+                .into_any_element()
+        };
 
         WindowControls {
             element: div()
@@ -260,24 +248,15 @@ impl TitleBar {
                 .flex()
                 .items_center()
                 .h(px(self.height_px))
-                .child(button(
-                    format!("{}-win-min", self.id),
-                    "\u{e921}",
-                    WindowsWindowAction::Minimize,
-                    false,
-                ))
-                .child(button(
-                    format!("{}-win-max", self.id),
-                    max_or_restore_icon,
-                    WindowsWindowAction::Zoom,
-                    false,
-                ))
-                .child(button(
-                    format!("{}-win-close", self.id),
-                    "\u{e8bb}",
-                    WindowsWindowAction::Close,
-                    true,
-                ))
+                .child(
+                    button(format!("{}-win-min", self.id), "\u{e921}", false)
+                        .window_control_area(WindowControlArea::Min),
+                )
+                .child(
+                    button(format!("{}-win-max", self.id), max_or_restore_icon, false)
+                        .window_control_area(WindowControlArea::Max),
+                )
+                .child(close)
                 .into_any_element(),
             width_px: 135.0,
         }
