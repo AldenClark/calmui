@@ -314,11 +314,14 @@ impl TextInput {
         input = apply_input_size(input, self.size);
         input = apply_radius(&self.theme, input, self.radius);
 
-        if self.error.is_some() {
-            input = input.border_color(resolve_hsla(&self.theme, &tokens.border_error));
+        let border = if self.error.is_some() {
+            resolve_hsla(&self.theme, &tokens.border_error)
+        } else if is_focused {
+            resolve_hsla(&self.theme, &tokens.border_focus)
         } else {
-            input = input.border_color(resolve_hsla(&self.theme, &tokens.border));
-        }
+            resolve_hsla(&self.theme, &tokens.border)
+        };
+        input = input.border_color(border);
 
         if self.disabled {
             input = input.cursor_default().opacity(0.55);
