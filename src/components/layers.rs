@@ -2,19 +2,23 @@ use gpui::{
     AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div, px,
 };
+use std::time::Duration;
 
+use crate::contracts::Variantable;
 use crate::feedback::{ToastEntry, ToastKind, ToastManager, ToastPosition};
 use crate::icon::{IconRegistry, IconSource};
 use crate::motion::{MotionConfig, MotionTransition, TransitionPreset};
-use crate::overlay::{Layer, ModalEntry, ModalManager};
+use crate::overlay::{ManagedModal, ModalCloseReason, ModalKind, ModalManager};
 use crate::{contracts::WithId, id::stable_auto_id};
 
 use super::Stack;
+use super::button::Button;
 use super::icon::Icon;
 use super::overlay::{Overlay, OverlayCoverage, OverlayMaterialMode};
 use super::transition::TransitionExt;
 use super::utils::{deepened_surface_border, resolve_hsla};
 
+#[derive(IntoElement)]
 pub struct ToastLayer {
     id: String,
     manager: ToastManager,
@@ -252,6 +256,35 @@ impl ToastLayer {
                 .gap_2(),
         }
     }
+
+    fn schedule_auto_dismiss(&self, entry: &ToastEntry, window: &Window, cx: &mut gpui::App) {
+        let Some(id) = entry.id else {
+            return;
+        };
+        let Some(delay_ms) = entry.auto_close_ms else {
+            return;
+        };
+        let Some(version) = self.manager.version_of(id) else {
+            return;
+        };
+        if !self.manager.mark_auto_close_scheduled(id, version) {
+            return;
+        }
+
+        let manager = self.manager.clone();
+        let window_handle = window.window_handle();
+        cx.spawn(async move |cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(u64::from(delay_ms)))
+                .await;
+            let _ = window_handle.update(cx, |_, window, _| {
+                if manager.dismiss_if_version(id, version) {
+                    window.refresh();
+                }
+            });
+        })
+        .detach();
+    }
 }
 
 impl WithId for ToastLayer {
@@ -265,8 +298,8 @@ impl WithId for ToastLayer {
 }
 
 impl RenderOnce for ToastLayer {
-    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
-        self.theme.sync_from_provider(_cx);
+    fn render(mut self, window: &mut gpui::Window, cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(cx);
         let positions = [
             ToastPosition::TopLeft,
             ToastPosition::TopCenter,
@@ -289,23 +322,16 @@ impl RenderOnce for ToastLayer {
                 continue;
             }
 
-            let cards = toasts
-                .into_iter()
-                .map(|entry| self.render_toast_card(entry, window))
-                .collect::<Vec<_>>();
+            let mut cards = Vec::with_capacity(toasts.len());
+            for entry in toasts {
+                self.schedule_auto_dismiss(&entry, window, cx);
+                cards.push(self.render_toast_card(entry, window));
+            }
 
             root = root.child(Self::anchor_for(position).children(cards));
         }
 
         root.into_any_element()
-    }
-}
-
-impl IntoElement for ToastLayer {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 
@@ -346,19 +372,47 @@ impl ModalLayer {
         self
     }
 
-    fn render_modal(&self, entry: ModalEntry, window: &gpui::Window) -> AnyElement {
+    fn modal_kind_icon(&self, kind: ModalKind) -> Option<IconSource> {
+        match kind {
+            ModalKind::Custom => None,
+            ModalKind::Info => Some(IconSource::named("info-circle")),
+            ModalKind::Success => Some(IconSource::named("circle-check")),
+            ModalKind::Warning => Some(IconSource::named("alert-triangle")),
+            ModalKind::Error => Some(IconSource::named("alert-circle")),
+            ModalKind::Confirm => Some(IconSource::named("info-circle")),
+        }
+    }
+
+    fn modal_kind_color(&self, kind: ModalKind) -> gpui::Hsla {
+        let tokens = &self.theme.components.toast;
+        match kind {
+            ModalKind::Success => resolve_hsla(&self.theme, &tokens.success_fg),
+            ModalKind::Warning => resolve_hsla(&self.theme, &tokens.warning_fg),
+            ModalKind::Error => resolve_hsla(&self.theme, &tokens.error_fg),
+            ModalKind::Info | ModalKind::Confirm | ModalKind::Custom => {
+                resolve_hsla(&self.theme, &tokens.info_fg)
+            }
+        }
+    }
+
+    fn render_modal(&self, managed: ManagedModal, window: &gpui::Window) -> AnyElement {
+        let id = managed.id();
+        let modal = managed.modal_arc();
+        let entry = modal.as_ref();
         let panel_bg = resolve_hsla(&self.theme, &self.theme.components.modal.panel_bg);
         let panel_border = resolve_hsla(&self.theme, &self.theme.components.modal.panel_border);
         let title_color = resolve_hsla(&self.theme, &self.theme.components.modal.title);
         let body_color = resolve_hsla(&self.theme, &self.theme.components.modal.body);
 
         let manager_for_overlay = self.manager.clone();
-        let id_for_overlay = entry.id;
         let manager_for_close = self.manager.clone();
-        let id_for_close = entry.id;
+        let manager_for_cancel = self.manager.clone();
+        let manager_for_confirm = self.manager.clone();
+        let manager_for_complete = self.manager.clone();
+        let manager_for_escape = self.manager.clone();
         let icons = self.icons.clone();
 
-        let close_on_click_outside = entry.close_on_click_outside;
+        let close_on_click_outside = entry.close_on_click_outside_enabled();
         let overlay = Overlay::new()
             .with_id(format!("{}-overlay", self.id))
             .coverage(OverlayCoverage::Window)
@@ -366,16 +420,56 @@ impl ModalLayer {
             .color(self.theme.components.modal.overlay_bg.clone())
             .on_click(
                 move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
-                    if close_on_click_outside && let Some(id) = id_for_overlay {
-                        manager_for_overlay.close(id);
+                    if close_on_click_outside {
+                        manager_for_overlay.close_with_reason(id, ModalCloseReason::OverlayClick);
                         window.refresh();
                     }
                 },
             );
 
-        let panel = div()
+        let mut header_title = div().flex().items_center();
+
+        if let Some(icon) = self.modal_kind_icon(entry.kind_ref()) {
+            header_title = header_title.child(
+                div().mr_2().flex().child(
+                    Icon::new(icon)
+                        .size(16.0)
+                        .color(self.modal_kind_color(entry.kind_ref()))
+                        .registry(self.icons.clone()),
+                ),
+            );
+        }
+        header_title = header_title.child(
+            div()
+                .text_color(title_color)
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .child(entry.title_ref().clone()),
+        );
+
+        let mut close_action = div().into_any_element();
+        if entry.close_button_enabled() {
+            close_action = div()
+                .id(format!("{}-modal-close-{}", self.id, id.0))
+                .cursor_pointer()
+                .child(
+                    Icon::named("x")
+                        .with_id(format!("{}-modal-close-icon-{}", self.id, id.0))
+                        .size(14.0)
+                        .color(title_color)
+                        .registry(icons.clone()),
+                )
+                .on_click(
+                    move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
+                        manager_for_close.close_with_reason(id, ModalCloseReason::CloseButton);
+                        window.refresh();
+                    },
+                )
+                .into_any_element();
+        }
+
+        let mut panel = div()
             .id(format!("{}-modal-panel", self.id))
-            .w_96()
+            .w(px(entry.width_px()))
             .max_w_full()
             .bg(panel_bg)
             .border(super::utils::quantized_stroke_px(window, 1.0))
@@ -389,50 +483,75 @@ impl ModalLayer {
                     .justify_between()
                     .items_center()
                     .mb_2()
+                    .child(header_title)
+                    .child(close_action),
+            )
+            .children(entry.body_ref().map(|body| {
+                div()
+                    .mb_2()
+                    .text_color(body_color)
+                    .text_sm()
+                    .child(body.clone())
+                    .into_any_element()
+            }))
+            .children(entry.render_content());
+
+        if entry.is_confirm_kind() {
+            panel = panel.child(
+                div()
+                    .mt_3()
+                    .flex()
+                    .justify_end()
+                    .gap_2()
                     .child(
-                        div()
-                            .text_color(title_color)
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .child(entry.title),
+                        Button::new(entry.cancel_label_ref().clone())
+                            .variant(crate::style::Variant::Default)
+                            .on_click(move |_, window, _| {
+                                manager_for_cancel.cancel(id);
+                                window.refresh();
+                            }),
                     )
                     .child(
-                        div()
-                            .id(format!(
-                                "{}-modal-close-{}",
-                                self.id,
-                                entry.id.map(|value| value.0).unwrap_or_default()
-                            ))
-                            .cursor_pointer()
-                            .child(
-                                Icon::named("x")
-                                    .with_id(format!(
-                                        "{}-modal-close-icon-{}",
-                                        self.id,
-                                        entry.id.map(|value| value.0).unwrap_or_default()
-                                    ))
-                                    .size(14.0)
-                                    .color(title_color)
-                                    .registry(icons),
-                            )
-                            .on_click(
-                                move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
-                                    if let Some(id) = id_for_close {
-                                        manager_for_close.close(id);
-                                        window.refresh();
-                                    }
-                                },
-                            ),
+                        Button::new(entry.confirm_label_ref().clone())
+                            .variant(crate::style::Variant::Filled)
+                            .on_click(move |_, window, _| {
+                                manager_for_confirm.confirm(id);
+                                window.refresh();
+                            }),
                     ),
-            )
-            .child(div().text_color(body_color).child(entry.body))
-            .with_enter_transition(format!("{}-modal-enter", self.id), self.motion);
+            );
+        } else if entry.has_complete_action() {
+            panel = panel.child(
+                div().mt_3().flex().justify_end().child(
+                    Button::new(entry.complete_label_ref().clone())
+                        .variant(crate::style::Variant::Filled)
+                        .on_click(move |_, window, _| {
+                            manager_for_complete.complete(id);
+                            window.refresh();
+                        }),
+                ),
+            );
+        }
+
+        let panel = panel.with_enter_transition(
+            format!("{}-modal-enter-{}", self.id, id.0),
+            entry.motion_ref(),
+        );
+
+        let close_on_escape = entry.close_on_escape_enabled();
 
         div()
-            .id(format!("{}-modal-root", self.id))
+            .id(format!("{}-modal-root-{}", self.id, id.0))
             .size_full()
             .absolute()
             .top_0()
             .left_0()
+            .on_key_down(move |event, window, _cx| {
+                if close_on_escape && event.keystroke.key == "escape" {
+                    manager_for_escape.close_with_reason(id, ModalCloseReason::EscapeKey);
+                    window.refresh();
+                }
+            })
             .child(overlay)
             .child(
                 div()
@@ -462,17 +581,10 @@ impl WithId for ModalLayer {
 impl RenderOnce for ModalLayer {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let stack = self.manager.list();
-        let Some(entry) = stack.last().cloned() else {
+        let Some(entry) = self.manager.top() else {
             return div().into_any_element();
         };
-
-        match entry.layer {
-            Layer::Modal | Layer::Popover | Layer::Dropdown | Layer::Tooltip | Layer::Toast => {
-                self.render_modal(entry, window)
-            }
-            Layer::Base | Layer::DragPreview => div().into_any_element(),
-        }
+        self.render_modal(entry, window)
     }
 }
 

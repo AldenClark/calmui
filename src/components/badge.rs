@@ -1,6 +1,6 @@
 use gpui::{
-    AnyElement, Component, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, Styled, div, px,
+    AnyElement, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
+    Styled, div, px,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable, WithId};
@@ -13,6 +13,7 @@ use super::utils::{apply_radius, resolve_hsla};
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 
+#[derive(IntoElement)]
 pub struct Badge {
     id: String,
     label: SharedString,
@@ -149,14 +150,6 @@ impl RenderOnce for Badge {
         }
 
         root.with_enter_transition(format!("{}-enter", self.id), self.motion)
-    }
-}
-
-impl IntoElement for Badge {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

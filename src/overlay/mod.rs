@@ -1,85 +1,64 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
-use crate::motion::MotionConfig;
-use gpui::SharedString;
+use crate::components::Modal;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct ModalId(pub u64);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Layer {
-    Base,
-    Dropdown,
-    Popover,
-    Modal,
-    Toast,
-    Tooltip,
-    DragPreview,
+pub enum ModalKind {
+    Custom,
+    Info,
+    Success,
+    Warning,
+    Error,
+    Confirm,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ModalKind {
-    Alert,
-    Confirm,
-    Prompt,
-    Custom,
+pub enum ModalCloseReason {
+    Programmatic,
+    OverlayClick,
+    CloseButton,
+    EscapeKey,
+    ConfirmAction,
+    CancelAction,
+    CompleteAction,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ModalEntry {
-    pub id: Option<ModalId>,
-    pub kind: ModalKind,
-    pub title: SharedString,
-    pub body: SharedString,
-    pub close_on_escape: bool,
-    pub close_on_click_outside: bool,
-    pub layer: Layer,
-    pub motion: MotionConfig,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ModalStateChange {
+    Opened,
+    Confirmed,
+    Canceled,
+    Completed,
+    Closed(ModalCloseReason),
 }
 
-impl ModalEntry {
-    pub fn new(
-        kind: ModalKind,
-        title: impl Into<SharedString>,
-        body: impl Into<SharedString>,
-    ) -> Self {
-        Self {
-            id: None,
-            kind,
-            title: title.into(),
-            body: body.into(),
-            close_on_escape: true,
-            close_on_click_outside: true,
-            layer: Layer::Modal,
-            motion: MotionConfig::default(),
-        }
+#[derive(Clone)]
+pub struct ManagedModal {
+    id: ModalId,
+    modal: Arc<Modal>,
+}
+
+impl ManagedModal {
+    pub fn id(&self) -> ModalId {
+        self.id
     }
 
-    pub fn close_on_escape(mut self, value: bool) -> Self {
-        self.close_on_escape = value;
-        self
+    pub fn modal(&self) -> &Modal {
+        self.modal.as_ref()
     }
 
-    pub fn close_on_click_outside(mut self, value: bool) -> Self {
-        self.close_on_click_outside = value;
-        self
-    }
-
-    pub fn layer(mut self, value: Layer) -> Self {
-        self.layer = value;
-        self
-    }
-
-    pub fn motion(mut self, value: MotionConfig) -> Self {
-        self.motion = value;
-        self
+    pub fn modal_arc(&self) -> Arc<Modal> {
+        self.modal.clone()
     }
 }
 
 #[derive(Default)]
 struct ModalState {
-    stack: Vec<ModalEntry>,
+    stack: Vec<ManagedModal>,
 }
 
 #[derive(Clone, Default)]
@@ -93,26 +72,67 @@ impl ModalManager {
         Self::default()
     }
 
-    pub fn open(&self, mut entry: ModalEntry) -> ModalId {
+    pub fn open(&self, modal: Modal) -> ModalId {
         let id = ModalId(self.next_id.fetch_add(1, Ordering::SeqCst) + 1);
-        entry.id = Some(id);
+        let modal = Arc::new(modal);
+
         self.state
             .write()
             .expect("modal state poisoned")
             .stack
-            .push(entry);
+            .push(ManagedModal {
+                id,
+                modal: modal.clone(),
+            });
+
+        modal.emit_opened();
         id
     }
 
-    pub fn update(&self, id: ModalId, mut entry: ModalEntry) -> bool {
+    pub fn open_confirm(
+        &self,
+        title: impl Into<gpui::SharedString>,
+        body: impl Into<gpui::SharedString>,
+    ) -> ModalId {
+        self.open(Modal::confirm(title, body))
+    }
+
+    pub fn open_info(
+        &self,
+        title: impl Into<gpui::SharedString>,
+        body: impl Into<gpui::SharedString>,
+    ) -> ModalId {
+        self.open(Modal::info(title, body))
+    }
+
+    pub fn open_success(
+        &self,
+        title: impl Into<gpui::SharedString>,
+        body: impl Into<gpui::SharedString>,
+    ) -> ModalId {
+        self.open(Modal::success(title, body))
+    }
+
+    pub fn open_warning(
+        &self,
+        title: impl Into<gpui::SharedString>,
+        body: impl Into<gpui::SharedString>,
+    ) -> ModalId {
+        self.open(Modal::warning(title, body))
+    }
+
+    pub fn open_error(
+        &self,
+        title: impl Into<gpui::SharedString>,
+        body: impl Into<gpui::SharedString>,
+    ) -> ModalId {
+        self.open(Modal::error(title, body))
+    }
+
+    pub fn update(&self, id: ModalId, modal: Modal) -> bool {
         let mut state = self.state.write().expect("modal state poisoned");
-        if let Some(current) = state
-            .stack
-            .iter_mut()
-            .find(|candidate| candidate.id == Some(id))
-        {
-            entry.id = Some(id);
-            *current = entry;
+        if let Some(current) = state.stack.iter_mut().find(|entry| entry.id == id) {
+            current.modal = Arc::new(modal);
             true
         } else {
             false
@@ -120,54 +140,169 @@ impl ModalManager {
     }
 
     pub fn close(&self, id: ModalId) -> bool {
-        let mut state = self.state.write().expect("modal state poisoned");
-        if let Some(index) = state.stack.iter().position(|entry| entry.id == Some(id)) {
-            state.stack.remove(index);
+        self.close_with_reason(id, ModalCloseReason::Programmatic)
+    }
+
+    pub fn close_with_reason(&self, id: ModalId, reason: ModalCloseReason) -> bool {
+        let closed = self.remove(id);
+        if let Some(entry) = closed {
+            entry.modal.emit_closed(reason);
             true
         } else {
             false
         }
     }
 
-    pub fn close_top(&self) -> Option<ModalEntry> {
-        self.state
+    pub fn confirm(&self, id: ModalId) -> bool {
+        let closed = self.remove(id);
+        if let Some(entry) = closed {
+            entry.modal.emit_confirmed();
+            entry.modal.emit_closed(ModalCloseReason::ConfirmAction);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn cancel(&self, id: ModalId) -> bool {
+        let closed = self.remove(id);
+        if let Some(entry) = closed {
+            entry.modal.emit_canceled();
+            entry.modal.emit_closed(ModalCloseReason::CancelAction);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn complete(&self, id: ModalId) -> bool {
+        let closed = self.remove(id);
+        if let Some(entry) = closed {
+            entry.modal.emit_completed();
+            entry.modal.emit_closed(ModalCloseReason::CompleteAction);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn close_top(&self) -> Option<ModalId> {
+        let closed = self
+            .state
             .write()
             .expect("modal state poisoned")
             .stack
-            .pop()
+            .pop();
+
+        closed.map(|entry| {
+            entry.modal.emit_closed(ModalCloseReason::Programmatic);
+            entry.id
+        })
     }
 
     pub fn close_all(&self) {
-        self.state
-            .write()
-            .expect("modal state poisoned")
-            .stack
-            .clear();
+        let closed = {
+            let mut state = self.state.write().expect("modal state poisoned");
+            state.stack.drain(..).collect::<Vec<_>>()
+        };
+
+        for entry in closed {
+            entry.modal.emit_closed(ModalCloseReason::Programmatic);
+        }
     }
 
-    pub fn list(&self) -> Vec<ModalEntry> {
+    pub fn list(&self) -> Vec<ManagedModal> {
         self.state
             .read()
             .expect("modal state poisoned")
             .stack
             .clone()
     }
+
+    pub fn top(&self) -> Option<ManagedModal> {
+        self.state
+            .read()
+            .expect("modal state poisoned")
+            .stack
+            .last()
+            .cloned()
+    }
+
+    fn remove(&self, id: ModalId) -> Option<ManagedModal> {
+        let mut state = self.state.write().expect("modal state poisoned");
+        let index = state.stack.iter().position(|entry| entry.id == id)?;
+        Some(state.stack.remove(index))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::AtomicUsize;
 
     #[test]
     fn modal_manager_uses_stack_order() {
         let manager = ModalManager::new();
-        let first_id = manager.open(ModalEntry::new(ModalKind::Alert, "A", "one"));
-        let second_id = manager.open(ModalEntry::new(ModalKind::Alert, "B", "two"));
+        let first_id = manager.open(Modal::new("A"));
+        let second_id = manager.open(Modal::new("B"));
+
         let stack = manager.list();
         assert_eq!(stack.len(), 2);
-        assert_eq!(stack[0].id, Some(first_id));
-        assert_eq!(stack[1].id, Some(second_id));
-        let top = manager.close_top().expect("top modal should exist");
-        assert_eq!(top.id, Some(second_id));
+        assert_eq!(stack[0].id(), first_id);
+        assert_eq!(stack[1].id(), second_id);
+        assert_eq!(manager.top().expect("top should exist").id(), second_id);
+
+        let closed = manager.close_top().expect("top modal should close");
+        assert_eq!(closed, second_id);
+    }
+
+    #[test]
+    fn modal_manager_fires_confirm_and_close_callbacks() {
+        let manager = ModalManager::new();
+        let confirmed = Arc::new(AtomicUsize::new(0));
+        let closed = Arc::new(AtomicUsize::new(0));
+
+        let confirmed_for_modal = confirmed.clone();
+        let closed_for_modal = closed.clone();
+        let id = manager.open(
+            Modal::confirm("Delete", "Are you sure?")
+                .on_confirm(move || {
+                    confirmed_for_modal.fetch_add(1, Ordering::SeqCst);
+                })
+                .on_close(move |reason| {
+                    if reason == ModalCloseReason::ConfirmAction {
+                        closed_for_modal.fetch_add(1, Ordering::SeqCst);
+                    }
+                }),
+        );
+
+        assert!(manager.confirm(id));
+        assert_eq!(confirmed.load(Ordering::SeqCst), 1);
+        assert_eq!(closed.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn modal_manager_fires_complete_and_close_callbacks() {
+        let manager = ModalManager::new();
+        let completed = Arc::new(AtomicUsize::new(0));
+        let closed = Arc::new(AtomicUsize::new(0));
+
+        let completed_for_modal = completed.clone();
+        let closed_for_modal = closed.clone();
+        let id = manager.open(
+            Modal::success("Done", "Operation finished")
+                .on_complete(move || {
+                    completed_for_modal.fetch_add(1, Ordering::SeqCst);
+                })
+                .on_close(move |reason| {
+                    if reason == ModalCloseReason::CompleteAction {
+                        closed_for_modal.fetch_add(1, Ordering::SeqCst);
+                    }
+                }),
+        );
+
+        assert!(manager.complete(id));
+        assert_eq!(completed.load(Ordering::SeqCst), 1);
+        assert_eq!(closed.load(Ordering::SeqCst), 1);
     }
 }
