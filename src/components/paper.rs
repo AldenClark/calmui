@@ -1,16 +1,15 @@
 use gpui::{
-    AnyElement, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, div,
-    px,
+    AnyElement, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, div, px,
 };
 
-use crate::contracts::WithId;
-use crate::id::stable_auto_id;
+use crate::id::ComponentId;
 use crate::style::{Radius, Size};
 
 use super::utils::{apply_radius, resolve_hsla};
 
+#[derive(IntoElement)]
 pub struct Paper {
-    id: String,
+    id: ComponentId,
     padding: Size,
     radius: Radius,
     bordered: bool,
@@ -24,7 +23,7 @@ impl Paper {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("paper"),
+            id: ComponentId::default(),
             padding: Size::Md,
             radius: Radius::Md,
             bordered: true,
@@ -81,13 +80,10 @@ impl Paper {
     }
 }
 
-impl WithId for Paper {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Paper {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -121,14 +117,6 @@ impl RenderOnce for Paper {
         }
 
         root.children(self.children).min_h(px(1.0))
-    }
-}
-
-impl IntoElement for Paper {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

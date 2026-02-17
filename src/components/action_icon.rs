@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, Hsla, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, StatefulInteractiveElement, Styled, Window, div, px,
+    AnyElement, ClickEvent, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
@@ -18,8 +18,9 @@ use super::utils::{apply_radius, resolve_hsla};
 type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)>;
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 
+#[derive(IntoElement)]
 pub struct ActionIcon {
-    id: String,
+    id: ComponentId,
     variant: Variant,
     size: Size,
     radius: Radius,
@@ -37,7 +38,7 @@ impl ActionIcon {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("action-icon"),
+            id: ComponentId::default(),
             variant: Variant::Default,
             size: Size::Md,
             radius: Radius::Sm,
@@ -129,13 +130,10 @@ impl ActionIcon {
     }
 }
 
-impl WithId for ActionIcon {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl ActionIcon {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -172,14 +170,14 @@ impl RenderOnce for ActionIcon {
         let size_px = self.box_size_px();
 
         let fallback = Icon::named("dots")
-            .with_id(format!("{}-fallback", self.id))
+            .with_id(self.id.slot("fallback"))
             .size(self.icon_size_px())
             .color(fg)
             .into_any_element();
 
         let content = if self.loading {
             Loader::new()
-                .with_id(format!("{}-loader", self.id))
+                .with_id(self.id.slot("loader"))
                 .variant(self.loading_variant)
                 .size(self.size)
                 .color(fg_token)
@@ -219,15 +217,7 @@ impl RenderOnce for ActionIcon {
             }
         }
 
-        root.with_enter_transition(format!("{}-enter", self.id), self.motion)
-    }
-}
-
-impl IntoElement for ActionIcon {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+        root.with_enter_transition(self.id.slot("enter"), self.motion)
     }
 }
 

@@ -1,10 +1,9 @@
 use gpui::{
-    Component, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, div, px,
-    svg,
+    Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, div, px, svg,
 };
 
 use crate::icon::{IconRegistry, IconSource};
-use crate::{contracts::WithId, id::stable_auto_id};
+use crate::id::ComponentId;
 
 use super::utils::resolve_hsla;
 
@@ -14,8 +13,9 @@ enum IconColor {
     Raw(gpui::Hsla),
 }
 
+#[derive(IntoElement)]
 pub struct Icon {
-    id: String,
+    id: ComponentId,
     source: IconSource,
     size: f32,
     color: Option<IconColor>,
@@ -29,7 +29,7 @@ impl Icon {
     #[track_caller]
     pub fn new(source: IconSource) -> Self {
         Self {
-            id: stable_auto_id("icon"),
+            id: ComponentId::default(),
             source,
             size: 16.0,
             color: None,
@@ -85,13 +85,10 @@ impl Icon {
     }
 }
 
-impl WithId for Icon {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Icon {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -120,14 +117,6 @@ impl RenderOnce for Icon {
             fallback = fallback.text_color(color);
         }
         fallback.into_any_element()
-    }
-}
-
-impl IntoElement for Icon {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

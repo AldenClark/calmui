@@ -1,13 +1,13 @@
 use std::{f32::consts::TAU, time::Duration};
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, Component, Hsla, InteractiveElement, IntoElement,
-    ParentElement, RenderOnce, SharedString, Styled, div, px,
+    Animation, AnimationExt, AnyElement, Hsla, InteractiveElement, IntoElement, ParentElement,
+    RenderOnce, SharedString, Styled, div, px,
 };
 
+use crate::id::ComponentId;
 use crate::motion::{MotionConfig, MotionTransition, TransitionPreset};
 use crate::style::Size;
-use crate::{contracts::WithId, id::stable_auto_id};
 
 use super::Stack;
 use super::transition::TransitionExt;
@@ -22,13 +22,15 @@ pub enum LoaderVariant {
     Oval,
 }
 
-pub trait LoaderElement: IntoElement + WithId + Sized + 'static {
+pub trait LoaderElement: IntoElement + Sized + 'static {
+    fn with_id(self, id: impl Into<ComponentId>) -> Self;
     fn size(self, size: Size) -> Self;
     fn color(self, color: impl Into<Hsla>) -> Self;
 }
 
+#[derive(IntoElement)]
 pub struct Loader {
-    id: String,
+    id: ComponentId,
     label: Option<SharedString>,
     variant: LoaderVariant,
     size: Size,
@@ -42,7 +44,7 @@ impl Loader {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("loader"),
+            id: ComponentId::default(),
             label: None,
             variant: LoaderVariant::Dots,
             size: Size::Md,
@@ -121,13 +123,13 @@ impl Loader {
                 .repeat()
                 .with_easing(gpui::ease_in_out);
             div()
-                .id(format!("{}-dot-cell-{index}", self.id))
+                .id(self.id.slot_index("dot-cell", index.to_string()))
                 .w(px(dot))
                 .h(px(cell_h))
                 .relative()
                 .child(
                     div()
-                        .id(format!("{}-dot-{index}", self.id))
+                        .id(self.id.slot_index("dot", index.to_string()))
                         .absolute()
                         .left_0()
                         .top(px(baseline_top))
@@ -136,7 +138,7 @@ impl Loader {
                         .rounded_full()
                         .bg(color)
                         .with_animation(
-                            format!("{}-dot-anim-{index}", self.id),
+                            self.id.slot_index("dot-anim", index.to_string()),
                             animation,
                             move |this, delta| {
                                 let progress = (delta + phase).fract();
@@ -164,13 +166,13 @@ impl Loader {
         let dot = self.dot_size_px() + 3.0;
 
         let outer = div()
-            .id(format!("{}-pulse-outer", self.id))
+            .id(self.id.slot("pulse-outer"))
             .w(px(dot + 4.0))
             .h(px(dot + 4.0))
             .rounded_full()
             .bg(color.alpha(0.35))
             .with_repeating_transition(
-                format!("{}-pulse-outer-anim", self.id),
+                self.id.slot("pulse-outer-anim"),
                 MotionTransition::new()
                     .preset(TransitionPreset::Pulse)
                     .duration_ms(980)
@@ -179,13 +181,13 @@ impl Loader {
             );
 
         let inner = div()
-            .id(format!("{}-pulse-inner", self.id))
+            .id(self.id.slot("pulse-inner"))
             .w(px(dot))
             .h(px(dot))
             .rounded_full()
             .bg(color)
             .with_repeating_transition(
-                format!("{}-pulse-inner-anim", self.id),
+                self.id.slot("pulse-inner-anim"),
                 MotionTransition::new()
                     .preset(TransitionPreset::Pulse)
                     .duration_ms(760)
@@ -241,13 +243,13 @@ impl Loader {
                 .items_end()
                 .child(
                     div()
-                        .id(format!("{}-bar-{index}", self.id))
+                        .id(self.id.slot_index("bar", index.to_string()))
                         .w(px(bar_w))
                         .h(px(bar_h_max))
                         .rounded_full()
                         .bg(color)
                         .with_animation(
-                            format!("{}-bar-anim-{index}", self.id),
+                            self.id.slot_index("bar-anim", index.to_string()),
                             animation,
                             move |this, delta| {
                                 let progress = (delta + phase).fract();
@@ -285,7 +287,7 @@ impl Loader {
                 .with_easing(gpui::linear);
 
             div()
-                .id(format!("{}-oval-segment-{index}", self.id))
+                .id(self.id.slot_index("oval-segment", index.to_string()))
                 .absolute()
                 .left(px(x))
                 .top(px(y))
@@ -294,7 +296,7 @@ impl Loader {
                 .rounded_full()
                 .bg(color)
                 .with_animation(
-                    format!("{}-oval-anim-{index}", self.id),
+                    self.id.slot_index("oval-anim", index.to_string()),
                     animation,
                     move |this, delta| {
                         let distance = (delta - phase).rem_euclid(1.0);
@@ -327,13 +329,10 @@ impl Loader {
     }
 }
 
-impl WithId for Loader {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Loader {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -350,20 +349,16 @@ impl RenderOnce for Loader {
 }
 
 impl LoaderElement for Loader {
+    fn with_id(self, id: impl Into<ComponentId>) -> Self {
+        Loader::with_id(self, id)
+    }
+
     fn size(self, size: Size) -> Self {
         Loader::size(self, size)
     }
 
     fn color(self, color: impl Into<Hsla>) -> Self {
         Loader::color(self, color)
-    }
-}
-
-impl IntoElement for Loader {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

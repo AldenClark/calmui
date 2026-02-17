@@ -6,14 +6,13 @@ use std::{
 };
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, Component, FocusHandle, InteractiveElement, IntoElement,
+    Animation, AnimationExt, AnyElement, FocusHandle, InteractiveElement, IntoElement,
     KeyDownEvent, ParentElement, RenderOnce, SharedString, StatefulInteractiveElement, Styled,
     Window, div, px,
 };
 
-use crate::contracts::WithId;
 use crate::contracts::{FieldLike, MotionAware, Sizeable, VariantConfigurable};
-use crate::id::stable_auto_id;
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
 
@@ -38,8 +37,9 @@ struct PasswordRevealState {
 static PASSWORD_REVEAL_STATE: LazyLock<Mutex<HashMap<String, PasswordRevealState>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+#[derive(IntoElement)]
 pub struct TextInput {
-    id: String,
+    id: ComponentId,
     value: Option<SharedString>,
     value_controlled: bool,
     default_value: SharedString,
@@ -71,7 +71,7 @@ impl TextInput {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("text-input"),
+            id: ComponentId::default(),
             value: None,
             value_controlled: false,
             default_value: SharedString::default(),
@@ -325,7 +325,7 @@ impl TextInput {
         let is_focused = handle_focused || tracked_focus;
 
         let mut input = div()
-            .id(format!("{}-box", self.id))
+            .id(self.id.slot("box"))
             .focusable()
             .flex()
             .flex_row()
@@ -462,14 +462,14 @@ impl TextInput {
             let caret_color = resolve_hsla(&self.theme, &tokens.fg);
             value_container = value_container.child(
                 div()
-                    .id(format!("{}-caret", self.id))
+                    .id(self.id.slot("caret"))
                     .flex_none()
                     .w(quantized_stroke_px(window, 1.5))
                     .h(px(self.caret_height_px()))
                     .bg(caret_color)
                     .rounded_sm()
                     .with_animation(
-                        format!("{}-caret-blink", self.id),
+                        self.id.slot("caret-blink"),
                         Animation::new(Duration::from_millis(CARET_BLINK_CYCLE_MS))
                             .repeat()
                             .with_easing(gpui::linear),
@@ -493,7 +493,7 @@ impl TextInput {
         }
 
         input
-            .with_enter_transition(format!("{}-enter", self.id), self.motion)
+            .with_enter_transition(self.id.slot("enter"), self.motion)
             .into_any_element()
     }
 
@@ -554,13 +554,10 @@ impl TextInput {
     }
 }
 
-impl WithId for TextInput {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl TextInput {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -634,14 +631,7 @@ impl RenderOnce for TextInput {
     }
 }
 
-impl IntoElement for TextInput {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
-    }
-}
-
+#[derive(IntoElement)]
 pub struct PasswordInput {
     inner: TextInput,
     style: gpui::StyleRefinement,
@@ -743,13 +733,10 @@ impl PasswordInput {
     }
 }
 
-impl WithId for PasswordInput {
-    fn id(&self) -> &str {
-        self.inner.id()
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        self.inner.id_mut()
+impl PasswordInput {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.inner = self.inner.with_id(id);
+        self
     }
 }
 
@@ -812,16 +799,9 @@ impl RenderOnce for PasswordInput {
     }
 }
 
-impl IntoElement for PasswordInput {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
-    }
-}
-
+#[derive(IntoElement)]
 pub struct PinInput {
-    id: String,
+    id: ComponentId,
     value: Option<SharedString>,
     value_controlled: bool,
     default_value: SharedString,
@@ -842,7 +822,7 @@ impl PinInput {
     #[track_caller]
     pub fn new(length: usize) -> Self {
         Self {
-            id: stable_auto_id("pin-input"),
+            id: ComponentId::default(),
             value: None,
             value_controlled: false,
             default_value: SharedString::default(),
@@ -918,13 +898,10 @@ impl PinInput {
     }
 }
 
-impl WithId for PinInput {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl PinInput {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -1089,13 +1066,13 @@ impl RenderOnce for PinInput {
             {
                 cell = cell.child(
                     div()
-                        .id(format!("{}-caret-{index}", self.id))
+                        .id(self.id.slot_index("caret", index.to_string()))
                         .w(quantized_stroke_px(window, 1.5))
                         .h(px(caret_height))
                         .bg(caret_color)
                         .rounded_sm()
                         .with_animation(
-                            format!("{}-caret-blink-{index}", self.id),
+                            self.id.slot_index("caret-blink", index.to_string()),
                             Animation::new(Duration::from_millis(CARET_BLINK_CYCLE_MS))
                                 .repeat()
                                 .with_easing(gpui::linear),
@@ -1111,12 +1088,12 @@ impl RenderOnce for PinInput {
         }
 
         let field = root
-            .with_enter_transition(format!("{}-enter", self.id), self.motion)
+            .with_enter_transition(self.id.slot("enter"), self.motion)
             .into_any_element();
 
         if let Some(error) = self.error {
             Stack::vertical()
-                .id(format!("{}-field", self.id))
+                .id(self.id.slot("field"))
                 .gap_1()
                 .child(field)
                 .child(
@@ -1132,14 +1109,6 @@ impl RenderOnce for PinInput {
         } else {
             field
         }
-    }
-}
-
-impl IntoElement for PinInput {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

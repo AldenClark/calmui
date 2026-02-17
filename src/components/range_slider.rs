@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    AppContext, ClickEvent, Component, EmptyView, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, canvas, div, px,
+    AppContext, ClickEvent, EmptyView, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    SharedString, StatefulInteractiveElement, Styled, Window, canvas, div, px,
 };
 
-use crate::contracts::{MotionAware, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
@@ -41,8 +41,9 @@ struct RangeSliderDragState {
     fallback_right: f32,
 }
 
+#[derive(IntoElement)]
 pub struct RangeSlider {
-    id: String,
+    id: ComponentId,
     values: Option<(f32, f32)>,
     values_controlled: bool,
     default_values: (f32, f32),
@@ -67,7 +68,7 @@ impl RangeSlider {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("range-slider"),
+            id: ComponentId::default(),
             values: None,
             values_controlled: false,
             default_values: (20.0, 80.0),
@@ -267,13 +268,10 @@ impl RangeSlider {
     }
 }
 
-impl WithId for RangeSlider {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl RangeSlider {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -327,7 +325,7 @@ impl RenderOnce for RangeSlider {
             let fill_height = (fill_bottom - fill_top).max(0.0);
 
             let mut track = div()
-                .id(format!("{}-track", self.id))
+                .id(self.id.slot("track"))
                 .absolute()
                 .top_0()
                 .left(px(track_left))
@@ -339,7 +337,7 @@ impl RenderOnce for RangeSlider {
             track = apply_radius(&self.theme, track, self.radius);
 
             let mut fill = div()
-                .id(format!("{}-range-fill", self.id))
+                .id(self.id.slot("range-fill"))
                 .absolute()
                 .top(px(fill_top))
                 .left(px(track_left))
@@ -349,7 +347,7 @@ impl RenderOnce for RangeSlider {
             fill = apply_radius(&self.theme, fill, self.radius);
 
             let mut left_thumb = div()
-                .id(format!("{}-thumb-left", self.id))
+                .id(self.id.slot("thumb-left"))
                 .absolute()
                 .top(px(left_thumb_y))
                 .left_0()
@@ -362,7 +360,7 @@ impl RenderOnce for RangeSlider {
             left_thumb = apply_radius(&self.theme, left_thumb, Radius::Pill);
 
             let mut right_thumb = div()
-                .id(format!("{}-thumb-right", self.id))
+                .id(self.id.slot("thumb-right"))
                 .absolute()
                 .top(px(right_thumb_y))
                 .left_0()
@@ -376,7 +374,7 @@ impl RenderOnce for RangeSlider {
 
             if !self.disabled {
                 let drag_common = |thumb: RangeThumb| RangeSliderDragState {
-                    slider_id: self.id.clone(),
+                    slider_id: self.id.to_string(),
                     thumb,
                     min: self.min,
                     max: self.max,
@@ -388,8 +386,8 @@ impl RenderOnce for RangeSlider {
 
                 let on_change_for_drag_left = self.on_change.clone();
                 let on_change_for_drag_right = self.on_change.clone();
-                let slider_id_for_drag_left = self.id.clone();
-                let slider_id_for_drag_right = self.id.clone();
+                let slider_id_for_drag_left = self.id.to_string();
+                let slider_id_for_drag_right = self.id.to_string();
 
                 left_thumb = left_thumb
                     .on_drag(drag_common(RangeThumb::Left), |_drag, _, _, cx| {
@@ -465,7 +463,7 @@ impl RenderOnce for RangeSlider {
             }
 
             let mut rail = div()
-                .id(format!("{}-rail", self.id))
+                .id(self.id.slot("rail"))
                 .relative()
                 .w(px(thumb_size))
                 .h(px(track_len))
@@ -566,11 +564,11 @@ impl RenderOnce for RangeSlider {
 
             return container
                 .child(rail)
-                .with_enter_transition(format!("{}-enter", self.id), self.motion);
+                .with_enter_transition(self.id.slot("enter"), self.motion);
         }
 
         let mut track = div()
-            .id(format!("{}-track", self.id))
+            .id(self.id.slot("track"))
             .absolute()
             .top(px(track_top))
             .left_0()
@@ -585,7 +583,7 @@ impl RenderOnce for RangeSlider {
         let fill_right = right_thumb_x + (thumb_size * 0.5);
         let fill_width = (fill_right - fill_left).max(0.0);
         let fill = div()
-            .id(format!("{}-range-fill", self.id))
+            .id(self.id.slot("range-fill"))
             .absolute()
             .top(px(track_top))
             .left(px(fill_left))
@@ -594,7 +592,7 @@ impl RenderOnce for RangeSlider {
             .bg(resolve_hsla(&self.theme, &tokens.range_bg));
 
         let mut left_thumb = div()
-            .id(format!("{}-thumb-left", self.id))
+            .id(self.id.slot("thumb-left"))
             .absolute()
             .top_0()
             .left(px(left_thumb_x))
@@ -607,7 +605,7 @@ impl RenderOnce for RangeSlider {
         left_thumb = apply_radius(&self.theme, left_thumb, Radius::Pill);
 
         let mut right_thumb = div()
-            .id(format!("{}-thumb-right", self.id))
+            .id(self.id.slot("thumb-right"))
             .absolute()
             .top_0()
             .left(px(right_thumb_x))
@@ -621,7 +619,7 @@ impl RenderOnce for RangeSlider {
 
         if !self.disabled {
             let drag_common = |thumb: RangeThumb| RangeSliderDragState {
-                slider_id: self.id.clone(),
+                slider_id: self.id.to_string(),
                 thumb,
                 min: self.min,
                 max: self.max,
@@ -633,8 +631,8 @@ impl RenderOnce for RangeSlider {
 
             let on_change_for_drag_left = self.on_change.clone();
             let on_change_for_drag_right = self.on_change.clone();
-            let slider_id_for_drag_left = self.id.clone();
-            let slider_id_for_drag_right = self.id.clone();
+            let slider_id_for_drag_left = self.id.to_string();
+            let slider_id_for_drag_right = self.id.to_string();
 
             left_thumb = left_thumb
                 .on_drag(drag_common(RangeThumb::Left), |_drag, _, _, cx| {
@@ -720,7 +718,7 @@ impl RenderOnce for RangeSlider {
         }
 
         let mut rail = div()
-            .id(format!("{}-rail", self.id))
+            .id(self.id.slot("rail"))
             .relative()
             .w(px(self.width_px))
             .h(px(thumb_size))
@@ -821,15 +819,7 @@ impl RenderOnce for RangeSlider {
 
         container
             .child(rail)
-            .with_enter_transition(format!("{}-enter", self.id), self.motion)
-    }
-}
-
-impl IntoElement for RangeSlider {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+            .with_enter_transition(self.id.slot("enter"), self.motion)
     }
 }
 

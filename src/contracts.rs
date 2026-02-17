@@ -197,16 +197,6 @@ macro_rules! impl_themable {
     };
 }
 
-pub trait WithId: Sized {
-    fn id(&self) -> &str;
-    fn id_mut(&mut self) -> &mut String;
-
-    fn with_id(mut self, id: impl Into<String>) -> Self {
-        *self.id_mut() = id.into();
-        self
-    }
-}
-
 pub trait GpuiRenderComponent: gpui::Render {}
 
 impl<T> GpuiRenderComponent for T where T: gpui::Render {}

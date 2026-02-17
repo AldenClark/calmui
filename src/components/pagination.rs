@@ -1,12 +1,12 @@
 use std::{collections::BTreeSet, rc::Rc};
 
 use gpui::{
-    ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    ClickEvent, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
@@ -23,8 +23,9 @@ enum PaginationNode {
     Ellipsis,
 }
 
+#[derive(IntoElement)]
 pub struct Pagination {
-    id: String,
+    id: ComponentId,
     total: usize,
     value: Option<usize>,
     value_controlled: bool,
@@ -45,7 +46,7 @@ impl Pagination {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("pagination"),
+            id: ComponentId::default(),
             total: 1,
             value: None,
             value_controlled: false,
@@ -192,13 +193,10 @@ impl Pagination {
     }
 }
 
-impl WithId for Pagination {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Pagination {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -239,7 +237,7 @@ impl RenderOnce for Pagination {
         let controlled = self.value_controlled;
         let pagination_id = self.id.clone();
 
-        let make_item = |id_suffix: String, label: String, target: usize, disabled: bool| {
+        let make_item = |id_suffix: ElementId, label: String, target: usize, disabled: bool| {
             let mut item = div()
                 .id(id_suffix)
                 .border(super::utils::quantized_stroke_px(window, 1.0))
@@ -284,7 +282,7 @@ impl RenderOnce for Pagination {
         let next_disabled = current >= total || self.disabled;
 
         let mut children = vec![make_item(
-            format!("{}-prev", self.id),
+            self.id.slot("prev"),
             "Prev".to_string(),
             current.saturating_sub(1).max(1),
             prev_disabled,
@@ -295,7 +293,7 @@ impl RenderOnce for Pagination {
                 PaginationNode::Page(page) => {
                     let is_active = page == current;
                     let mut page_item = div()
-                        .id(format!("{}-page-{index}", self.id))
+                        .id(self.id.slot_index("page", index.to_string()))
                         .border(super::utils::quantized_stroke_px(window, 1.0))
                         .border_color(resolve_hsla(&theme, &tokens.item_border))
                         .bg(if is_active {
@@ -343,7 +341,7 @@ impl RenderOnce for Pagination {
                 }
                 PaginationNode::Ellipsis => {
                     let mut dots = div()
-                        .id(format!("{}-dots-{index}", self.id))
+                        .id(self.id.slot_index("dots", index.to_string()))
                         .text_color(resolve_hsla(&theme, &tokens.dots_fg))
                         .child("...");
                     dots = Self::apply_item_size(self.size, dots);
@@ -353,7 +351,7 @@ impl RenderOnce for Pagination {
         }
 
         children.push(make_item(
-            format!("{}-next", self.id),
+            self.id.slot("next"),
             "Next".to_string(),
             (current + 1).min(total),
             next_disabled,
@@ -364,15 +362,7 @@ impl RenderOnce for Pagination {
             .items_center()
             .gap_1()
             .children(children)
-            .with_enter_transition(format!("{}-enter", self.id), self.motion)
-    }
-}
-
-impl IntoElement for Pagination {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+            .with_enter_transition(self.id.slot("enter"), self.motion)
     }
 }
 

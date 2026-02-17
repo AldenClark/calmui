@@ -1,13 +1,13 @@
 use std::{rc::Rc, time::Duration};
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, AppContext, ClickEvent, ClipboardItem, Component,
-    EmptyView, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, canvas, div, px,
+    Animation, AnimationExt, AnyElement, AppContext, ClickEvent, ClipboardItem, EmptyView,
+    FocusHandle, InteractiveElement, IntoElement, KeyDownEvent, ParentElement, RenderOnce,
+    SharedString, StatefulInteractiveElement, Styled, Window, canvas, div, px,
 };
 
-use crate::contracts::{FieldLike, MotionAware, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{FieldLike, MotionAware, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
 
@@ -27,8 +27,9 @@ struct TextareaSelectionDragState {
     anchor: usize,
 }
 
+#[derive(IntoElement)]
 pub struct Textarea {
-    id: String,
+    id: ComponentId,
     value: Option<SharedString>,
     value_controlled: bool,
     default_value: SharedString,
@@ -57,7 +58,7 @@ impl Textarea {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("textarea"),
+            id: ComponentId::default(),
             value: None,
             value_controlled: false,
             default_value: SharedString::default(),
@@ -593,7 +594,7 @@ impl Textarea {
         let box_height = (rows as f32 * line_height) + (vertical_padding * 2.0) + 2.0;
 
         let mut input = div()
-            .id(format!("{}-box", self.id))
+            .id(self.id.slot("box"))
             .focusable()
             .flex()
             .flex_col()
@@ -718,10 +719,10 @@ impl Textarea {
 
         if !self.disabled && !self.read_only {
             let drag_state = TextareaSelectionDragState {
-                textarea_id: self.id.clone(),
+                textarea_id: self.id.to_string(),
                 anchor: current_caret,
             };
-            let id_for_drag = self.id.clone();
+            let id_for_drag = self.id.to_string();
             let value_for_drag = current_value.clone();
             let line_height_for_drag = line_height;
             let vertical_padding_for_drag = vertical_padding;
@@ -943,14 +944,14 @@ impl Textarea {
                     let left = line.chars().take(caret_col).collect::<String>();
                     let right = line.chars().skip(caret_col).collect::<String>();
                     let caret = div()
-                        .id(format!("{}-caret", self.id))
+                        .id(self.id.slot("caret"))
                         .flex_none()
                         .w(super::utils::quantized_stroke_px(window, 1.5))
                         .h(px(self.caret_height_px()))
                         .bg(resolve_hsla(&self.theme, &tokens.fg))
                         .rounded_sm()
                         .with_animation(
-                            format!("{}-caret-blink", self.id),
+                            self.id.slot("caret-blink"),
                             Animation::new(Duration::from_millis(CARET_BLINK_CYCLE_MS))
                                 .repeat()
                                 .with_easing(gpui::linear),
@@ -993,14 +994,14 @@ impl Textarea {
             {
                 content = content.child(
                     div()
-                        .id(format!("{}-caret", self.id))
+                        .id(self.id.slot("caret"))
                         .flex_none()
                         .w(super::utils::quantized_stroke_px(window, 1.5))
                         .h(px(self.caret_height_px()))
                         .bg(resolve_hsla(&self.theme, &tokens.fg))
                         .rounded_sm()
                         .with_animation(
-                            format!("{}-caret-blink", self.id),
+                            self.id.slot("caret-blink"),
                             Animation::new(Duration::from_millis(CARET_BLINK_CYCLE_MS))
                                 .repeat()
                                 .with_easing(gpui::linear),
@@ -1016,18 +1017,15 @@ impl Textarea {
         }
 
         input
-            .with_enter_transition(format!("{}-enter", self.id), self.motion)
+            .with_enter_transition(self.id.slot("enter"), self.motion)
             .into_any_element()
     }
 }
 
-impl WithId for Textarea {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Textarea {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -1096,14 +1094,6 @@ impl RenderOnce for Textarea {
                 .child(div().w(px(168.0)).child(self.render_label_block()))
                 .child(div().flex_1().child(self.render_input_box(window))),
         }
-    }
-}
-
-impl IntoElement for Textarea {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

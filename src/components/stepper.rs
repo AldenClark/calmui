@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
 
@@ -53,8 +53,9 @@ impl StepperStep {
     }
 }
 
+#[derive(IntoElement)]
 pub struct Stepper {
-    id: String,
+    id: ComponentId,
     steps: Vec<StepperStep>,
     active: Option<usize>,
     active_controlled: bool,
@@ -74,7 +75,7 @@ impl Stepper {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("stepper"),
+            id: ComponentId::default(),
             steps: Vec::new(),
             active: None,
             active_controlled: false,
@@ -186,13 +187,10 @@ impl Stepper {
     }
 }
 
-impl WithId for Stepper {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Stepper {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -286,7 +284,7 @@ impl RenderOnce for Stepper {
                 };
 
                 let mut indicator = div()
-                    .id(format!("{}-indicator-{index}", self.id))
+                    .id(self.id.slot_index("indicator", index.to_string()))
                     .w(px(indicator_size))
                     .h(px(indicator_size))
                     .flex()
@@ -327,7 +325,7 @@ impl RenderOnce for Stepper {
                 let mut item = match self.orientation {
                     GroupOrientation::Horizontal => match self.content_position {
                         StepperContentPosition::Below => Stack::vertical()
-                            .id(format!("{}-step-{index}", self.id))
+                            .id(self.id.slot_index("step", index.to_string()))
                             .items_center()
                             .gap_1()
                             .p_1()
@@ -336,7 +334,7 @@ impl RenderOnce for Stepper {
                             .child(indicator)
                             .child(text_block),
                         StepperContentPosition::Right => Stack::horizontal()
-                            .id(format!("{}-step-{index}", self.id))
+                            .id(self.id.slot_index("step", index.to_string()))
                             .items_center()
                             .gap_2()
                             .p_1()
@@ -346,7 +344,7 @@ impl RenderOnce for Stepper {
                             .child(text_block.min_w_0()),
                     },
                     GroupOrientation::Vertical => Stack::horizontal()
-                        .id(format!("{}-step-{index}", self.id))
+                        .id(self.id.slot_index("step", index.to_string()))
                         .items_start()
                         .gap_2()
                         .p_1()
@@ -385,7 +383,7 @@ impl RenderOnce for Stepper {
         let mut steps_view = match self.orientation {
             GroupOrientation::Horizontal => {
                 let mut row = Stack::horizontal()
-                    .id(format!("{}-steps-row", self.id))
+                    .id(self.id.slot("steps-row"))
                     .w_full()
                     .items_start();
                 for (index, node) in step_nodes.into_iter().enumerate() {
@@ -409,7 +407,7 @@ impl RenderOnce for Stepper {
             }
             GroupOrientation::Vertical => {
                 let mut col = Stack::vertical()
-                    .id(format!("{}-steps-col", self.id))
+                    .id(self.id.slot("steps-col"))
                     .w_full()
                     .gap_1p5();
                 for (index, node) in step_nodes.into_iter().enumerate() {
@@ -441,7 +439,7 @@ impl RenderOnce for Stepper {
         }
 
         let mut panel = div()
-            .id(format!("{}-panel", self.id))
+            .id(self.id.slot("panel"))
             .w_full()
             .mt_2()
             .p_3()
@@ -478,15 +476,7 @@ impl RenderOnce for Stepper {
             .gap_1p5()
             .child(steps_view)
             .child(panel)
-            .with_enter_transition(format!("{}-enter", self.id), self.motion)
-    }
-}
-
-impl IntoElement for Stepper {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+            .with_enter_transition(self.id.slot("enter"), self.motion)
     }
 }
 

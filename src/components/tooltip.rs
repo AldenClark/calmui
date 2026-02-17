@@ -1,10 +1,10 @@
 use gpui::{
-    AnyElement, Component, Corner, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window, anchored, deferred, div, point, px,
+    AnyElement, Corner, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
+    StatefulInteractiveElement, Styled, Window, anchored, deferred, div, point, px,
 };
 
-use crate::contracts::{MotionAware, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::MotionAware;
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 
 use super::control;
@@ -20,8 +20,9 @@ pub enum TooltipPlacement {
     Bottom,
 }
 
+#[derive(IntoElement)]
 pub struct Tooltip {
-    id: String,
+    id: ComponentId,
     label: SharedString,
     opened: Option<bool>,
     default_opened: bool,
@@ -40,7 +41,7 @@ impl Tooltip {
     #[track_caller]
     pub fn new(label: impl Into<SharedString>) -> Self {
         Self {
-            id: stable_auto_id("tooltip"),
+            id: ComponentId::default(),
             label: label.into(),
             opened: None,
             default_opened: false,
@@ -106,7 +107,7 @@ impl Tooltip {
     fn render_bubble(&self, window: &gpui::Window) -> AnyElement {
         let tokens = &self.theme.components.tooltip;
         div()
-            .id(format!("{}-bubble", self.id))
+            .id(self.id.slot("bubble"))
             .text_xs()
             .px(px(8.0))
             .py(px(5.0))
@@ -116,18 +117,15 @@ impl Tooltip {
             .bg(resolve_hsla(&self.theme, &tokens.bg))
             .text_color(resolve_hsla(&self.theme, &tokens.fg))
             .child(self.label.clone())
-            .with_enter_transition(format!("{}-bubble-enter", self.id), self.motion)
+            .with_enter_transition(self.id.slot("bubble-enter"), self.motion)
             .into_any_element()
     }
 }
 
-impl WithId for Tooltip {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Tooltip {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -154,7 +152,7 @@ impl RenderOnce for Tooltip {
             .unwrap_or_else(|| div().child("target").into_any_element());
 
         let mut trigger = div()
-            .id(format!("{}-trigger", self.id))
+            .id(self.id.slot("trigger"))
             .relative()
             .child(trigger_content);
 
@@ -216,7 +214,7 @@ impl RenderOnce for Tooltip {
 
             let anchor_host = match self.placement {
                 TooltipPlacement::Top => div()
-                    .id(format!("{}-anchor-host", self.id))
+                    .id(self.id.slot("anchor-host"))
                     .absolute()
                     .top_0()
                     .left_0()
@@ -233,7 +231,7 @@ impl RenderOnce for Tooltip {
                     )
                     .into_any_element(),
                 TooltipPlacement::Bottom => div()
-                    .id(format!("{}-anchor-host", self.id))
+                    .id(self.id.slot("anchor-host"))
                     .absolute()
                     .bottom_0()
                     .left_0()
@@ -260,14 +258,6 @@ impl RenderOnce for Tooltip {
             .relative()
             .child(trigger)
             .into_any_element()
-    }
-}
-
-impl IntoElement for Tooltip {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

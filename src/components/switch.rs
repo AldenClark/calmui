@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    Component, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
+    InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
@@ -23,8 +23,9 @@ pub enum SwitchLabelPosition {
     Right,
 }
 
+#[derive(IntoElement)]
 pub struct Switch {
-    id: String,
+    id: ComponentId,
     label: Option<SharedString>,
     label_position: SwitchLabelPosition,
     description: Option<SharedString>,
@@ -43,7 +44,7 @@ impl Switch {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("switch"),
+            id: ComponentId::default(),
             label: None,
             label_position: SwitchLabelPosition::Right,
             description: None,
@@ -112,13 +113,10 @@ impl Switch {
     }
 }
 
-impl WithId for Switch {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Switch {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -318,15 +316,7 @@ impl RenderOnce for Switch {
                 });
         }
 
-        row.with_enter_transition(format!("{}-enter", self.id), self.motion)
-    }
-}
-
-impl IntoElement for Switch {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+        row.with_enter_transition(self.id.slot("enter"), self.motion)
     }
 }
 

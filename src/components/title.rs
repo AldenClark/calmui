@@ -1,16 +1,15 @@
 use gpui::{
-    Component, FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels, Refineable,
-    RenderOnce, SharedString, Styled, Window, div,
+    FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels, Refineable, RenderOnce,
+    SharedString, Styled, Window, div,
 };
 
-use crate::contracts::WithId;
-use crate::id::stable_auto_id;
+use crate::id::ComponentId;
 
 use super::Stack;
 
-#[derive(Debug)]
+#[derive(Debug, IntoElement)]
 pub struct Title {
-    id: String,
+    id: ComponentId,
     text: SharedString,
     subtitle: Option<SharedString>,
     order: u8,
@@ -25,7 +24,7 @@ impl Title {
     #[track_caller]
     pub fn new(text: impl Into<SharedString>) -> Self {
         Self {
-            id: stable_auto_id("title"),
+            id: ComponentId::default(),
             text: text.into(),
             subtitle: None,
             order: 2,
@@ -63,13 +62,10 @@ impl Title {
     }
 }
 
-impl WithId for Title {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Title {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -105,14 +101,6 @@ impl RenderOnce for Title {
         root.style().refine(&self.style);
 
         root
-    }
-}
-
-impl IntoElement for Title {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

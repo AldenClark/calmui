@@ -3,8 +3,8 @@ use gpui::{
     Styled, div, px,
 };
 
-use crate::contracts::{MotionAware, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
@@ -15,7 +15,7 @@ type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 
 #[derive(IntoElement)]
 pub struct Badge {
-    id: String,
+    id: ComponentId,
     label: SharedString,
     variant: Variant,
     size: Size,
@@ -31,7 +31,7 @@ impl Badge {
     #[track_caller]
     pub fn new(label: impl Into<SharedString>) -> Self {
         Self {
-            id: stable_auto_id("badge"),
+            id: ComponentId::default(),
             label: label.into(),
             variant: Variant::Filled,
             size: Size::Sm,
@@ -75,13 +75,10 @@ impl Badge {
     }
 }
 
-impl WithId for Badge {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Badge {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -149,7 +146,7 @@ impl RenderOnce for Badge {
             root = root.child(right());
         }
 
-        root.with_enter_transition(format!("{}-enter", self.id), self.motion)
+        root.with_enter_transition(self.id.slot("enter"), self.motion)
     }
 }
 

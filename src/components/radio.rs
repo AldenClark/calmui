@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    Component, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
+    InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, Radiusable, Sizeable, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, Radiusable, Sizeable, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
 
@@ -18,8 +18,9 @@ use super::utils::resolve_hsla;
 type RadioChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
 type RadioGroupChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
 
+#[derive(IntoElement)]
 pub struct Radio {
-    id: String,
+    id: ComponentId,
     value: SharedString,
     label: SharedString,
     description: Option<SharedString>,
@@ -39,7 +40,7 @@ impl Radio {
     pub fn new(label: impl Into<SharedString>) -> Self {
         let label = label.into();
         Self {
-            id: stable_auto_id("radio"),
+            id: ComponentId::default(),
             value: label.clone(),
             label,
             description: None,
@@ -103,13 +104,10 @@ impl Radio {
     }
 }
 
-impl WithId for Radio {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Radio {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -290,15 +288,7 @@ impl RenderOnce for Radio {
                 });
         }
 
-        row.with_enter_transition(format!("{}-enter", self.id), self.motion)
-    }
-}
-
-impl IntoElement for Radio {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+        row.with_enter_transition(self.id.slot("enter"), self.motion)
     }
 }
 
@@ -331,8 +321,9 @@ impl RadioOption {
     }
 }
 
+#[derive(IntoElement)]
 pub struct RadioGroup {
-    id: String,
+    id: ComponentId,
     options: Vec<RadioOption>,
     value: Option<SharedString>,
     value_controlled: bool,
@@ -350,7 +341,7 @@ impl RadioGroup {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("radio-group"),
+            id: ComponentId::default(),
             options: Vec::new(),
             value: None,
             value_controlled: false,
@@ -417,13 +408,10 @@ impl RadioGroup {
     }
 }
 
-impl WithId for RadioGroup {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl RadioGroup {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -464,7 +452,7 @@ impl RenderOnce for RadioGroup {
                     .as_ref()
                     .is_some_and(|current| current.as_ref() == option.value.as_ref());
                 let mut radio = Radio::new(option.label)
-                    .with_id(format!("{}-option-{index}", self.id))
+                    .with_id(self.id.slot_index("option", index.to_string()))
                     .value(option.value.clone())
                     .checked(checked)
                     .disabled(option.disabled);
@@ -512,14 +500,6 @@ impl RenderOnce for RadioGroup {
                 .gap_2()
                 .children(radios),
         }
-    }
-}
-
-impl IntoElement for RadioGroup {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

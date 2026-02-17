@@ -1,5 +1,5 @@
 use gpui::{
-    AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 use std::time::Duration;
@@ -7,9 +7,9 @@ use std::time::Duration;
 use crate::contracts::Variantable;
 use crate::feedback::{ToastEntry, ToastKind, ToastManager, ToastPosition};
 use crate::icon::{IconRegistry, IconSource};
+use crate::id::ComponentId;
 use crate::motion::{MotionConfig, MotionTransition, TransitionPreset};
 use crate::overlay::{ManagedModal, ModalCloseReason, ModalKind, ModalManager};
-use crate::{contracts::WithId, id::stable_auto_id};
 
 use super::Stack;
 use super::button::Button;
@@ -20,7 +20,7 @@ use super::utils::{deepened_surface_border, resolve_hsla};
 
 #[derive(IntoElement)]
 pub struct ToastLayer {
-    id: String,
+    id: ComponentId,
     manager: ToastManager,
     icons: IconRegistry,
     theme: crate::theme::LocalTheme,
@@ -32,7 +32,7 @@ impl ToastLayer {
     #[track_caller]
     pub fn new(manager: ToastManager) -> Self {
         Self {
-            id: stable_auto_id("toast-layer"),
+            id: ComponentId::default(),
             manager,
             icons: IconRegistry::new(),
             theme: crate::theme::LocalTheme::default(),
@@ -104,7 +104,7 @@ impl ToastLayer {
         let icons = self.icons.clone();
 
         let close_button = div()
-            .id(format!("{}-toast-close-{}", self.id, toast_key))
+            .id(self.id.slot_index("toast-close", (toast_key).to_string()))
             .flex_none()
             .w(gpui::px(24.0))
             .h(gpui::px(24.0))
@@ -121,7 +121,10 @@ impl ToastLayer {
             .active(|style| style.bg(fg.opacity(0.24)))
             .child(
                 Icon::named("x")
-                    .with_id(format!("{}-toast-close-icon-{}", self.id, toast_key))
+                    .with_id(
+                        self.id
+                            .slot_index("toast-close-icon", (toast_key).to_string()),
+                    )
                     .size(13.0)
                     .color(fg)
                     .registry(icons.clone()),
@@ -136,7 +139,7 @@ impl ToastLayer {
             );
 
         let icon_badge = div()
-            .id(format!("{}-toast-icon-{}", self.id, toast_key))
+            .id(self.id.slot_index("toast-icon", (toast_key).to_string()))
             .flex_none()
             .w(gpui::px(24.0))
             .h(gpui::px(24.0))
@@ -146,14 +149,17 @@ impl ToastLayer {
             .justify_center()
             .child(
                 Icon::new(icon)
-                    .with_id(format!("{}-toast-kind-icon-{}", self.id, toast_key))
+                    .with_id(
+                        self.id
+                            .slot_index("toast-kind-icon", (toast_key).to_string()),
+                    )
                     .size(17.0)
                     .color(fg)
                     .registry(icons),
             );
 
         div()
-            .id(format!("{}-toast-{}", self.id, toast_key))
+            .id(self.id.slot_index("toast", (toast_key).to_string()))
             .w(gpui::px(360.0))
             .max_w_full()
             .p_3()
@@ -193,7 +199,7 @@ impl ToastLayer {
                     .children(closable.then_some(close_button)),
             )
             .with_enter_transition(
-                format!("{}-toast-enter-{}", self.id, toast_key),
+                self.id.slot_index("toast-enter", toast_key.to_string()),
                 self.motion,
             )
             .into_any_element()
@@ -287,13 +293,10 @@ impl ToastLayer {
     }
 }
 
-impl WithId for ToastLayer {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl ToastLayer {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -335,8 +338,9 @@ impl RenderOnce for ToastLayer {
     }
 }
 
+#[derive(IntoElement)]
 pub struct ModalLayer {
-    id: String,
+    id: ComponentId,
     manager: ModalManager,
     icons: IconRegistry,
     theme: crate::theme::LocalTheme,
@@ -348,7 +352,7 @@ impl ModalLayer {
     #[track_caller]
     pub fn new(manager: ModalManager) -> Self {
         Self {
-            id: stable_auto_id("modal-layer"),
+            id: ComponentId::default(),
             manager,
             icons: IconRegistry::new(),
             theme: crate::theme::LocalTheme::default(),
@@ -414,7 +418,7 @@ impl ModalLayer {
 
         let close_on_click_outside = entry.close_on_click_outside_enabled();
         let overlay = Overlay::new()
-            .with_id(format!("{}-overlay", self.id))
+            .with_id(self.id.slot("overlay"))
             .coverage(OverlayCoverage::Window)
             .material_mode(OverlayMaterialMode::Auto)
             .color(self.theme.components.modal.overlay_bg.clone())
@@ -449,11 +453,11 @@ impl ModalLayer {
         let mut close_action = div().into_any_element();
         if entry.close_button_enabled() {
             close_action = div()
-                .id(format!("{}-modal-close-{}", self.id, id.0))
+                .id(self.id.slot_index("modal-close", (id.0).to_string()))
                 .cursor_pointer()
                 .child(
                     Icon::named("x")
-                        .with_id(format!("{}-modal-close-icon-{}", self.id, id.0))
+                        .with_id(self.id.slot_index("modal-close-icon", (id.0).to_string()))
                         .size(14.0)
                         .color(title_color)
                         .registry(icons.clone()),
@@ -468,7 +472,7 @@ impl ModalLayer {
         }
 
         let mut panel = div()
-            .id(format!("{}-modal-panel", self.id))
+            .id(self.id.slot("modal-panel"))
             .w(px(entry.width_px()))
             .max_w_full()
             .bg(panel_bg)
@@ -534,14 +538,14 @@ impl ModalLayer {
         }
 
         let panel = panel.with_enter_transition(
-            format!("{}-modal-enter-{}", self.id, id.0),
+            self.id.slot_index("modal-enter", id.0.to_string()),
             entry.motion_ref(),
         );
 
         let close_on_escape = entry.close_on_escape_enabled();
 
         div()
-            .id(format!("{}-modal-root-{}", self.id, id.0))
+            .id(self.id.slot_index("modal-root", (id.0).to_string()))
             .size_full()
             .absolute()
             .top_0()
@@ -568,13 +572,10 @@ impl ModalLayer {
     }
 }
 
-impl WithId for ModalLayer {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl ModalLayer {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -585,14 +586,6 @@ impl RenderOnce for ModalLayer {
             return div().into_any_element();
         };
         self.render_modal(entry, window)
-    }
-}
-
-impl IntoElement for ModalLayer {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

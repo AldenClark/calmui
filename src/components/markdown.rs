@@ -2,14 +2,10 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, LazyLock, Mutex};
 
-use gpui::{
-    Component, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
-    div,
-};
+use gpui::{InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled, div};
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
-use crate::contracts::WithId;
-use crate::id::stable_auto_id;
+use crate::id::ComponentId;
 use crate::style::{Radius, Size};
 
 use super::Stack;
@@ -302,8 +298,9 @@ fn cached_blocks(source: &str) -> Arc<Vec<MarkdownBlock>> {
     parsed
 }
 
+#[derive(IntoElement)]
 pub struct Markdown {
-    id: String,
+    id: ComponentId,
     source: SharedString,
     compact: bool,
     theme: crate::theme::LocalTheme,
@@ -314,7 +311,7 @@ impl Markdown {
     #[track_caller]
     pub fn new(source: impl Into<SharedString>) -> Self {
         Self {
-            id: stable_auto_id("markdown"),
+            id: ComponentId::default(),
             source: source.into(),
             compact: false,
             theme: crate::theme::LocalTheme::default(),
@@ -328,13 +325,10 @@ impl Markdown {
     }
 }
 
-impl WithId for Markdown {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Markdown {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -356,7 +350,7 @@ impl RenderOnce for Markdown {
                 }
                 MarkdownBlock::Paragraph(text) => Text::new(text).into_any_element(),
                 MarkdownBlock::Quote(text) => div()
-                    .id(format!("{}-quote-{index}", self.id))
+                    .id(self.id.slot_index("quote", index.to_string()))
                     .w_full()
                     .pl_3()
                     .py_1()
@@ -427,7 +421,7 @@ impl RenderOnce for Markdown {
                     list.into_any_element()
                 }
                 MarkdownBlock::Rule => div()
-                    .id(format!("{}-rule-{index}", self.id))
+                    .id(self.id.slot_index("rule", index.to_string()))
                     .w_full()
                     .h(super::utils::hairline_px(window))
                     .bg(resolve_hsla(
@@ -440,14 +434,6 @@ impl RenderOnce for Markdown {
         }
 
         root
-    }
-}
-
-impl IntoElement for Markdown {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

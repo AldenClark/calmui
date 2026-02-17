@@ -2,13 +2,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, Component, Hsla, InteractiveElement, IntoElement, MouseButton, ParentElement,
+    AnyElement, ElementId, Hsla, InteractiveElement, IntoElement, MouseButton, ParentElement,
     RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, WindowControlArea, div,
     px, rgb,
 };
 
-use crate::contracts::WithId;
-use crate::id::stable_auto_id;
+use crate::id::ComponentId;
 use crate::theme::ColorScheme;
 
 use super::control;
@@ -74,8 +73,9 @@ struct WindowControls {
     width_px: f32,
 }
 
+#[derive(IntoElement)]
 pub struct TitleBar {
-    id: String,
+    id: ComponentId,
     pub(crate) visible: bool,
     pub(crate) title: Option<SharedString>,
     pub(crate) height_px: f32,
@@ -92,7 +92,7 @@ impl TitleBar {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("title-bar"),
+            id: ComponentId::default(),
             visible: true,
             title: None,
             height_px: default_title_bar_height(),
@@ -203,7 +203,7 @@ impl TitleBar {
             "\u{e922}"
         };
 
-        let button = move |id: String, text: &'static str, close: bool| {
+        let button = move |id: ElementId, text: &'static str, close: bool| {
             let (hover_bg, active_bg, hover_fg) = if close {
                 let close_bg: gpui::Hsla = rgb(0xe81123).into();
                 (close_bg, close_bg.opacity(0.85), gpui::white())
@@ -227,22 +227,22 @@ impl TitleBar {
                 .child(text)
         };
 
-        let close = button(format!("{}-win-close", self.id), "\u{e8bb}", true)
+        let close = button(self.id.slot("win-close"), "\u{e8bb}", true)
             .window_control_area(WindowControlArea::Close)
             .into_any_element();
 
         WindowControls {
             element: div()
-                .id(format!("{}-controls-win", self.id))
+                .id(self.id.slot("controls-win"))
                 .flex()
                 .items_center()
                 .h(px(self.height_px))
                 .child(
-                    button(format!("{}-win-min", self.id), "\u{e921}", false)
+                    button(self.id.slot("win-min"), "\u{e921}", false)
                         .window_control_area(WindowControlArea::Min),
                 )
                 .child(
-                    button(format!("{}-win-max", self.id), max_or_restore_icon, false)
+                    button(self.id.slot("win-max"), max_or_restore_icon, false)
                         .window_control_area(WindowControlArea::Max),
                 )
                 .child(close)
@@ -265,7 +265,7 @@ impl TitleBar {
 
         let on_close_window = self.on_close_window.clone();
         let button =
-            move |id: String, text: &'static str, action: LinuxWindowAction, close: bool| {
+            move |id: ElementId, text: &'static str, action: LinuxWindowAction, close: bool| {
                 let hover_bg = if close {
                     rgb(0xcc3344).into()
                 } else {
@@ -310,24 +310,24 @@ impl TitleBar {
 
         WindowControls {
             element: div()
-                .id(format!("{}-controls-linux", self.id))
+                .id(self.id.slot("controls-linux"))
                 .flex()
                 .items_center()
                 .gap(px(6.0))
                 .child(button(
-                    format!("{}-linux-min", self.id),
+                    self.id.slot("linux-min"),
                     "—",
                     LinuxWindowAction::Minimize,
                     false,
                 ))
                 .child(button(
-                    format!("{}-linux-max", self.id),
+                    self.id.slot("linux-max"),
                     "□",
                     LinuxWindowAction::Zoom,
                     false,
                 ))
                 .child(button(
-                    format!("{}-linux-close", self.id),
+                    self.id.slot("linux-close"),
                     "×",
                     LinuxWindowAction::Close,
                     true,
@@ -354,13 +354,10 @@ impl TitleBar {
     }
 }
 
-impl WithId for TitleBar {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl TitleBar {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -433,7 +430,7 @@ impl RenderOnce for TitleBar {
         if cfg!(target_os = "macos") {
             if has_slot {
                 let mut left_cluster = div()
-                    .id(format!("{}-mac-left", self.id))
+                    .id(self.id.slot("mac-left"))
                     .flex()
                     .items_center()
                     .gap(px(10.0));
@@ -448,7 +445,7 @@ impl RenderOnce for TitleBar {
                 if let Some(slot) = self.slot {
                     row = row.child(
                         div()
-                            .id(format!("{}-mac-slot", self.id))
+                            .id(self.id.slot("mac-slot"))
                             .flex_1()
                             .min_w_0()
                             .h_full()
@@ -460,13 +457,13 @@ impl RenderOnce for TitleBar {
                 }
             } else {
                 let left = div()
-                    .id(format!("{}-mac-left", self.id))
+                    .id(self.id.slot("mac-left"))
                     .w(px(macos_controls_reserve))
                     .h(px(self.height_px))
                     .flex();
 
                 let center = div()
-                    .id(format!("{}-mac-center", self.id))
+                    .id(self.id.slot("mac-center"))
                     .flex_1()
                     .min_w_0()
                     .h_full()
@@ -476,7 +473,7 @@ impl RenderOnce for TitleBar {
                     .children(title_element);
 
                 let right = div()
-                    .id(format!("{}-mac-right", self.id))
+                    .id(self.id.slot("mac-right"))
                     .w(px(macos_controls_reserve))
                     .h(px(self.height_px));
 
@@ -485,7 +482,7 @@ impl RenderOnce for TitleBar {
         } else if cfg!(target_os = "windows") {
             if has_slot {
                 let left_title = div()
-                    .id(format!("{}-win-title", self.id))
+                    .id(self.id.slot("win-title"))
                     .h_full()
                     .max_w(px(320.0))
                     .pr(px(12.0))
@@ -494,7 +491,7 @@ impl RenderOnce for TitleBar {
                     .children(title_element);
 
                 let mut middle_slot = div()
-                    .id(format!("{}-win-slot", self.id))
+                    .id(self.id.slot("win-slot"))
                     .flex_1()
                     .min_w_0()
                     .h_full()
@@ -513,7 +510,7 @@ impl RenderOnce for TitleBar {
                     .child(div().w(px(controls_width)).h(px(self.height_px)))
                     .child(
                         div()
-                            .id(format!("{}-win-center", self.id))
+                            .id(self.id.slot("win-center"))
                             .flex_1()
                             .min_w_0()
                             .h_full()
@@ -536,7 +533,7 @@ impl RenderOnce for TitleBar {
             if has_slot {
                 row = row.child(
                     div()
-                        .id(format!("{}-linux-title", self.id))
+                        .id(self.id.slot("linux-title"))
                         .h_full()
                         .max_w(px(320.0))
                         .pr(px(12.0))
@@ -546,7 +543,7 @@ impl RenderOnce for TitleBar {
                 );
 
                 let mut slot_container = div()
-                    .id(format!("{}-linux-slot", self.id))
+                    .id(self.id.slot("linux-slot"))
                     .flex_1()
                     .min_w_0()
                     .h_full()
@@ -565,7 +562,7 @@ impl RenderOnce for TitleBar {
                     .child(div().w(px(controls_width)).h(px(self.height_px)))
                     .child(
                         div()
-                            .id(format!("{}-linux-center", self.id))
+                            .id(self.id.slot("linux-center"))
                             .flex_1()
                             .min_w_0()
                             .h_full()
@@ -635,7 +632,7 @@ impl RenderOnce for TitleBar {
         if !immersive {
             root = root.child(
                 div()
-                    .id(format!("{}-bottom-border", self.id))
+                    .id(self.id.slot("bottom-border"))
                     .absolute()
                     .left_0()
                     .right_0()
@@ -646,14 +643,6 @@ impl RenderOnce for TitleBar {
         }
 
         root.into_any_element()
-    }
-}
-
-impl IntoElement for TitleBar {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

@@ -1,15 +1,15 @@
 use std::{rc::Rc, str::FromStr, time::Duration};
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, ClickEvent, Component, FocusHandle, InteractiveElement,
-    IntoElement, KeyDownEvent, ParentElement, RenderOnce, SharedString, StatefulInteractiveElement,
-    Styled, Window, div, px,
+    Animation, AnimationExt, AnyElement, ClickEvent, FocusHandle, InteractiveElement, IntoElement,
+    KeyDownEvent, ParentElement, RenderOnce, SharedString, StatefulInteractiveElement, Styled,
+    Window, div, px,
 };
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 
-use crate::contracts::{FieldLike, MotionAware, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{FieldLike, MotionAware, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
 
@@ -25,8 +25,9 @@ type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 const CARET_BLINK_TOGGLE_MS: u64 = 680;
 const CARET_BLINK_CYCLE_MS: u64 = CARET_BLINK_TOGGLE_MS * 2;
 
+#[derive(IntoElement)]
 pub struct NumberInput {
-    id: String,
+    id: ComponentId,
     value: Option<f64>,
     value_controlled: bool,
     default_value: f64,
@@ -60,7 +61,7 @@ impl NumberInput {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("number-input"),
+            id: ComponentId::default(),
             value: None,
             value_controlled: false,
             default_value: 0.0,
@@ -447,7 +448,7 @@ impl NumberInput {
             .is_some_and(|focus_handle| focus_handle.is_focused(window));
 
         let mut input = div()
-            .id(format!("{}-box", self.id))
+            .id(self.id.slot("box"))
             .focusable()
             .flex()
             .items_center()
@@ -542,14 +543,14 @@ impl NumberInput {
         if !self.disabled && !self.read_only && show_caret {
             value_container = value_container.child(
                 div()
-                    .id(format!("{}-caret", self.id))
+                    .id(self.id.slot("caret"))
                     .flex_none()
                     .w(super::utils::quantized_stroke_px(window, 1.5))
                     .h(px(self.caret_height_px()))
                     .bg(resolve_hsla(&self.theme, &tokens.fg))
                     .rounded_sm()
                     .with_animation(
-                        format!("{}-caret-blink", self.id),
+                        self.id.slot("caret-blink"),
                         Animation::new(Duration::from_millis(CARET_BLINK_CYCLE_MS))
                             .repeat()
                             .with_easing(gpui::linear),
@@ -577,7 +578,7 @@ impl NumberInput {
             let controls_border = resolve_hsla(&self.theme, &tokens.controls_border);
 
             let mut up = div()
-                .id(format!("{}-control-up", self.id))
+                .id(self.id.slot("control-up"))
                 .w(px(18.0))
                 .h(px(12.0))
                 .flex()
@@ -589,13 +590,13 @@ impl NumberInput {
                 .border_color(controls_border)
                 .child(
                     Icon::named("chevron-up")
-                        .with_id(format!("{}-chevron-up", self.id))
+                        .with_id(self.id.slot("chevron-up"))
                         .size(12.0)
                         .color(controls_fg),
                 );
 
             let mut down = div()
-                .id(format!("{}-control-down", self.id))
+                .id(self.id.slot("control-down"))
                 .w(px(18.0))
                 .h(px(12.0))
                 .flex()
@@ -607,7 +608,7 @@ impl NumberInput {
                 .border_color(controls_border)
                 .child(
                     Icon::named("chevron-down")
-                        .with_id(format!("{}-chevron-down", self.id))
+                        .with_id(self.id.slot("chevron-down"))
                         .size(12.0)
                         .color(controls_fg),
                 );
@@ -682,18 +683,15 @@ impl NumberInput {
         }
 
         input
-            .with_enter_transition(format!("{}-enter", self.id), self.motion)
+            .with_enter_transition(self.id.slot("enter"), self.motion)
             .into_any_element()
     }
 }
 
-impl WithId for NumberInput {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl NumberInput {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -762,14 +760,6 @@ impl RenderOnce for NumberInput {
                 .child(div().w(px(168.0)).child(self.render_label_block()))
                 .child(div().flex_1().child(self.render_input_box(window))),
         }
-    }
-}
-
-impl IntoElement for NumberInput {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

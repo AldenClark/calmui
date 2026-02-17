@@ -1,12 +1,12 @@
 use std::{collections::BTreeSet, rc::Rc};
 
 use gpui::{
-    Component, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
+    InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, Radiusable, Sizeable, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, Radiusable, Sizeable, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
 
@@ -18,8 +18,9 @@ use super::utils::{apply_radius, resolve_hsla};
 type CheckboxChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
 type CheckboxGroupChangeHandler = Rc<dyn Fn(Vec<SharedString>, &mut Window, &mut gpui::App)>;
 
+#[derive(IntoElement)]
 pub struct Checkbox {
-    id: String,
+    id: ComponentId,
     value: SharedString,
     label: SharedString,
     description: Option<SharedString>,
@@ -39,7 +40,7 @@ impl Checkbox {
     pub fn new(label: impl Into<SharedString>) -> Self {
         let label = label.into();
         Self {
-            id: stable_auto_id("checkbox"),
+            id: ComponentId::default(),
             value: label.clone(),
             label,
             description: None,
@@ -103,13 +104,10 @@ impl Checkbox {
     }
 }
 
-impl WithId for Checkbox {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Checkbox {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -286,15 +284,7 @@ impl RenderOnce for Checkbox {
                 });
         }
 
-        row.with_enter_transition(format!("{}-enter", self.id), self.motion)
-    }
-}
-
-impl IntoElement for Checkbox {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+        row.with_enter_transition(self.id.slot("enter"), self.motion)
     }
 }
 
@@ -327,8 +317,9 @@ impl CheckboxOption {
     }
 }
 
+#[derive(IntoElement)]
 pub struct CheckboxGroup {
-    id: String,
+    id: ComponentId,
     options: Vec<CheckboxOption>,
     values: Vec<SharedString>,
     values_controlled: bool,
@@ -346,7 +337,7 @@ impl CheckboxGroup {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("checkbox-group"),
+            id: ComponentId::default(),
             options: Vec::new(),
             values: Vec::new(),
             values_controlled: false,
@@ -431,13 +422,10 @@ impl CheckboxGroup {
     }
 }
 
-impl WithId for CheckboxGroup {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl CheckboxGroup {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -476,7 +464,7 @@ impl RenderOnce for CheckboxGroup {
             .map(|(index, option)| {
                 let checked = Self::contains_value(&values, &option.value);
                 let mut checkbox = Checkbox::new(option.label)
-                    .with_id(format!("{}-option-{index}", self.id))
+                    .with_id(self.id.slot_index("option", index.to_string()))
                     .value(option.value.clone())
                     .checked(checked)
                     .disabled(option.disabled);
@@ -531,14 +519,6 @@ impl RenderOnce for CheckboxGroup {
                 .gap_2()
                 .children(items),
         }
-    }
-}
-
-impl IntoElement for CheckboxGroup {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

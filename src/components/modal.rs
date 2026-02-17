@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, Variantable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, Variantable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::overlay::{ModalCloseReason, ModalKind, ModalStateChange};
 use crate::style::Variant;
@@ -24,8 +24,9 @@ type CloseHandler = Arc<dyn Fn(ModalCloseReason)>;
 type ActionHandler = Arc<dyn Fn()>;
 type StateChangeHandler = Arc<dyn Fn(ModalStateChange)>;
 
+#[derive(IntoElement)]
 pub struct Modal {
-    id: String,
+    id: ComponentId,
     opened: Option<bool>,
     default_opened: bool,
     title: SharedString,
@@ -54,7 +55,7 @@ impl Modal {
     #[track_caller]
     pub fn new(title: impl Into<SharedString>) -> Self {
         Self {
-            id: stable_auto_id("modal"),
+            id: ComponentId::default(),
             opened: None,
             default_opened: false,
             title: title.into(),
@@ -329,13 +330,10 @@ impl Modal {
     }
 }
 
-impl WithId for Modal {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Modal {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -349,14 +347,6 @@ impl MotionAware for Modal {
 impl RenderOnce for Modal {
     fn render(self, window: &mut gpui::Window, cx: &mut gpui::App) -> impl IntoElement {
         self.render_standalone(window, cx)
-    }
-}
-
-impl IntoElement for Modal {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 
@@ -394,7 +384,7 @@ impl Modal {
         let state_change_for_overlay = self.on_state_change.clone();
 
         let overlay = Overlay::new()
-            .with_id(format!("{}-overlay", self.id))
+            .with_id(self.id.slot("overlay"))
             .coverage(OverlayCoverage::Window)
             .material_mode(OverlayMaterialMode::Auto)
             .color(tokens.overlay_bg.clone())
@@ -420,7 +410,7 @@ impl Modal {
             let close_callbacks_for_close = self.on_close.clone();
             let state_change_for_close = self.on_state_change.clone();
             close_action = div()
-                .id(format!("{}-close", self.id))
+                .id(self.id.slot("close"))
                 .w(px(26.0))
                 .h(px(26.0))
                 .rounded_full()
@@ -437,7 +427,7 @@ impl Modal {
                 .hover(|style| style.opacity(0.8))
                 .child(
                     Icon::named("x")
-                        .with_id(format!("{}-close-icon", self.id))
+                        .with_id(self.id.slot("close-icon"))
                         .size(14.0)
                         .color(resolve_hsla(&self.theme, &tokens.title)),
                 )
@@ -458,7 +448,7 @@ impl Modal {
         }
 
         let mut panel = div()
-            .id(format!("{}-panel", self.id))
+            .id(self.id.slot("panel"))
             .w(px(self.width_px))
             .max_w_full()
             .rounded_lg()
@@ -580,7 +570,7 @@ impl Modal {
             );
         }
 
-        let panel = panel.with_enter_transition(format!("{}-panel-enter", self.id), self.motion);
+        let panel = panel.with_enter_transition(self.id.slot("panel-enter"), self.motion);
 
         let close_on_escape = self.close_on_escape;
         let id_for_escape = self.id.clone();

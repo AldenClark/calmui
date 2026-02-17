@@ -1,12 +1,12 @@
 use std::{collections::BTreeSet, rc::Rc};
 
 use gpui::{
-    Component, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
+    Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
     StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, Radiusable, Sizeable, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, Radiusable, Sizeable, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
 
@@ -24,8 +24,9 @@ pub enum ChipSelectionMode {
     Multiple,
 }
 
+#[derive(IntoElement)]
 pub struct Chip {
-    id: String,
+    id: ComponentId,
     value: SharedString,
     label: SharedString,
     checked: Option<bool>,
@@ -45,7 +46,7 @@ impl Chip {
     pub fn new(label: impl Into<SharedString>) -> Self {
         let label = label.into();
         Self {
-            id: stable_auto_id("chip"),
+            id: ComponentId::default(),
             value: label.clone(),
             label,
             checked: None,
@@ -138,13 +139,10 @@ impl Chip {
     }
 }
 
-impl WithId for Chip {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Chip {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -298,16 +296,8 @@ impl RenderOnce for Chip {
             }
         }
 
-        chip.with_enter_transition(format!("{}-enter", self.id), self.motion)
+        chip.with_enter_transition(self.id.slot("enter"), self.motion)
             .into_any_element()
-    }
-}
-
-impl IntoElement for Chip {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 
@@ -332,8 +322,9 @@ impl ChipOption {
         self
     }
 }
+#[derive(IntoElement)]
 pub struct ChipGroup {
-    id: String,
+    id: ComponentId,
     options: Vec<ChipOption>,
     mode: ChipSelectionMode,
     value: Option<SharedString>,
@@ -356,7 +347,7 @@ impl ChipGroup {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("chip-group"),
+            id: ComponentId::default(),
             options: Vec::new(),
             mode: ChipSelectionMode::Multiple,
             value: None,
@@ -476,13 +467,10 @@ impl ChipGroup {
     }
 }
 
-impl WithId for ChipGroup {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl ChipGroup {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -524,7 +512,7 @@ impl RenderOnce for ChipGroup {
             .map(|(index, option)| {
                 let checked = Self::contains(&selected_values, &option.value);
                 let mut chip = Chip::new(option.label)
-                    .with_id(format!("{}-option-{index}", self.id))
+                    .with_id(self.id.slot_index("option", index.to_string()))
                     .value(option.value.clone())
                     .checked(checked)
                     .disabled(option.disabled)
@@ -629,14 +617,6 @@ impl RenderOnce for ChipGroup {
                 .children(chips)
                 .into_any_element(),
         }
-    }
-}
-
-impl IntoElement for ChipGroup {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

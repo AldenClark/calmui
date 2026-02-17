@@ -1,10 +1,6 @@
-use gpui::{
-    Component, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
-    div,
-};
+use gpui::{InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled, div};
 
-use crate::contracts::WithId;
-use crate::id::stable_auto_id;
+use crate::id::ComponentId;
 use crate::style::Size;
 
 use super::utils::resolve_hsla;
@@ -20,8 +16,9 @@ pub enum TextTone {
     Error,
 }
 
+#[derive(IntoElement)]
 pub struct Text {
-    id: String,
+    id: ComponentId,
     content: SharedString,
     tone: TextTone,
     size: Size,
@@ -36,7 +33,7 @@ impl Text {
     #[track_caller]
     pub fn new(content: impl Into<SharedString>) -> Self {
         Self {
-            id: stable_auto_id("text"),
+            id: ComponentId::default(),
             content: content.into(),
             tone: TextTone::Default,
             size: Size::Md,
@@ -98,13 +95,10 @@ impl Text {
     }
 }
 
-impl WithId for Text {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Text {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -143,14 +137,6 @@ impl RenderOnce for Text {
 
         gpui::Refineable::refine(gpui::Styled::style(&mut node), &self.style);
         node.child(self.content)
-    }
-}
-
-impl IntoElement for Text {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

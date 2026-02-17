@@ -1,13 +1,12 @@
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, Component, Corner, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window, anchored, canvas, deferred, div,
-    point, px,
+    AnyElement, Corner, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
+    StatefulInteractiveElement, Styled, Window, anchored, canvas, deferred, div, point, px,
 };
 
-use crate::contracts::{MotionAware, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::MotionAware;
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 
 use super::Stack;
@@ -32,8 +31,9 @@ pub enum HoverCardPlacement {
     Bottom,
 }
 
+#[derive(IntoElement)]
 pub struct HoverCard {
-    id: String,
+    id: ComponentId,
     title: SharedString,
     body: Option<SharedString>,
     opened: Option<bool>,
@@ -54,7 +54,7 @@ impl HoverCard {
     #[track_caller]
     pub fn new(title: impl Into<SharedString>) -> Self {
         Self {
-            id: stable_auto_id("hover-card"),
+            id: ComponentId::default(),
             title: title.into(),
             body: None,
             opened: None,
@@ -150,7 +150,7 @@ impl HoverCard {
             260.0
         };
         let mut card = Stack::vertical()
-            .id(format!("{}-card", self.id))
+            .id(self.id.slot("card"))
             .gap_1p5()
             .w(px(panel_width))
             .max_w_full()
@@ -221,18 +221,15 @@ impl HoverCard {
             }
         });
 
-        card.with_enter_transition(format!("{}-card-enter", self.id), self.motion)
+        card.with_enter_transition(self.id.slot("card-enter"), self.motion)
             .into_any_element()
     }
 }
 
-impl WithId for HoverCard {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl HoverCard {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -259,7 +256,7 @@ impl RenderOnce for HoverCard {
             .unwrap_or_else(|| div().child("target").into_any_element());
 
         let mut trigger = div()
-            .id(format!("{}-trigger", self.id))
+            .id(self.id.slot("trigger"))
             .relative()
             .child(trigger_content);
         trigger = trigger.child({
@@ -339,7 +336,7 @@ impl RenderOnce for HoverCard {
 
             let anchor_host = match self.placement {
                 HoverCardPlacement::Top => div()
-                    .id(format!("{}-anchor-host", self.id))
+                    .id(self.id.slot("anchor-host"))
                     .absolute()
                     .top_0()
                     .left_0()
@@ -356,7 +353,7 @@ impl RenderOnce for HoverCard {
                     )
                     .into_any_element(),
                 HoverCardPlacement::Bottom => div()
-                    .id(format!("{}-anchor-host", self.id))
+                    .id(self.id.slot("anchor-host"))
                     .absolute()
                     .bottom_0()
                     .left_0()
@@ -383,14 +380,6 @@ impl RenderOnce for HoverCard {
             .relative()
             .child(trigger)
             .into_any_element()
-    }
-}
-
-impl IntoElement for HoverCard {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

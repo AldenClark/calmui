@@ -1,12 +1,12 @@
 use std::{collections::BTreeSet, rc::Rc};
 
 use gpui::{
-    AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
@@ -60,8 +60,9 @@ impl TreeNode {
     }
 }
 
+#[derive(IntoElement)]
 pub struct Tree {
-    id: String,
+    id: ComponentId,
     nodes: Vec<TreeNode>,
     value: Option<SharedString>,
     value_controlled: bool,
@@ -85,7 +86,7 @@ impl Tree {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("tree"),
+            id: ComponentId::default(),
             nodes: Vec::new(),
             value: None,
             value_controlled: false,
@@ -246,13 +247,10 @@ impl Tree {
     }
 }
 
-impl WithId for Tree {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Tree {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -288,7 +286,7 @@ pub enum TreeTogglePosition {
 
 #[derive(Clone)]
 struct TreeRenderCtx {
-    tree_id: String,
+    tree_id: ComponentId,
     theme: crate::theme::LocalTheme,
     tokens: crate::theme::TreeTokens,
     selected: Option<SharedString>,
@@ -331,7 +329,7 @@ impl TreeRenderCtx {
             .is_some_and(|selected| selected.as_ref() == node.value.as_ref());
 
         let mut row = div()
-            .id(format!("{}-row-{path}", self.tree_id))
+            .id(self.tree_id.slot_index("row", path.clone()))
             .w_full()
             .flex()
             .items_center()
@@ -360,7 +358,7 @@ impl TreeRenderCtx {
         row = apply_radius(&self.theme, row, self.radius);
 
         let mut toggle = div()
-            .id(format!("{}-toggle-{path}", self.tree_id))
+            .id(self.tree_id.slot_index("toggle", path.clone()))
             .w(px(16.0))
             .h(px(16.0))
             .flex()
@@ -373,7 +371,7 @@ impl TreeRenderCtx {
                 } else {
                     "chevron-right"
                 })
-                .with_id(format!("{}-chevron-{path}", self.tree_id))
+                .with_id(self.tree_id.slot_index("chevron", path.clone()))
                 .size(13.0),
             );
             if !node.disabled {
@@ -414,7 +412,7 @@ impl TreeRenderCtx {
         let connector = if self.show_lines && depth > 0 {
             Some(
                 div()
-                    .id(format!("{}-line-h-{path}", self.tree_id))
+                    .id(self.tree_id.slot_index("line-h", path.clone()))
                     .w(px(8.0))
                     .h(super::utils::hairline_px(window))
                     .bg(resolve_hsla(&self.theme, &self.tokens.line))
@@ -425,7 +423,7 @@ impl TreeRenderCtx {
         };
 
         let label = div()
-            .id(format!("{}-label-{path}", self.tree_id))
+            .id(self.tree_id.slot_index("label", path.clone()))
             .flex_1()
             .min_w_0()
             .truncate()
@@ -466,14 +464,14 @@ impl TreeRenderCtx {
         }
 
         let mut wrapper = Stack::vertical()
-            .id(format!("{}-node-{path}", self.tree_id))
+            .id(self.tree_id.slot_index("node", path.clone()))
             .w_full()
             .gap_0()
             .child(row);
 
         if has_children && is_expanded {
             let mut child_list = Stack::vertical()
-                .id(format!("{}-children-{path}", self.tree_id))
+                .id(self.tree_id.slot_index("children", path.clone()))
                 .w_full()
                 .gap_0();
             if self.show_lines {
@@ -538,15 +536,7 @@ impl RenderOnce for Tree {
         }
 
         gpui::Refineable::refine(gpui::Styled::style(&mut root), &self.style);
-        root.with_enter_transition(format!("{}-enter", self.id), self.motion)
-    }
-}
-
-impl IntoElement for Tree {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+        root.with_enter_transition(self.id.slot("enter"), self.motion)
     }
 }
 

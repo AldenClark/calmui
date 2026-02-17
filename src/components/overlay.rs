@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, Hsla, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, StatefulInteractiveElement, Styled, Window, backdrop, canvas, div, px,
+    AnyElement, ClickEvent, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    StatefulInteractiveElement, Styled, Window, backdrop, canvas, div, px,
 };
 
-use crate::contracts::{MotionAware, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::MotionAware;
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 
 use super::transition::TransitionExt;
@@ -29,8 +29,9 @@ pub enum OverlayCoverage {
     Window,
 }
 
+#[derive(IntoElement)]
 pub struct Overlay {
-    id: String,
+    id: ComponentId,
     visible: bool,
     absolute: bool,
     cover_parent: bool,
@@ -51,7 +52,7 @@ impl Overlay {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("overlay"),
+            id: ComponentId::default(),
             visible: true,
             absolute: true,
             cover_parent: true,
@@ -136,13 +137,10 @@ impl Overlay {
     }
 }
 
-impl WithId for Overlay {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Overlay {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -236,16 +234,8 @@ impl RenderOnce for Overlay {
             root = root.child(content());
         }
 
-        root.with_enter_transition(format!("{}-enter", self.id), self.motion)
+        root.with_enter_transition(self.id.slot("enter"), self.motion)
             .into_any_element()
-    }
-}
-
-impl IntoElement for Overlay {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

@@ -1,10 +1,9 @@
 use gpui::{
-    AnyElement, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    AnyElement, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::WithId;
-use crate::id::stable_auto_id;
+use crate::id::ComponentId;
 use crate::style::Size;
 
 use super::utils::resolve_hsla;
@@ -16,8 +15,9 @@ pub enum ScrollDirection {
     Both,
 }
 
+#[derive(IntoElement)]
 pub struct ScrollArea {
-    id: String,
+    id: ComponentId,
     viewport_height_px: Option<f32>,
     viewport_width_px: Option<f32>,
     padding: Size,
@@ -33,7 +33,7 @@ impl ScrollArea {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("scroll-area"),
+            id: ComponentId::default(),
             viewport_height_px: None,
             viewport_width_px: None,
             padding: Size::Md,
@@ -108,13 +108,10 @@ impl ParentElement for ScrollArea {
     }
 }
 
-impl WithId for ScrollArea {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl ScrollArea {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -122,7 +119,7 @@ impl RenderOnce for ScrollArea {
     fn render(mut self, window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.scroll_area;
-        let mut viewport = div().id(format!("{}-viewport", self.id)).w_full().min_h_0();
+        let mut viewport = div().id(self.id.slot("viewport")).w_full().min_h_0();
 
         viewport = match self.direction {
             ScrollDirection::Vertical => viewport.overflow_y_scroll(),
@@ -160,14 +157,6 @@ impl RenderOnce for ScrollArea {
         }
 
         root.child(viewport)
-    }
-}
-
-impl IntoElement for ScrollArea {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

@@ -1,13 +1,13 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, Corner, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, anchored, canvas,
-    deferred, div, point, px,
+    AnyElement, ClickEvent, Corner, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    SharedString, StatefulInteractiveElement, Styled, Window, anchored, canvas, deferred, div,
+    point, px,
 };
 
-use crate::contracts::{MotionAware, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::MotionAware;
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 
 use super::Stack;
@@ -49,8 +49,9 @@ impl MenuItem {
     }
 }
 
+#[derive(IntoElement)]
 pub struct Menu {
-    id: String,
+    id: ComponentId,
     opened: Option<bool>,
     default_opened: bool,
     disabled: bool,
@@ -70,7 +71,7 @@ impl Menu {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("menu"),
+            id: ComponentId::default(),
             opened: None,
             default_opened: false,
             disabled: false,
@@ -174,7 +175,7 @@ impl Menu {
             .cloned()
             .map(|item| {
                 let mut row = div()
-                    .id(format!("{}-item-{}", self.id, item.value))
+                    .id(self.id.slot_index("item", (item.value).to_string()))
                     .flex()
                     .items_center()
                     .gap_2()
@@ -191,7 +192,7 @@ impl Menu {
                 if let Some(icon) = item.left_icon.clone() {
                     row = row.child(
                         Icon::named(icon.to_string())
-                            .with_id(format!("{}-item-icon-{}", self.id, item.value))
+                            .with_id(self.id.slot_index("item-icon", (item.value).to_string()))
                             .size(14.0)
                             .color(resolve_hsla(&self.theme, &tokens.icon)),
                     );
@@ -238,7 +239,7 @@ impl Menu {
             .collect::<Vec<_>>();
 
         let mut dropdown = Stack::vertical()
-            .id(format!("{}-dropdown", self.id))
+            .id(self.id.slot("dropdown"))
             .w(px(Self::dropdown_width_px(&self.id)))
             .max_w_full()
             .p_1p5()
@@ -270,18 +271,15 @@ impl Menu {
         }
 
         dropdown
-            .with_enter_transition(format!("{}-dropdown-enter", self.id), self.motion)
+            .with_enter_transition(self.id.slot("dropdown-enter"), self.motion)
             .into_any_element()
     }
 }
 
-impl WithId for Menu {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Menu {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -303,7 +301,7 @@ impl RenderOnce for Menu {
         let is_controlled = self.opened.is_some();
 
         let mut trigger = div()
-            .id(format!("{}-trigger", self.id))
+            .id(self.id.slot("trigger"))
             .relative()
             .cursor_pointer()
             .child(
@@ -352,7 +350,7 @@ impl RenderOnce for Menu {
         if opened {
             let dropdown = self.render_dropdown(is_controlled, window);
             let anchor_host = div()
-                .id(format!("{}-anchor-host", self.id))
+                .id(self.id.slot("anchor-host"))
                 .absolute()
                 .bottom_0()
                 .left_0()
@@ -372,14 +370,6 @@ impl RenderOnce for Menu {
         }
 
         div().id(self.id.clone()).relative().child(trigger)
-    }
-}
-
-impl IntoElement for Menu {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

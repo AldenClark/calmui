@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    AppContext, ClickEvent, Component, EmptyView, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div, px,
+    AppContext, ClickEvent, EmptyView, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
@@ -32,8 +32,9 @@ pub enum SliderOrientation {
     Vertical,
 }
 
+#[derive(IntoElement)]
 pub struct Slider {
-    id: String,
+    id: ComponentId,
     value: f32,
     value_controlled: bool,
     default_value: f32,
@@ -58,7 +59,7 @@ impl Slider {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("slider"),
+            id: ComponentId::default(),
             value: 0.0,
             value_controlled: false,
             default_value: 0.0,
@@ -219,13 +220,10 @@ impl Slider {
     }
 }
 
-impl WithId for Slider {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Slider {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -275,7 +273,7 @@ impl RenderOnce for Slider {
             let thumb_top = ((track_len - thumb_size) * (1.0 - ratio)).max(0.0);
 
             let mut track = div()
-                .id(format!("{}-track", self.id))
+                .id(self.id.slot("track"))
                 .absolute()
                 .top_0()
                 .left(px(track_left))
@@ -290,7 +288,7 @@ impl RenderOnce for Slider {
             let fill_top = (thumb_top + (thumb_size * 0.5)).clamp(0.0, track_len);
             let fill_height = (track_len - fill_top).max(0.0);
             let mut fill = div()
-                .id(format!("{}-fill", self.id))
+                .id(self.id.slot("fill"))
                 .absolute()
                 .left(px(track_left))
                 .top(px(fill_top))
@@ -300,7 +298,7 @@ impl RenderOnce for Slider {
             fill = apply_radius(&self.theme, fill, self.radius);
 
             let mut thumb = div()
-                .id(format!("{}-thumb", self.id))
+                .id(self.id.slot("thumb"))
                 .absolute()
                 .top(px(thumb_top))
                 .left_0()
@@ -316,7 +314,7 @@ impl RenderOnce for Slider {
             }
 
             let mut rail = div()
-                .id(format!("{}-rail", self.id))
+                .id(self.id.slot("rail"))
                 .relative()
                 .w(px(thumb_size))
                 .h(px(track_len))
@@ -331,13 +329,13 @@ impl RenderOnce for Slider {
                 let step = self.step;
                 let on_change = on_change.clone();
                 let drag_state = SliderDragState {
-                    slider_id: self.id.clone(),
+                    slider_id: self.id.to_string(),
                     min: self.min,
                     max: self.max,
                     step: self.step,
                     controlled: is_controlled,
                 };
-                let slider_id = self.id.clone();
+                let slider_id = self.id.to_string();
                 let on_change_for_drag = on_change.clone();
 
                 rail = rail
@@ -401,11 +399,11 @@ impl RenderOnce for Slider {
 
             return container
                 .child(rail)
-                .with_enter_transition(format!("{}-enter", self.id), self.motion);
+                .with_enter_transition(self.id.slot("enter"), self.motion);
         }
 
         let mut track = Stack::horizontal()
-            .id(format!("{}-track", self.id))
+            .id(self.id.slot("track"))
             .absolute()
             .top(px(track_top))
             .left_0()
@@ -424,7 +422,7 @@ impl RenderOnce for Slider {
             let target = self.normalize(segment_value);
             let active = target <= value + (self.step * 0.5);
             let mut segment = div()
-                .id(format!("{}-segment-{index}", self.id))
+                .id(self.id.slot_index("segment", index.to_string()))
                 .flex_1()
                 .h(px(track_height))
                 .bg(if active { filled_color } else { empty_color });
@@ -450,7 +448,7 @@ impl RenderOnce for Slider {
         track = track.children(segments);
 
         let mut thumb = div()
-            .id(format!("{}-thumb", self.id))
+            .id(self.id.slot("thumb"))
             .absolute()
             .top_0()
             .left(px(thumb_left))
@@ -466,7 +464,7 @@ impl RenderOnce for Slider {
         }
 
         let mut rail = div()
-            .id(format!("{}-rail", self.id))
+            .id(self.id.slot("rail"))
             .relative()
             .w(px(self.width_px))
             .h(px(thumb_size))
@@ -475,13 +473,13 @@ impl RenderOnce for Slider {
 
         if !self.disabled {
             let drag_state = SliderDragState {
-                slider_id: self.id.clone(),
+                slider_id: self.id.to_string(),
                 min: self.min,
                 max: self.max,
                 step: self.step,
                 controlled: is_controlled,
             };
-            let slider_id = self.id.clone();
+            let slider_id = self.id.to_string();
             let on_change_for_drag = on_change.clone();
 
             rail = rail
@@ -529,15 +527,7 @@ impl RenderOnce for Slider {
 
         container
             .child(rail)
-            .with_enter_transition(format!("{}-enter", self.id), self.motion)
-    }
-}
-
-impl IntoElement for Slider {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+            .with_enter_transition(self.id.slot("enter"), self.motion)
     }
 }
 

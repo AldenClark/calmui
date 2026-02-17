@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     SharedString, StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
@@ -46,8 +46,9 @@ impl TabItem {
     }
 }
 
+#[derive(IntoElement)]
 pub struct Tabs {
-    id: String,
+    id: ComponentId,
     items: Vec<TabItem>,
     value: Option<SharedString>,
     value_controlled: bool,
@@ -65,7 +66,7 @@ impl Tabs {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("tabs"),
+            id: ComponentId::default(),
             items: Vec::new(),
             value: None,
             value_controlled: false,
@@ -154,13 +155,10 @@ impl Tabs {
     }
 }
 
-impl WithId for Tabs {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Tabs {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -221,7 +219,7 @@ impl RenderOnce for Tabs {
             }
 
             let mut trigger = div()
-                .id(format!("{}-tab-{index}", self.id))
+                .id(self.id.slot_index("tab", index.to_string()))
                 .min_w_0()
                 .cursor_pointer()
                 .border(super::utils::quantized_stroke_px(window, 1.0))
@@ -281,7 +279,7 @@ impl RenderOnce for Tabs {
         });
 
         let mut list = Stack::horizontal()
-            .id(format!("{}-list", self.id))
+            .id(self.id.slot("list"))
             .w_full()
             .gap_0p5()
             .p_0p5()
@@ -292,7 +290,7 @@ impl RenderOnce for Tabs {
         list = apply_radius(&self.theme, list, self.radius);
 
         let mut panel = div()
-            .id(format!("{}-panel", self.id))
+            .id(self.id.slot("panel"))
             .w_full()
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&theme, &tokens.panel_border))
@@ -308,15 +306,7 @@ impl RenderOnce for Tabs {
             .gap_2()
             .child(list)
             .child(panel)
-            .with_enter_transition(format!("{}-enter", self.id), motion)
-    }
-}
-
-impl IntoElement for Tabs {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+            .with_enter_transition(self.id.slot("enter"), motion)
     }
 }
 

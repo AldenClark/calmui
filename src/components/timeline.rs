@@ -1,10 +1,10 @@
 use gpui::{
-    AnyElement, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, Styled, div, px,
+    AnyElement, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
+    div, px,
 };
 
-use crate::contracts::{MotionAware, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
@@ -48,8 +48,9 @@ impl TimelineItem {
     }
 }
 
+#[derive(IntoElement)]
 pub struct Timeline {
-    id: String,
+    id: ComponentId,
     items: Vec<TimelineItem>,
     active: usize,
     variant: Variant,
@@ -64,7 +65,7 @@ impl Timeline {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("timeline"),
+            id: ComponentId::default(),
             items: Vec::new(),
             active: 0,
             variant: Variant::Default,
@@ -124,13 +125,10 @@ impl Timeline {
     }
 }
 
-impl WithId for Timeline {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Timeline {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -178,7 +176,7 @@ impl RenderOnce for Timeline {
                         .text_color(resolve_hsla(&theme, &tokens.body))
                         .child("No timeline items"),
                 )
-                .with_enter_transition(format!("{}-enter", self.id), self.motion);
+                .with_enter_transition(self.id.slot("enter"), self.motion);
         }
 
         let mut rows = Stack::vertical().id(self.id.clone()).w_full().gap_0();
@@ -189,7 +187,7 @@ impl RenderOnce for Timeline {
             let has_next = index < total_items.saturating_sub(1);
 
             let mut bullet = div()
-                .id(format!("{}-bullet-{index}", self.id))
+                .id(self.id.slot_index("bullet", index.to_string()))
                 .w(px(bullet_size))
                 .h(px(bullet_size))
                 .flex()
@@ -217,7 +215,7 @@ impl RenderOnce for Timeline {
             if let Some(icon) = item.marker_icon.take() {
                 bullet = bullet.child(
                     Icon::named(icon.to_string())
-                        .with_id(format!("{}-bullet-icon-{index}", self.id))
+                        .with_id(self.id.slot_index("bullet-icon", index.to_string()))
                         .size((bullet_size * 0.56).max(10.0))
                         .color(if is_active_marker {
                             resolve_hsla(&theme, &tokens.bullet_active_fg)
@@ -290,7 +288,7 @@ impl RenderOnce for Timeline {
 
             rows = rows.child(
                 Stack::horizontal()
-                    .id(format!("{}-item-{index}", self.id))
+                    .id(self.id.slot_index("item", index.to_string()))
                     .items_start()
                     .gap_2()
                     .py(px(0.0))
@@ -300,15 +298,7 @@ impl RenderOnce for Timeline {
             );
         }
 
-        rows.with_enter_transition(format!("{}-enter", self.id), self.motion)
-    }
-}
-
-impl IntoElement for Timeline {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+        rows.with_enter_transition(self.id.slot("enter"), self.motion)
     }
 }
 

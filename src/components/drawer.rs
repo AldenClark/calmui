@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::MotionAware;
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 
 use super::control;
@@ -26,8 +26,9 @@ pub enum DrawerPlacement {
     Bottom,
 }
 
+#[derive(IntoElement)]
 pub struct Drawer {
-    id: String,
+    id: ComponentId,
     opened: Option<bool>,
     default_opened: bool,
     title: SharedString,
@@ -47,7 +48,7 @@ impl Drawer {
     #[track_caller]
     pub fn new(title: impl Into<SharedString>) -> Self {
         Self {
-            id: stable_auto_id("drawer"),
+            id: ComponentId::default(),
             opened: None,
             default_opened: false,
             title: title.into(),
@@ -114,13 +115,10 @@ impl Drawer {
     }
 }
 
-impl WithId for Drawer {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Drawer {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -146,7 +144,7 @@ impl RenderOnce for Drawer {
         let drawer_id_for_overlay = self.id.clone();
 
         let overlay = Overlay::new()
-            .with_id(format!("{}-overlay", self.id))
+            .with_id(self.id.slot("overlay"))
             .coverage(OverlayCoverage::Window)
             .material_mode(OverlayMaterialMode::Auto)
             .color(tokens.overlay_bg.clone())
@@ -170,7 +168,7 @@ impl RenderOnce for Drawer {
             let close_id = self.id.clone();
             let close_fg = resolve_hsla(&self.theme, &tokens.title);
             close_action = div()
-                .id(format!("{}-close", self.id))
+                .id(self.id.slot("close"))
                 .w(px(28.0))
                 .h(px(28.0))
                 .rounded_full()
@@ -187,7 +185,7 @@ impl RenderOnce for Drawer {
                 .hover(|style| style.opacity(0.82))
                 .child(
                     Icon::named("x")
-                        .with_id(format!("{}-close-icon", self.id))
+                        .with_id(self.id.slot("close-icon"))
                         .size(14.0)
                         .color(close_fg),
                 )
@@ -213,7 +211,7 @@ impl RenderOnce for Drawer {
         }
 
         let mut panel = div()
-            .id(format!("{}-panel", self.id))
+            .id(self.id.slot("panel"))
             .flex()
             .flex_col()
             .border(super::utils::quantized_stroke_px(window, 1.0))
@@ -245,7 +243,7 @@ impl RenderOnce for Drawer {
             DrawerPlacement::Top | DrawerPlacement::Bottom => panel.h(px(self.size_px)).w_full(),
         };
 
-        let panel = panel.with_enter_transition(format!("{}-panel-enter", self.id), self.motion);
+        let panel = panel.with_enter_transition(self.id.slot("panel-enter"), self.motion);
 
         let host = match self.placement {
             DrawerPlacement::Left => div().absolute().top_0().left_0().h_full().child(panel),
@@ -263,14 +261,6 @@ impl RenderOnce for Drawer {
             .child(overlay)
             .child(host)
             .into_any_element()
-    }
-}
-
-impl IntoElement for Drawer {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

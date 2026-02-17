@@ -1,10 +1,9 @@
 use gpui::{
-    AnyElement, Component, Div, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled,
-    Window, div, px,
+    AnyElement, Div, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, Window,
+    div, px,
 };
 
-use crate::contracts::WithId;
-use crate::id::stable_auto_id;
+use crate::id::ComponentId;
 use crate::style::Size;
 
 pub struct Stack;
@@ -21,8 +20,9 @@ impl Stack {
     }
 }
 
+#[derive(IntoElement)]
 pub struct Grid {
-    id: String,
+    id: ComponentId,
     columns: usize,
     gap_x: Size,
     gap_y: Size,
@@ -35,7 +35,7 @@ impl Grid {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("grid"),
+            id: ComponentId::default(),
             columns: 2,
             gap_x: Size::Md,
             gap_y: Size::Md,
@@ -98,13 +98,10 @@ impl ParentElement for Grid {
     }
 }
 
-impl WithId for Grid {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Grid {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -149,14 +146,7 @@ impl RenderOnce for Grid {
     }
 }
 
-impl IntoElement for Grid {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
-    }
-}
-
+#[derive(IntoElement)]
 pub struct SimpleGrid {
     inner: Grid,
     style: gpui::StyleRefinement,
@@ -206,13 +196,10 @@ impl SimpleGrid {
     }
 }
 
-impl WithId for SimpleGrid {
-    fn id(&self) -> &str {
-        self.inner.id()
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        self.inner.id_mut()
+impl SimpleGrid {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.inner = self.inner.with_id(id);
+        self
     }
 }
 
@@ -224,20 +211,13 @@ impl RenderOnce for SimpleGrid {
     }
 }
 
-impl IntoElement for SimpleGrid {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
-    }
-}
-
 impl ParentElement for SimpleGrid {
     fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
         self.inner.extend(elements);
     }
 }
 
+#[derive(IntoElement)]
 pub struct Space {
     width_px: Option<f32>,
     height_px: Option<f32>,
@@ -307,14 +287,6 @@ impl RenderOnce for Space {
             node = node.h(px(height_px));
         }
         node
-    }
-}
-
-impl IntoElement for Space {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

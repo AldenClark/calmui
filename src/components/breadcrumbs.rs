@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window, div,
+    ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
+    StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::MotionAware;
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::Size;
 
@@ -41,8 +41,9 @@ enum CrumbNode {
     Ellipsis,
 }
 
+#[derive(IntoElement)]
 pub struct Breadcrumbs {
-    id: String,
+    id: ComponentId,
     items: Vec<BreadcrumbItem>,
     separator: SharedString,
     max_items: Option<usize>,
@@ -57,7 +58,7 @@ impl Breadcrumbs {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("breadcrumbs"),
+            id: ComponentId::default(),
             items: Vec::new(),
             separator: "/".into(),
             max_items: None,
@@ -151,13 +152,10 @@ impl Breadcrumbs {
     }
 }
 
-impl WithId for Breadcrumbs {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Breadcrumbs {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -181,7 +179,7 @@ impl RenderOnce for Breadcrumbs {
                 CrumbNode::Item(index, item) => {
                     let is_current = position == total_nodes.saturating_sub(1);
                     let mut crumb = div()
-                        .id(format!("{}-item-{index}", self.id))
+                        .id(self.id.slot_index("item", index.to_string()))
                         .text_color(if is_current {
                             resolve_hsla(&self.theme, &tokens.item_current_fg)
                         } else {
@@ -211,7 +209,7 @@ impl RenderOnce for Breadcrumbs {
                 }
                 CrumbNode::Ellipsis => {
                     let mut ellipsis = div()
-                        .id(format!("{}-ellipsis-{position}", self.id))
+                        .id(self.id.slot_index("ellipsis", position.to_string()))
                         .text_color(resolve_hsla(&self.theme, &tokens.separator))
                         .child("...");
                     ellipsis = self.apply_item_size(ellipsis);
@@ -221,7 +219,7 @@ impl RenderOnce for Breadcrumbs {
 
             if position < total_nodes.saturating_sub(1) {
                 let mut separator = div()
-                    .id(format!("{}-sep-{position}", self.id))
+                    .id(self.id.slot_index("sep", position.to_string()))
                     .text_color(resolve_hsla(&self.theme, &tokens.separator))
                     .child(self.separator.clone());
                 separator = self.apply_item_size(separator);
@@ -234,15 +232,7 @@ impl RenderOnce for Breadcrumbs {
             .items_center()
             .gap_1()
             .children(children)
-            .with_enter_transition(format!("{}-enter", self.id), self.motion)
-    }
-}
-
-impl IntoElement for Breadcrumbs {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+            .with_enter_transition(self.id.slot("enter"), self.motion)
     }
 }
 

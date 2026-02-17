@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     ScrollHandle, SharedString, StatefulInteractiveElement, Styled, canvas, div, point, px,
 };
 
-use crate::contracts::{MotionAware, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::MotionAware;
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size};
 
@@ -102,8 +102,9 @@ impl TableRow {
     }
 }
 
+#[derive(IntoElement)]
 pub struct Table {
-    id: String,
+    id: ComponentId,
     headers: Vec<SharedString>,
     rows: Vec<TableRow>,
     caption: Option<SharedString>,
@@ -148,7 +149,7 @@ impl Table {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("table"),
+            id: ComponentId::default(),
             headers: Vec::new(),
             rows: Vec::new(),
             caption: None,
@@ -429,13 +430,10 @@ impl Table {
     }
 }
 
-impl WithId for Table {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Table {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -683,7 +681,7 @@ impl RenderOnce for Table {
             let caption = Self::apply_cell_size(
                 size,
                 div()
-                    .id(format!("{}-caption", table_id))
+                    .id(table_id.slot("caption"))
                     .text_color(resolve_hsla(&self.theme, &tokens.caption))
                     .font_weight(gpui::FontWeight::MEDIUM)
                     .child(caption),
@@ -695,7 +693,7 @@ impl RenderOnce for Table {
         let mut header_row_any = None;
         if !headers.is_empty() {
             let mut header_row = div()
-                .id(format!("{}-header", table_id))
+                .id(table_id.slot("header"))
                 .w_full()
                 .flex()
                 .items_center()
@@ -722,7 +720,7 @@ impl RenderOnce for Table {
                 let cell = Self::apply_cell_size(
                     size,
                     div()
-                        .id(format!("{}-header-cell-{index}", table_id))
+                        .id(table_id.slot_index("header-cell", index.to_string()))
                         .flex_1()
                         .min_w_0()
                         .font_weight(gpui::FontWeight::SEMIBOLD)
@@ -749,14 +747,11 @@ impl RenderOnce for Table {
         } else {
             0.0
         };
-        let mut rows_root = Stack::vertical()
-            .id(format!("{}-rows", table_id))
-            .w_full()
-            .gap_0();
+        let mut rows_root = Stack::vertical().id(table_id.slot("rows")).w_full().gap_0();
         if top_spacer_height > 0.0 {
             rows_root = rows_root.child(
                 div()
-                    .id(format!("{}-virtual-top-spacer", table_id))
+                    .id(table_id.slot("virtual-top-spacer"))
                     .w_full()
                     .h(px(top_spacer_height)),
             );
@@ -773,7 +768,7 @@ impl RenderOnce for Table {
             };
 
             let mut row_node = div()
-                .id(format!("{}-row-{row_index}", table_id))
+                .id(table_id.slot_index("row", row_index.to_string()))
                 .w_full()
                 .flex()
                 .items_center()
@@ -838,7 +833,7 @@ impl RenderOnce for Table {
                 let mut cell = Self::apply_cell_size(
                     size,
                     div()
-                        .id(format!("{}-row-{row_index}-cell-{column}", table_id))
+                        .id(table_id.slot_index("row-cell", format!("{row_index}-{column}")))
                         .flex_1()
                         .min_w_0(),
                 );
@@ -862,7 +857,7 @@ impl RenderOnce for Table {
         if bottom_spacer_height > 0.0 {
             rows_root = rows_root.child(
                 div()
-                    .id(format!("{}-virtual-bottom-spacer", table_id))
+                    .id(table_id.slot("virtual-bottom-spacer"))
                     .w_full()
                     .h(px(bottom_spacer_height)),
             );
@@ -872,7 +867,7 @@ impl RenderOnce for Table {
             rows_root = rows_root.child(Self::apply_cell_size(
                 size,
                 div()
-                    .id(format!("{}-empty", table_id))
+                    .id(table_id.slot("empty"))
                     .w_full()
                     .flex()
                     .items_center()
@@ -899,14 +894,14 @@ impl RenderOnce for Table {
             let page_size_options = page_size_options.clone();
             let size_selector = if show_page_size_selector {
                 let mut items = div()
-                    .id(format!("{}-page-size-selector-{suffix}", table_id))
+                    .id(table_id.slot_index("page-size-selector", suffix))
                     .flex()
                     .items_center()
                     .gap_1();
                 for option in page_size_options {
                     let is_active = option == resolved_page_size;
                     let mut item = div()
-                        .id(format!("{}-page-size-{}-{suffix}", table_id, option))
+                        .id(table_id.slot_index("page-size", format!("{option}-{suffix}")))
                         .px_2()
                         .py_1()
                         .text_sm()
@@ -957,7 +952,7 @@ impl RenderOnce for Table {
 
             let mut right = div().flex().items_center().gap_2().child(
                 Pagination::new()
-                    .with_id(format!("{}-pagination-{suffix}", table_id))
+                    .with_id(table_id.slot_index("pagination", suffix))
                     .total(page_count)
                     .value(resolved_page)
                     .siblings(self.pagination_siblings)
@@ -981,7 +976,7 @@ impl RenderOnce for Table {
             }
 
             div()
-                .id(format!("{}-pagination-bar-{suffix}", table_id))
+                .id(table_id.slot_index("pagination-bar", suffix))
                 .w_full()
                 .px_3()
                 .py_2()
@@ -1021,7 +1016,7 @@ impl RenderOnce for Table {
             }
 
             let mut scroll_content = Stack::vertical()
-                .id(format!("{}-scroll-content", table_id))
+                .id(table_id.slot("scroll-content"))
                 .w_full()
                 .gap_0();
             if !sticky_header && let Some(header_row) = header_row_any.take() {
@@ -1041,7 +1036,7 @@ impl RenderOnce for Table {
                 let max_scroll_for_monitor = max_scroll_y;
                 root = root.child(
                     div()
-                        .id(format!("{}-virtual-scroll", table_id))
+                        .id(table_id.slot("virtual-scroll"))
                         .relative()
                         .w_full()
                         .h(px(scroll_height))
@@ -1101,7 +1096,7 @@ impl RenderOnce for Table {
             } else {
                 root = root.child(
                     ScrollArea::new()
-                        .with_id(format!("{}-scroll", table_id))
+                        .with_id(table_id.slot("scroll"))
                         .direction(ScrollDirection::Vertical)
                         .bordered(false)
                         .padding(Size::Xs)
@@ -1135,15 +1130,7 @@ impl RenderOnce for Table {
                 .child(render_pagination_bar("bottom"));
         }
 
-        root.with_enter_transition(format!("{}-enter", table_id), motion)
-    }
-}
-
-impl IntoElement for Table {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+        root.with_enter_transition(table_id.slot("enter"), motion)
     }
 }
 

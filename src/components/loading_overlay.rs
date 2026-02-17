@@ -1,10 +1,10 @@
 use gpui::{
-    AnyElement, Component, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    AnyElement, ElementId, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     SharedString, Styled, div,
 };
 
-use crate::contracts::{MotionAware, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::MotionAware;
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::Size;
 
@@ -14,10 +14,11 @@ use super::overlay::{Overlay, OverlayMaterialMode};
 use super::utils::resolve_hsla;
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
-type LoaderRenderer = Box<dyn FnOnce(Size, Hsla, String) -> AnyElement>;
+type LoaderRenderer = Box<dyn FnOnce(Size, Hsla, ElementId) -> AnyElement>;
 
+#[derive(IntoElement)]
 pub struct LoadingOverlay {
-    id: String,
+    id: ComponentId,
     visible: bool,
     label: Option<SharedString>,
     variant: LoaderVariant,
@@ -36,7 +37,7 @@ impl LoadingOverlay {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("loading-overlay"),
+            id: ComponentId::default(),
             visible: true,
             label: None,
             variant: LoaderVariant::Dots,
@@ -107,13 +108,10 @@ impl LoadingOverlay {
     }
 }
 
-impl WithId for LoadingOverlay {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl LoadingOverlay {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -140,14 +138,10 @@ impl RenderOnce for LoadingOverlay {
         let tokens = &self.theme.components.loading_overlay;
         let loader_color = tokens.loader_color.clone();
         let loader = if let Some(renderer) = self.loader.take() {
-            renderer(
-                self.size,
-                loader_color.clone(),
-                format!("{}-loader", self.id),
-            )
+            renderer(self.size, loader_color.clone(), self.id.slot("loader"))
         } else {
             Loader::new()
-                .with_id(format!("{}-loader", self.id))
+                .with_id(self.id.slot("loader"))
                 .variant(self.variant)
                 .size(self.size)
                 .color(loader_color)
@@ -165,7 +159,7 @@ impl RenderOnce for LoadingOverlay {
         }
 
         let overlay = Overlay::new()
-            .with_id(format!("{}-mask", self.id))
+            .with_id(self.id.slot("mask"))
             .material_mode(OverlayMaterialMode::Auto)
             .motion(self.motion)
             .color(tokens.bg.clone())
@@ -182,14 +176,6 @@ impl RenderOnce for LoadingOverlay {
             );
 
         root.child(overlay).into_any_element()
-    }
-}
-
-impl IntoElement for LoadingOverlay {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

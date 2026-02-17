@@ -327,7 +327,9 @@ mod tests {
         assert!(!manager.mark_auto_close_scheduled(id, initial_version));
 
         assert!(manager.update(id, ToastEntry::new("a", "2")));
-        let updated_version = manager.version_of(id).expect("updated version should exist");
+        let updated_version = manager
+            .version_of(id)
+            .expect("updated version should exist");
         assert!(updated_version > initial_version);
         assert!(manager.mark_auto_close_scheduled(id, updated_version));
         assert!(!manager.dismiss_if_version(id, initial_version));

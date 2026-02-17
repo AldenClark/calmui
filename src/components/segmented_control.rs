@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window, div,
+    ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
+    StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
@@ -37,8 +37,9 @@ impl SegmentedControlItem {
     }
 }
 
+#[derive(IntoElement)]
 pub struct SegmentedControl {
-    id: String,
+    id: ComponentId,
     items: Vec<SegmentedControlItem>,
     value: Option<SharedString>,
     value_controlled: bool,
@@ -57,7 +58,7 @@ impl SegmentedControl {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("segmented-control"),
+            id: ComponentId::default(),
             items: Vec::new(),
             value: None,
             value_controlled: false,
@@ -147,13 +148,10 @@ impl SegmentedControl {
     }
 }
 
-impl WithId for SegmentedControl {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl SegmentedControl {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -207,7 +205,7 @@ impl RenderOnce for SegmentedControl {
                     .is_some_and(|value| value.as_ref() == item.value.as_ref());
 
                 let mut segment = div()
-                    .id(format!("{}-item-{index}", self.id))
+                    .id(self.id.slot_index("item", index.to_string()))
                     .flex()
                     .items_center()
                     .justify_center()
@@ -273,15 +271,7 @@ impl RenderOnce for SegmentedControl {
 
         root = apply_radius(&self.theme, root, self.radius);
 
-        root.with_enter_transition(format!("{}-enter", enter_id), motion)
-    }
-}
-
-impl IntoElement for SegmentedControl {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+        root.with_enter_transition(enter_id.slot("enter"), motion)
     }
 }
 

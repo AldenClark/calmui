@@ -1,10 +1,9 @@
 use gpui::{
-    Component, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
-    Window, div, px,
+    InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div,
+    px,
 };
 
-use crate::contracts::WithId;
-use crate::id::stable_auto_id;
+use crate::id::ComponentId;
 
 use super::utils::{hairline_px, resolve_hsla};
 
@@ -21,8 +20,9 @@ pub enum DividerLabelPosition {
     End,
 }
 
+#[derive(IntoElement)]
 pub struct Divider {
-    id: String,
+    id: ComponentId,
     orientation: DividerOrientation,
     label: Option<SharedString>,
     label_position: DividerLabelPosition,
@@ -34,7 +34,7 @@ impl Divider {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("divider"),
+            id: ComponentId::default(),
             orientation: DividerOrientation::Horizontal,
             label: None,
             label_position: DividerLabelPosition::Center,
@@ -59,13 +59,10 @@ impl Divider {
     }
 }
 
-impl WithId for Divider {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Divider {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -118,14 +115,6 @@ impl RenderOnce for Divider {
                 }
             }
         }
-    }
-}
-
-impl IntoElement for Divider {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

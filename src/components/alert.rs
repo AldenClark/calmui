@@ -1,13 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     SharedString, StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::WithId;
 use crate::icon::{IconRegistry, IconSource};
-use crate::id::stable_auto_id;
+use crate::id::ComponentId;
 
 use super::Stack;
 use super::control;
@@ -26,8 +25,9 @@ pub enum AlertKind {
     Loading,
 }
 
+#[derive(IntoElement)]
 pub struct Alert {
-    id: String,
+    id: ComponentId,
     title: SharedString,
     message: SharedString,
     kind: AlertKind,
@@ -46,7 +46,7 @@ impl Alert {
     #[track_caller]
     pub fn new(title: impl Into<SharedString>, message: impl Into<SharedString>) -> Self {
         Self {
-            id: stable_auto_id("alert"),
+            id: ComponentId::default(),
             title: title.into(),
             message: message.into(),
             kind: AlertKind::Info,
@@ -147,13 +147,10 @@ impl Alert {
     }
 }
 
-impl WithId for Alert {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Alert {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -173,7 +170,7 @@ impl RenderOnce for Alert {
         let alert_id = self.id.clone();
 
         let icon_badge = div()
-            .id(format!("{}-icon", self.id))
+            .id(self.id.slot("icon"))
             .flex_none()
             .w(gpui::px(24.0))
             .h(gpui::px(24.0))
@@ -183,14 +180,14 @@ impl RenderOnce for Alert {
             .justify_center()
             .child(
                 Icon::new(icon)
-                    .with_id(format!("{}-kind-icon", self.id))
+                    .with_id(self.id.slot("kind-icon"))
                     .size(17.0)
                     .color(fg)
                     .registry(icon_registry.clone()),
             );
 
         let close_button = div()
-            .id(format!("{}-close", self.id))
+            .id(self.id.slot("close"))
             .flex_none()
             .w(gpui::px(24.0))
             .h(gpui::px(24.0))
@@ -207,7 +204,7 @@ impl RenderOnce for Alert {
             .active(|style| style.bg(fg.opacity(0.24)))
             .child(
                 Icon::named("x")
-                    .with_id(format!("{}-close-icon", self.id))
+                    .with_id(self.id.slot("close-icon"))
                     .size(13.0)
                     .color(fg)
                     .registry(icon_registry),
@@ -271,14 +268,6 @@ impl RenderOnce for Alert {
                     .children(show_right_actions.then_some(right)),
             )
             .into_any_element()
-    }
-}
-
-impl IntoElement for Alert {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
@@ -18,8 +18,9 @@ use super::utils::resolve_hsla;
 
 type ChangeHandler = Rc<dyn Fn(f32, &mut Window, &mut gpui::App)>;
 
+#[derive(IntoElement)]
 pub struct Rating {
-    id: String,
+    id: ComponentId,
     value: Option<f32>,
     value_controlled: bool,
     default_value: f32,
@@ -41,7 +42,7 @@ impl Rating {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("rating"),
+            id: ComponentId::default(),
             value: None,
             value_controlled: false,
             default_value: 0.0,
@@ -132,13 +133,10 @@ impl Rating {
     }
 }
 
-impl WithId for Rating {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Rating {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -189,12 +187,12 @@ impl RenderOnce for Rating {
                 } else {
                     Icon::named("star")
                 }
-                .with_id(format!("{}-star-{index}", self.id))
+                .with_id(self.id.slot_index("star", index.to_string()))
                 .size(icon_size)
                 .color(if is_full || is_half { active } else { inactive });
 
                 let mut cell = div()
-                    .id(format!("{}-cell-{index}", self.id))
+                    .id(self.id.slot_index("cell", index.to_string()))
                     .relative()
                     .child(icon)
                     .text_color(if is_full || is_half { active } else { inactive });
@@ -229,7 +227,7 @@ impl RenderOnce for Rating {
                             .cursor_pointer()
                             .child(
                                 div()
-                                    .id(format!("{}-cell-{index}-left", self.id))
+                                    .id(self.id.slot_index("cell-left", index.to_string()))
                                     .absolute()
                                     .top_0()
                                     .left_0()
@@ -252,7 +250,7 @@ impl RenderOnce for Rating {
                             )
                             .child(
                                 div()
-                                    .id(format!("{}-cell-{index}-right", self.id))
+                                    .id(self.id.slot_index("cell-right", index.to_string()))
                                     .absolute()
                                     .top_0()
                                     .right_0()
@@ -302,15 +300,7 @@ impl RenderOnce for Rating {
             .items_center()
             .gap_1()
             .children(stars)
-            .with_enter_transition(format!("{}-enter", self.id), self.motion)
-    }
-}
-
-impl IntoElement for Rating {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+            .with_enter_transition(self.id.slot("enter"), self.motion)
     }
 }
 

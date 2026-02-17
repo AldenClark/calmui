@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, Corner, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, StatefulInteractiveElement, Styled, Window, anchored, deferred, div, point, px,
+    AnyElement, ClickEvent, Corner, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    StatefulInteractiveElement, Styled, Window, anchored, deferred, div, point, px,
 };
 
-use crate::contracts::{MotionAware, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::MotionAware;
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 
 use super::Stack;
@@ -23,8 +23,9 @@ pub enum PopoverPlacement {
     Bottom,
 }
 
+#[derive(IntoElement)]
 pub struct Popover {
-    id: String,
+    id: ComponentId,
     opened: Option<bool>,
     default_opened: bool,
     disabled: bool,
@@ -43,7 +44,7 @@ impl Popover {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("popover"),
+            id: ComponentId::default(),
             opened: None,
             default_opened: false,
             disabled: false,
@@ -114,7 +115,7 @@ impl Popover {
     fn render_panel(&mut self, is_controlled: bool, window: &gpui::Window) -> AnyElement {
         let tokens = &self.theme.components.popover;
         let mut panel = Stack::vertical()
-            .id(format!("{}-panel", self.id))
+            .id(self.id.slot("panel"))
             .gap_2()
             .bg(resolve_hsla(&self.theme, &tokens.bg))
             .border(super::utils::quantized_stroke_px(window, 1.0))
@@ -147,18 +148,15 @@ impl Popover {
         }
 
         panel
-            .with_enter_transition(format!("{}-panel-enter", self.id), self.motion)
+            .with_enter_transition(self.id.slot("panel-enter"), self.motion)
             .into_any_element()
     }
 }
 
-impl WithId for Popover {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Popover {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -179,7 +177,7 @@ impl RenderOnce for Popover {
         };
         let is_controlled = self.opened.is_some();
 
-        let mut trigger = div().id(format!("{}-trigger", self.id)).relative().child(
+        let mut trigger = div().id(self.id.slot("trigger")).relative().child(
             self.trigger
                 .take()
                 .map(|content| content())
@@ -230,7 +228,7 @@ impl RenderOnce for Popover {
 
             let anchor_host = match self.placement {
                 PopoverPlacement::Top => div()
-                    .id(format!("{}-anchor-host", self.id))
+                    .id(self.id.slot("anchor-host"))
                     .absolute()
                     .top_0()
                     .left_0()
@@ -247,7 +245,7 @@ impl RenderOnce for Popover {
                     )
                     .into_any_element(),
                 PopoverPlacement::Bottom => div()
-                    .id(format!("{}-anchor-host", self.id))
+                    .id(self.id.slot("anchor-host"))
                     .absolute()
                     .bottom_0()
                     .left_0()
@@ -274,14 +272,6 @@ impl RenderOnce for Popover {
             .relative()
             .child(trigger)
             .into_any_element()
-    }
-}
-
-impl IntoElement for Popover {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

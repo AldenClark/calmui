@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    AnyElement, ClickEvent, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     SharedString, StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
@@ -68,8 +68,9 @@ impl AccordionItem {
     }
 }
 
+#[derive(IntoElement)]
 pub struct Accordion {
-    id: String,
+    id: ComponentId,
     items: Vec<AccordionItem>,
     value: Option<SharedString>,
     value_controlled: bool,
@@ -86,7 +87,7 @@ impl Accordion {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("accordion"),
+            id: ComponentId::default(),
             items: Vec::new(),
             value: None,
             value_controlled: false,
@@ -145,15 +146,14 @@ impl Accordion {
         )
         .map(SharedString::from)
     }
-}
 
-impl WithId for Accordion {
-    fn id(&self) -> &str {
-        &self.id
+    pub fn id(&self) -> &ElementId {
+        self.id.id()
     }
 
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+    pub fn set_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -192,16 +192,17 @@ impl RenderOnce for Accordion {
             .into_iter()
             .enumerate()
             .map(|(index, mut item)| {
-                let item_id = format!("{}-item-{index}", self.id);
+                let item_root_id = self.id.slot_index("item", index.to_string());
+                let header_id = self.id.slot_index("header", index.to_string());
+                let chevron_id = self.id.slot_index("chevron", index.to_string());
+                let panel_id = self.id.slot_index("panel", index.to_string());
+
                 let is_open = active_value
                     .as_ref()
                     .is_some_and(|current| current.as_ref() == item.meta.value.as_ref());
-                let header_id = format!("{item_id}-header");
-                let chevron_id = format!("{item_id}-chevron");
-                let panel_id = format!("{item_id}-panel");
 
                 let mut root = Stack::vertical()
-                    .id(item_id.clone())
+                    .id(item_root_id)
                     .w_full()
                     .bg(resolve_hsla(&self.theme, &tokens.item_bg))
                     .border(super::utils::quantized_stroke_px(window, 1.0))
@@ -253,7 +254,7 @@ impl RenderOnce for Accordion {
                 if item.meta.disabled {
                     header = header.cursor_default().opacity(0.55);
                 } else if let Some(handler) = self.on_change.clone() {
-                    let accordion_id = self.id.clone();
+                    let accordion_id = self.id.to_string();
                     let value = item.meta.value.clone();
                     header = header.on_click(move |_: &ClickEvent, window, cx| {
                         let current = control::optional_text_state(
@@ -275,7 +276,7 @@ impl RenderOnce for Accordion {
                         (handler)(next.map(SharedString::from), window, cx);
                     });
                 } else if !is_controlled {
-                    let accordion_id = self.id.clone();
+                    let accordion_id = self.id.to_string();
                     let value = item.meta.value.clone();
                     header = header.on_click(move |_: &ClickEvent, window, _cx| {
                         let current = control::optional_text_state(
@@ -311,9 +312,7 @@ impl RenderOnce for Accordion {
                     if let Some(content) = item.content.take() {
                         body = body.child(content());
                     }
-                    root = root.child(
-                        body.with_enter_transition(format!("{panel_id}-enter"), self.motion),
-                    );
+                    root = root.child(body.with_enter_transition((panel_id, "enter"), self.motion));
                 }
 
                 root.into_any_element()
@@ -325,15 +324,7 @@ impl RenderOnce for Accordion {
             .gap_2()
             .w_full()
             .children(item_views)
-            .with_enter_transition(format!("{}-enter", self.id), self.motion)
-    }
-}
-
-impl IntoElement for Accordion {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+            .with_enter_transition(self.id.slot("enter"), self.motion)
     }
 }
 

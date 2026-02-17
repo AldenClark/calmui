@@ -1,12 +1,12 @@
 use std::time::Duration;
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, Component, Hsla, InteractiveElement, IntoElement,
-    ParentElement, RenderOnce, SharedString, Styled, div, px,
+    Animation, AnimationExt, AnyElement, Hsla, InteractiveElement, IntoElement, ParentElement,
+    RenderOnce, SharedString, Styled, div, px,
 };
 
-use crate::contracts::{MotionAware, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{MotionAware, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
@@ -31,8 +31,9 @@ impl ProgressSection {
     }
 }
 
+#[derive(IntoElement)]
 pub struct Progress {
-    id: String,
+    id: ComponentId,
     value: f32,
     sections: Vec<ProgressSection>,
     label: Option<SharedString>,
@@ -52,7 +53,7 @@ impl Progress {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("progress"),
+            id: ComponentId::default(),
             value: 0.0,
             sections: Vec::new(),
             label: None,
@@ -162,7 +163,7 @@ impl Progress {
 
     fn striped_overlay(
         color: gpui::Hsla,
-        key: String,
+        key: ComponentId,
         width_px: f32,
         bar_height: f32,
         animated: bool,
@@ -176,7 +177,7 @@ impl Progress {
             .ceil()
             .max(8.0) as usize;
 
-        let primary_prefix = format!("{key}-primary");
+        let primary_key = key.clone();
         let primary_stripes = (0..primary_count).map(move |index| {
             let alpha = match index % 3 {
                 0 => 0.18,
@@ -184,18 +185,18 @@ impl Progress {
                 _ => 0.04,
             };
             div()
-                .id(format!("{primary_prefix}-{index}"))
+                .id(primary_key.slot_index("primary", index.to_string()))
                 .w(px(stripe_width))
                 .h_full()
                 .bg(color.alpha(alpha))
                 .into_any_element()
         });
 
-        let secondary_prefix = format!("{key}-secondary");
+        let secondary_key = key.clone();
         let secondary_stripes = (0..secondary_count).map(move |index| {
             let alpha = if index % 2 == 0 { 0.08 } else { 0.03 };
             div()
-                .id(format!("{secondary_prefix}-{index}"))
+                .id(secondary_key.slot_index("secondary", index.to_string()))
                 .w(px(stripe_width * 1.25))
                 .h_full()
                 .bg(color.alpha(alpha))
@@ -203,7 +204,7 @@ impl Progress {
         });
 
         let primary_band = Stack::horizontal()
-            .id(format!("{key}-band-primary"))
+            .id(key.slot("band-primary"))
             .absolute()
             .top_0()
             .left(px(-width_px * 1.15))
@@ -212,7 +213,7 @@ impl Progress {
             .children(primary_stripes);
 
         let secondary_band = Stack::horizontal()
-            .id(format!("{key}-band-secondary"))
+            .id(key.slot("band-secondary"))
             .absolute()
             .top_0()
             .left(px(-width_px * 0.2))
@@ -228,14 +229,10 @@ impl Progress {
                 .with_easing(gpui::ease_in_out);
             let travel = width_px * 1.35;
             primary_band
-                .with_animation(
-                    format!("{key}-move-primary"),
-                    animation,
-                    move |this, delta| {
-                        let eased = gpui::ease_in_out(delta);
-                        this.left(px(-width_px * 1.15 + travel * eased))
-                    },
-                )
+                .with_animation(key.slot("move-primary"), animation, move |this, delta| {
+                    let eased = gpui::ease_in_out(delta);
+                    this.left(px(-width_px * 1.15 + travel * eased))
+                })
                 .into_any_element()
         } else {
             primary_band.into_any_element()
@@ -248,14 +245,10 @@ impl Progress {
                     .with_easing(gpui::ease_in_out);
             let travel = width_px * 1.1;
             secondary_band
-                .with_animation(
-                    format!("{key}-move-secondary"),
-                    animation,
-                    move |this, delta| {
-                        let eased = gpui::ease_in_out(delta);
-                        this.left(px(-width_px * 0.2 - travel * eased))
-                    },
-                )
+                .with_animation(key.slot("move-secondary"), animation, move |this, delta| {
+                    let eased = gpui::ease_in_out(delta);
+                    this.left(px(-width_px * 0.2 - travel * eased))
+                })
                 .into_any_element()
         } else {
             secondary_band.into_any_element()
@@ -263,7 +256,7 @@ impl Progress {
 
         let sheen_width = (width_px * 0.22).clamp(26.0, 78.0);
         let sheen = div()
-            .id(format!("{key}-sheen"))
+            .id(key.slot("sheen"))
             .absolute()
             .top_0()
             .bottom_0()
@@ -279,20 +272,16 @@ impl Progress {
                     .with_easing(gpui::ease_in_out);
             let travel = width_px + sheen_width * 2.0;
             sheen
-                .with_animation(
-                    format!("{key}-sheen-move"),
-                    animation,
-                    move |this, delta| {
-                        let stepped = if delta < 0.12 {
-                            0.0
-                        } else if delta > 0.96 {
-                            1.0
-                        } else {
-                            gpui::ease_in_out((delta - 0.12) / 0.84)
-                        };
-                        this.left(px(-sheen_width + travel * stepped))
-                    },
-                )
+                .with_animation(key.slot("sheen-move"), animation, move |this, delta| {
+                    let stepped = if delta < 0.12 {
+                        0.0
+                    } else if delta > 0.96 {
+                        1.0
+                    } else {
+                        gpui::ease_in_out((delta - 0.12) / 0.84)
+                    };
+                    this.left(px(-sheen_width + travel * stepped))
+                })
                 .into_any_element()
         } else {
             sheen.into_any_element()
@@ -313,13 +302,10 @@ impl Progress {
     }
 }
 
-impl WithId for Progress {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Progress {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -360,7 +346,7 @@ impl RenderOnce for Progress {
             .fold(0.0_f32, |acc, section| acc + section.value);
 
         let mut track = div()
-            .id(format!("{}-track", self.id))
+            .id(self.id.slot("track"))
             .relative()
             .w(px(self.width_px))
             .h(px(bar_height))
@@ -381,7 +367,7 @@ impl RenderOnce for Progress {
                 .unwrap_or(default_fill);
 
             let mut fill = div()
-                .id(format!("{}-fill-{index}", self.id))
+                .id(self.id.slot_index("fill", index.to_string()))
                 .absolute()
                 .left(px(left))
                 .top_0()
@@ -393,7 +379,7 @@ impl RenderOnce for Progress {
                 let stripe_color = resolve_hsla(&self.theme, &tokens.label).opacity(0.28);
                 fill = fill.child(Self::striped_overlay(
                     stripe_color,
-                    format!("{}-stripe-{index}", self.id),
+                    ComponentId::from(self.id.slot_index("stripe", index.to_string())),
                     width,
                     bar_height,
                     self.animated,
@@ -426,15 +412,7 @@ impl RenderOnce for Progress {
         }
 
         root.child(track)
-            .with_enter_transition(format!("{}-enter", self.id), self.motion)
-    }
-}
-
-impl IntoElement for Progress {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+            .with_enter_transition(self.id.slot("enter"), self.motion)
     }
 }
 

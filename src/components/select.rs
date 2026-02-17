@@ -1,13 +1,13 @@
 use std::{collections::BTreeSet, rc::Rc};
 
 use gpui::{
-    AnyElement, ClickEvent, Component, Corner, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, anchored, canvas,
-    deferred, div, point, px,
+    AnyElement, ClickEvent, Corner, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    SharedString, StatefulInteractiveElement, Styled, Window, anchored, canvas, deferred, div,
+    point, px,
 };
 
-use crate::contracts::{FieldLike, MotionAware, VariantConfigurable, WithId};
-use crate::id::stable_auto_id;
+use crate::contracts::{FieldLike, MotionAware, VariantConfigurable};
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
 use crate::theme::{SelectTokens, Theme};
@@ -121,8 +121,9 @@ impl SelectOption {
     }
 }
 
+#[derive(IntoElement)]
 pub struct Select {
-    id: String,
+    id: ComponentId,
     value: Option<SharedString>,
     value_controlled: bool,
     default_value: Option<SharedString>,
@@ -154,7 +155,7 @@ impl Select {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("select"),
+            id: ComponentId::default(),
             value: None,
             value_controlled: false,
             default_value: None,
@@ -367,7 +368,7 @@ impl Select {
         let opened = self.resolved_opened();
         let value = self.resolved_value();
         let mut control = div()
-            .id(format!("{}-control", self.id))
+            .id(self.id.slot("control"))
             .relative()
             .w_full()
             .flex()
@@ -473,7 +474,7 @@ impl Select {
         control
             .child(
                 Icon::named(if opened { "chevron-up" } else { "chevron-down" })
-                    .with_id(format!("{}-chevron", self.id))
+                    .with_id(self.id.slot("chevron"))
                     .size(14.0)
                     .color(resolve_hsla(&self.theme, &tokens.icon)),
             )
@@ -515,7 +516,7 @@ impl Select {
                 let hover_bg = resolve_hsla(&self.theme, &tokens.option_hover_bg);
 
                 let mut row = div()
-                    .id(format!("{}-option-{}", self.id, option.value))
+                    .id(self.id.slot_index("option", (option.value).to_string()))
                     .px(gpui::px(10.0))
                     .py(gpui::px(8.0))
                     .rounded_sm()
@@ -547,9 +548,9 @@ impl Select {
                                     .children(
                                         selected.then_some(
                                             Icon::named("check")
-                                                .with_id(format!(
-                                                    "{}-selected-{}",
-                                                    self.id, option.value
+                                                .with_id(self.id.slot_index(
+                                                    "selected",
+                                                    option.value.to_string(),
                                                 ))
                                                 .size(12.0)
                                                 .color(resolve_hsla(&self.theme, &tokens.icon)),
@@ -597,7 +598,7 @@ impl Select {
             .collect::<Vec<_>>();
 
         let mut dropdown = div()
-            .id(format!("{}-dropdown", self.id))
+            .id(self.id.slot("dropdown"))
             .w(px(SelectRuntime::dropdown_width_px(&self.id)))
             .rounded_md()
             .border(super::utils::quantized_stroke_px(window, 1.0))
@@ -630,18 +631,15 @@ impl Select {
         }
 
         dropdown
-            .with_enter_transition(format!("{}-dropdown-enter", self.id), self.motion)
+            .with_enter_transition(self.id.slot("dropdown-enter"), self.motion)
             .into_any_element()
     }
 }
 
-impl WithId for Select {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Select {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -713,7 +711,7 @@ impl RenderOnce for Select {
 
         let mut field = Stack::vertical().gap_1();
         let mut trigger = div()
-            .id(format!("{}-trigger", self.id))
+            .id(self.id.slot("trigger"))
             .relative()
             .w_full()
             .child(self.render_control(window));
@@ -722,7 +720,7 @@ impl RenderOnce for Select {
             let floating = self.render_dropdown(window);
             let anchor_host = if dropdown_upward {
                 div()
-                    .id(format!("{}-anchor-host", self.id))
+                    .id(self.id.slot("anchor-host"))
                     .absolute()
                     .top_0()
                     .left_0()
@@ -740,7 +738,7 @@ impl RenderOnce for Select {
                     )
             } else {
                 div()
-                    .id(format!("{}-anchor-host", self.id))
+                    .id(self.id.slot("anchor-host"))
                     .absolute()
                     .bottom_0()
                     .left_0()
@@ -774,16 +772,9 @@ impl RenderOnce for Select {
     }
 }
 
-impl IntoElement for Select {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
-    }
-}
-
+#[derive(IntoElement)]
 pub struct MultiSelect {
-    id: String,
+    id: ComponentId,
     values: Vec<SharedString>,
     values_controlled: bool,
     default_values: Vec<SharedString>,
@@ -815,7 +806,7 @@ impl MultiSelect {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("multi-select"),
+            id: ComponentId::default(),
             values: Vec::new(),
             values_controlled: false,
             default_values: Vec::new(),
@@ -1050,7 +1041,7 @@ impl MultiSelect {
         let opened = self.resolved_opened();
 
         let mut control = div()
-            .id(format!("{}-control", self.id))
+            .id(self.id.slot("control"))
             .relative()
             .w_full()
             .flex()
@@ -1171,7 +1162,7 @@ impl MultiSelect {
         control
             .child(
                 Icon::named(if opened { "chevron-up" } else { "chevron-down" })
-                    .with_id(format!("{}-chevron", self.id))
+                    .with_id(self.id.slot("chevron"))
                     .size(14.0)
                     .color(resolve_hsla(&self.theme, &tokens.icon)),
             )
@@ -1210,7 +1201,7 @@ impl MultiSelect {
                 let hover_bg = resolve_hsla(&self.theme, &tokens.option_hover_bg);
 
                 let mut row = div()
-                    .id(format!("{}-option-{}", self.id, option.value))
+                    .id(self.id.slot_index("option", (option.value).to_string()))
                     .px(gpui::px(10.0))
                     .py(gpui::px(8.0))
                     .rounded_sm()
@@ -1242,9 +1233,9 @@ impl MultiSelect {
                                     .children(
                                         checked.then_some(
                                             Icon::named("check")
-                                                .with_id(format!(
-                                                    "{}-selected-{}",
-                                                    self.id, option.value
+                                                .with_id(self.id.slot_index(
+                                                    "selected",
+                                                    option.value.to_string(),
                                                 ))
                                                 .size(12.0)
                                                 .color(resolve_hsla(&self.theme, &tokens.icon)),
@@ -1284,7 +1275,7 @@ impl MultiSelect {
             .collect::<Vec<_>>();
 
         let mut dropdown = div()
-            .id(format!("{}-dropdown", self.id))
+            .id(self.id.slot("dropdown"))
             .w(px(SelectRuntime::dropdown_width_px(&self.id)))
             .rounded_md()
             .border(super::utils::quantized_stroke_px(window, 1.0))
@@ -1317,18 +1308,15 @@ impl MultiSelect {
         }
 
         dropdown
-            .with_enter_transition(format!("{}-dropdown-enter", self.id), self.motion)
+            .with_enter_transition(self.id.slot("dropdown-enter"), self.motion)
             .into_any_element()
     }
 }
 
-impl WithId for MultiSelect {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl MultiSelect {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -1399,7 +1387,7 @@ impl RenderOnce for MultiSelect {
 
         let mut field = Stack::vertical().gap_1();
         let mut trigger = div()
-            .id(format!("{}-trigger", self.id))
+            .id(self.id.slot("trigger"))
             .relative()
             .w_full()
             .child(self.render_control(window));
@@ -1408,7 +1396,7 @@ impl RenderOnce for MultiSelect {
             let floating = self.render_dropdown(window);
             let anchor_host = if dropdown_upward {
                 div()
-                    .id(format!("{}-anchor-host", self.id))
+                    .id(self.id.slot("anchor-host"))
                     .absolute()
                     .top_0()
                     .left_0()
@@ -1426,7 +1414,7 @@ impl RenderOnce for MultiSelect {
                     )
             } else {
                 div()
-                    .id(format!("{}-anchor-host", self.id))
+                    .id(self.id.slot("anchor-host"))
                     .absolute()
                     .bottom_0()
                     .left_0()
@@ -1457,14 +1445,6 @@ impl RenderOnce for MultiSelect {
                 .child(div().flex_1().child(field))
                 .into_any_element(),
         }
-    }
-}
-
-impl IntoElement for MultiSelect {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

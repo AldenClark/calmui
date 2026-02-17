@@ -1,13 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, Hsla, InteractiveElement, IntoElement, ParentElement,
+    AnyElement, ClickEvent, ElementId, Hsla, InteractiveElement, IntoElement, ParentElement,
     RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::WithId;
 use crate::contracts::{MotionAware, Radiusable, Sizeable, VariantConfigurable};
-use crate::id::stable_auto_id;
+use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
 
@@ -19,10 +18,11 @@ use super::utils::{apply_button_size, apply_radius, resolve_hsla, variant_text_w
 
 type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)>;
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
-type LoaderRenderer = Box<dyn FnOnce(Size, Hsla, String) -> AnyElement>;
+type LoaderRenderer = Box<dyn FnOnce(Size, Hsla, ElementId) -> AnyElement>;
 
+#[derive(IntoElement)]
 pub struct Button {
-    id: String,
+    id: ComponentId,
     label: SharedString,
     variant: Variant,
     size: Size,
@@ -43,7 +43,7 @@ impl Button {
     #[track_caller]
     pub fn new(label: impl Into<SharedString>) -> Self {
         Self {
-            id: stable_auto_id("button"),
+            id: ComponentId::default(),
             label: label.into(),
             variant: Variant::Filled,
             size: Size::Md,
@@ -133,7 +133,7 @@ impl Button {
         let fg = resolve_hsla(&self.theme, &fg_token);
 
         if self.loading {
-            let loader_id = format!("{}-loader", self.id);
+            let loader_id = self.id.slot("loader");
             let loader = if let Some(custom_loader) = self.loader.take() {
                 custom_loader(self.size, fg_token.clone(), loader_id)
             } else {
@@ -196,13 +196,10 @@ impl Button {
     }
 }
 
-impl WithId for Button {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Button {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -270,15 +267,7 @@ impl RenderOnce for Button {
         }
 
         root.child(self.render_content())
-            .with_enter_transition(format!("{}-enter", self.id), self.motion)
-    }
-}
-
-impl IntoElement for Button {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
+            .with_enter_transition(self.id.slot("enter"), self.motion)
     }
 }
 
@@ -306,8 +295,9 @@ impl ButtonGroupItem {
     }
 }
 
+#[derive(IntoElement)]
 pub struct ButtonGroup {
-    id: String,
+    id: ComponentId,
     items: Vec<ButtonGroupItem>,
     value: Option<SharedString>,
     value_controlled: bool,
@@ -327,7 +317,7 @@ impl ButtonGroup {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("button-group"),
+            id: ComponentId::default(),
             items: Vec::new(),
             value: None,
             value_controlled: false,
@@ -406,13 +396,10 @@ impl ButtonGroup {
     }
 }
 
-impl WithId for ButtonGroup {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl ButtonGroup {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -460,7 +447,7 @@ impl RenderOnce for ButtonGroup {
                 };
 
                 let mut button = Button::new(item.label.clone())
-                    .with_id(format!("{}-item-{index}", self.id))
+                    .with_id(self.id.slot_index("item", index.to_string()))
                     .variant(variant);
                 button = Sizeable::size(button, self.size);
                 button = Radiusable::radius(button, self.radius);
@@ -513,14 +500,6 @@ impl RenderOnce for ButtonGroup {
                 .into_any_element(),
         };
         root
-    }
-}
-
-impl IntoElement for ButtonGroup {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

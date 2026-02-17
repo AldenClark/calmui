@@ -1,12 +1,11 @@
 use std::time::Duration;
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, Component, Hsla, InteractiveElement, IntoElement,
-    ParentElement, RenderOnce, SharedString, Styled, Window, div, px,
+    Animation, AnimationExt, AnyElement, Hsla, InteractiveElement, IntoElement, ParentElement,
+    RenderOnce, SharedString, Styled, Window, div, px,
 };
 
-use crate::contracts::WithId;
-use crate::id::stable_auto_id;
+use crate::id::ComponentId;
 
 use super::utils::resolve_hsla;
 
@@ -24,8 +23,9 @@ pub enum IndicatorPosition {
     BottomEnd,
 }
 
+#[derive(IntoElement)]
 pub struct Indicator {
-    id: String,
+    id: ComponentId,
     label: Option<SharedString>,
     dot: bool,
     processing: bool,
@@ -44,7 +44,7 @@ impl Indicator {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("indicator"),
+            id: ComponentId::default(),
             label: None,
             dot: true,
             processing: false,
@@ -150,13 +150,10 @@ impl Indicator {
     }
 }
 
-impl WithId for Indicator {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Indicator {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -172,7 +169,7 @@ impl RenderOnce for Indicator {
         let border = resolve_hsla(&self.theme, &self.theme.semantic.bg_canvas);
 
         let mut badge = div()
-            .id(format!("{}-badge", self.id))
+            .id(self.id.slot("badge"))
             .h(px(self.size_px))
             .min_w(px(self.size_px))
             .rounded_full()
@@ -206,14 +203,14 @@ impl RenderOnce for Indicator {
         if self.processing {
             badge = badge.child(
                 div()
-                    .id(format!("{}-pulse", self.id))
+                    .id(self.id.slot("pulse"))
                     .absolute()
                     .size_full()
                     .rounded_full()
                     .border(super::utils::quantized_stroke_px(window, 1.0))
                     .border_color(bg)
                     .with_animation(
-                        format!("{}-pulse-anim", self.id),
+                        self.id.slot("pulse-anim"),
                         Animation::new(Duration::from_millis(1200))
                             .repeat()
                             .with_easing(gpui::ease_in_out),
@@ -228,14 +225,6 @@ impl RenderOnce for Indicator {
         }
 
         root.child(self.indicator_host().child(badge))
-    }
-}
-
-impl IntoElement for Indicator {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 

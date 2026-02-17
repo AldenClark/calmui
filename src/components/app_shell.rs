@@ -1,13 +1,12 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Component, Hsla, InteractiveElement, IntoElement, MouseButton,
+    AnyElement, ClickEvent, ElementId, Hsla, InteractiveElement, IntoElement, MouseButton,
     ParentElement, Refineable, RenderOnce, StatefulInteractiveElement, Styled, Window,
     WindowControlArea, div, px,
 };
 
-use crate::contracts::WithId;
-use crate::id::stable_auto_id;
+use crate::id::ComponentId;
 
 use super::control;
 use super::overlay::{Overlay, OverlayMaterialMode};
@@ -28,9 +27,10 @@ type OverlayOpenChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
 ///
 /// 该组件用于承载“顶部 / 主体 / 底部”三个区域，并提供统一主题 token。
 /// `AppShell` 只负责摆放该组件，不关心它的内部内容结构。
+#[derive(IntoElement)]
 pub struct Sidebar {
     /// 组件唯一 id。
-    id: String,
+    id: ComponentId,
     /// 侧边栏固定宽度（像素）。
     /// `None` 表示占满父容器宽度（推荐与 `AppShell.sidebar_width` 搭配）。
     width_px: Option<f32>,
@@ -53,7 +53,7 @@ impl Sidebar {
     #[track_caller]
     pub fn new() -> Self {
         Self {
-            id: stable_auto_id("sidebar"),
+            id: ComponentId::default(),
             width_px: None,
             background: None,
             header: None,
@@ -95,13 +95,10 @@ impl Sidebar {
     }
 }
 
-impl WithId for Sidebar {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl Sidebar {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -138,13 +135,13 @@ impl RenderOnce for Sidebar {
         if let Some(content) = self.content.take() {
             root = root.child(
                 div()
-                    .id(format!("{}-content", self.id))
+                    .id(self.id.slot("content"))
                     .flex_1()
                     .min_h_0()
                     .text_color(resolve_hsla(&self.theme, &tokens.content_fg))
                     .child(
                         ScrollArea::new()
-                            .with_id(format!("{}-scroll", self.id))
+                            .with_id(self.id.slot("scroll"))
                             .direction(ScrollDirection::Vertical)
                             .bordered(false)
                             .padding(crate::style::Size::Md)
@@ -167,14 +164,6 @@ impl RenderOnce for Sidebar {
 
         root.style().refine(&self.style);
         root
-    }
-}
-
-impl IntoElement for Sidebar {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 
@@ -257,9 +246,10 @@ impl PaneChrome {
 /// 1) 只负责区域编排与 overlay 行为；
 /// 2) 各区域内容由调用方自行提供（例如 `TitleBar` / `Sidebar` / 自定义组件）；
 /// 3) 提供少量高频基础样式能力（尺寸、背景、边框、圆角）。
+#[derive(IntoElement)]
 pub struct AppShell {
     /// 组件唯一 id，用于受控/非受控状态 key。
-    id: String,
+    id: ComponentId,
     /// 顶部区域内容。
     title_bar: Option<SlotRenderer>,
     /// 顶部区域是否采用沉浸模式。
@@ -317,7 +307,7 @@ impl AppShell {
     #[track_caller]
     pub fn new(content: impl IntoElement + 'static) -> Self {
         Self {
-            id: stable_auto_id("app-shell"),
+            id: ComponentId::default(),
             title_bar: None,
             title_bar_immersive: false,
             sidebar: None,
@@ -519,7 +509,7 @@ impl AppShell {
     fn wrap_region(
         &self,
         window: &Window,
-        id: String,
+        id: ElementId,
         content: AnyElement,
         scroll_vertical: bool,
         chrome: &PaneChrome,
@@ -527,7 +517,7 @@ impl AppShell {
     ) -> gpui::Stateful<gpui::Div> {
         let region_content = if scroll_vertical {
             div()
-                .id(format!("{}-scroll", id))
+                .id((id.clone(), "scroll"))
                 .size_full()
                 .min_h_0()
                 .overflow_y_scroll()
@@ -552,13 +542,10 @@ impl AppShell {
     }
 }
 
-impl WithId for AppShell {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn id_mut(&mut self) -> &mut String {
-        &mut self.id
+impl AppShell {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
     }
 }
 
@@ -600,7 +587,7 @@ impl RenderOnce for AppShell {
             let title_region = self
                 .wrap_region(
                     window,
-                    format!("{}-title-bar", self.id),
+                    self.id.slot("title-bar"),
                     title_bar(),
                     false,
                     &self.title_bar_chrome,
@@ -612,7 +599,7 @@ impl RenderOnce for AppShell {
 
             if self.title_bar_immersive {
                 let mut overlay = div()
-                    .id(format!("{}-title-bar-overlay", self.id))
+                    .id(self.id.slot("title-bar-overlay"))
                     .absolute()
                     .top_0()
                     .left_0()
@@ -629,7 +616,7 @@ impl RenderOnce for AppShell {
                 }
 
                 if cfg!(any(target_os = "linux", target_os = "freebsd")) {
-                    let drag_state_id = format!("{}-titlebar-drag", self.id);
+                    let drag_state_id = self.id.slot("titlebar-drag").to_string();
                     let drag_state_id_move = drag_state_id.clone();
                     let drag_state_id_up = drag_state_id.clone();
                     let drag_state_id_up_out = drag_state_id.clone();
@@ -668,7 +655,7 @@ impl RenderOnce for AppShell {
 
         // 主体容器：用于承载 inline 布局与 overlay 浮层。
         let mut body_host = div()
-            .id(format!("{}-body", self.id))
+            .id(self.id.slot("body"))
             .flex_1()
             .min_h_0()
             .w_full()
@@ -676,7 +663,7 @@ impl RenderOnce for AppShell {
 
         // 主体行布局：sidebar(可选) + 中心列(content 必填 + bottom_panel 可选) + inspector(可选)。
         let mut row = div()
-            .id(format!("{}-row", self.id))
+            .id(self.id.slot("row"))
             .size_full()
             .flex()
             .flex_row()
@@ -688,7 +675,7 @@ impl RenderOnce for AppShell {
                 let sidebar_region = self
                     .wrap_region(
                         window,
-                        format!("{}-sidebar-inline", self.id),
+                        self.id.slot("sidebar-inline"),
                         sidebar(),
                         true,
                         &self.sidebar_chrome,
@@ -702,7 +689,7 @@ impl RenderOnce for AppShell {
         }
 
         let mut center = div()
-            .id(format!("{}-center", self.id))
+            .id(self.id.slot("center"))
             .flex_1()
             .min_w_0()
             .min_h_0()
@@ -716,13 +703,13 @@ impl RenderOnce for AppShell {
 
         center = center.child(
             div()
-                .id(format!("{}-content", self.id))
+                .id(self.id.slot("content"))
                 .flex_1()
                 .min_h_0()
                 .min_w_0()
                 .child(
                     div()
-                        .id(format!("{}-content-scroll", self.id))
+                        .id(self.id.slot("content-scroll"))
                         .size_full()
                         .min_h_0()
                         .overflow_y_scroll()
@@ -735,7 +722,7 @@ impl RenderOnce for AppShell {
             let bottom_region = self
                 .wrap_region(
                     window,
-                    format!("{}-bottom-panel", self.id),
+                    self.id.slot("bottom-panel"),
                     bottom_panel(),
                     true,
                     &self.bottom_panel_chrome,
@@ -755,7 +742,7 @@ impl RenderOnce for AppShell {
                 let inspector_region = self
                     .wrap_region(
                         window,
-                        format!("{}-inspector-inline", self.id),
+                        self.id.slot("inspector-inline"),
                         inspector(),
                         true,
                         &self.inspector_chrome,
@@ -780,7 +767,7 @@ impl RenderOnce for AppShell {
 
             body_host = body_host.child(
                 Overlay::new()
-                    .with_id(format!("{}-panels-overlay", self.id))
+                    .with_id(self.id.slot("panels-overlay"))
                     .material_mode(OverlayMaterialMode::TintOnly)
                     .frosted(false)
                     .opacity(1.0)
@@ -831,7 +818,7 @@ impl RenderOnce for AppShell {
                 let sidebar_region = self
                     .wrap_region(
                         window,
-                        format!("{}-sidebar-overlay", self.id),
+                        self.id.slot("sidebar-overlay"),
                         sidebar(),
                         true,
                         &self.sidebar_chrome,
@@ -843,7 +830,7 @@ impl RenderOnce for AppShell {
 
                 body_host = body_host.child(
                     div()
-                        .id(format!("{}-sidebar-overlay-host", self.id))
+                        .id(self.id.slot("sidebar-overlay-host"))
                         .absolute()
                         .top_0()
                         .left_0()
@@ -860,7 +847,7 @@ impl RenderOnce for AppShell {
                 let inspector_region = self
                     .wrap_region(
                         window,
-                        format!("{}-inspector-overlay", self.id),
+                        self.id.slot("inspector-overlay"),
                         inspector(),
                         true,
                         &self.inspector_chrome,
@@ -872,7 +859,7 @@ impl RenderOnce for AppShell {
 
                 body_host = body_host.child(
                     div()
-                        .id(format!("{}-inspector-overlay-host", self.id))
+                        .id(self.id.slot("inspector-overlay-host"))
                         .absolute()
                         .top_0()
                         .right_0()
@@ -889,14 +876,6 @@ impl RenderOnce for AppShell {
         root.style().refine(&self.style);
 
         root.into_any_element()
-    }
-}
-
-impl IntoElement for AppShell {
-    type Element = Component<Self>;
-
-    fn into_element(self) -> Self::Element {
-        Component::new(self)
     }
 }
 
