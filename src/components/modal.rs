@@ -160,12 +160,13 @@ impl Modal {
         self
     }
 
-    pub fn custom<E>(mut self, content: E) -> Self
+    pub fn custom<F, E>(mut self, content: F) -> Self
     where
-        E: IntoElement + Clone + 'static,
+        F: Fn() -> E + 'static,
+        E: IntoElement + 'static,
     {
         self.kind = ModalKind::Custom;
-        self.content = Some(Arc::new(move || content.clone().into_any_element()));
+        self.content = Some(Arc::new(move || content().into_any_element()));
         self
     }
 
