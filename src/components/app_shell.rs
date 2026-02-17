@@ -2,8 +2,7 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, ClickEvent, ElementId, Hsla, InteractiveElement, IntoElement, MouseButton,
-    ParentElement, Refineable, RenderOnce, StatefulInteractiveElement, Styled, Window,
-    WindowControlArea, div, px,
+    ParentElement, Refineable, RenderOnce, Styled, Window, WindowControlArea, div, px,
 };
 
 use crate::id::ComponentId;
@@ -511,23 +510,11 @@ impl AppShell {
         window: &Window,
         id: ElementId,
         content: AnyElement,
-        scroll_vertical: bool,
         chrome: &PaneChrome,
         default_bg: Hsla,
     ) -> gpui::Stateful<gpui::Div> {
-        let region_content = if scroll_vertical {
-            div()
-                .id((id.clone(), "scroll"))
-                .size_full()
-                .min_h_0()
-                .overflow_y_scroll()
-                .child(content)
-                .into_any_element()
-        } else {
-            content
-        };
         let mut region =
-            Self::apply_surface(div().id(id).size_full(), chrome, default_bg).child(region_content);
+            Self::apply_surface(div().id(id).size_full(), chrome, default_bg).child(content);
 
         if chrome.bordered {
             region = region
@@ -589,7 +576,6 @@ impl RenderOnce for AppShell {
                     window,
                     self.id.slot("title-bar"),
                     title_bar(),
-                    false,
                     &self.title_bar_chrome,
                     title_default_bg,
                 )
@@ -677,7 +663,6 @@ impl RenderOnce for AppShell {
                         window,
                         self.id.slot("sidebar-inline"),
                         sidebar(),
-                        true,
                         &self.sidebar_chrome,
                         sidebar_default_bg,
                     )
@@ -707,14 +692,7 @@ impl RenderOnce for AppShell {
                 .flex_1()
                 .min_h_0()
                 .min_w_0()
-                .child(
-                    div()
-                        .id(self.id.slot("content-scroll"))
-                        .size_full()
-                        .min_h_0()
-                        .overflow_y_scroll()
-                        .child(content_element),
-                ),
+                .child(content_element),
         );
 
         if let Some(bottom_panel) = self.bottom_panel.take() {
@@ -724,7 +702,6 @@ impl RenderOnce for AppShell {
                     window,
                     self.id.slot("bottom-panel"),
                     bottom_panel(),
-                    true,
                     &self.bottom_panel_chrome,
                     bottom_default_bg,
                 )
@@ -744,7 +721,6 @@ impl RenderOnce for AppShell {
                         window,
                         self.id.slot("inspector-inline"),
                         inspector(),
-                        true,
                         &self.inspector_chrome,
                         inspector_default_bg,
                     )
@@ -820,7 +796,6 @@ impl RenderOnce for AppShell {
                         window,
                         self.id.slot("sidebar-overlay"),
                         sidebar(),
-                        true,
                         &self.sidebar_chrome,
                         sidebar_default_bg,
                     )
@@ -849,7 +824,6 @@ impl RenderOnce for AppShell {
                         window,
                         self.id.slot("inspector-overlay"),
                         inspector(),
-                        true,
                         &self.inspector_chrome,
                         inspector_default_bg,
                     )
