@@ -404,7 +404,7 @@ impl Modal {
                 },
             );
 
-        let mut close_action = div().into_any_element();
+        let mut close_action: AnyElement = div().into_any_element();
         if self.close_button {
             let id_for_close = self.id.clone();
             let close_callbacks_for_close = self.on_close.clone();

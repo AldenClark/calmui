@@ -242,8 +242,7 @@ impl RenderOnce for Popover {
                                 .child(floating),
                         )
                         .priority(20),
-                    )
-                    .into_any_element(),
+                    ),
                 PopoverPlacement::Bottom => div()
                     .id(self.id.slot("anchor-host"))
                     .absolute()
@@ -260,18 +259,13 @@ impl RenderOnce for Popover {
                                 .child(floating),
                         )
                         .priority(20),
-                    )
-                    .into_any_element(),
+                    ),
             };
 
             trigger = trigger.child(anchor_host);
         }
 
-        div()
-            .id(self.id.clone())
-            .relative()
-            .child(trigger)
-            .into_any_element()
+        div().id(self.id.clone()).relative().child(trigger)
     }
 }
 

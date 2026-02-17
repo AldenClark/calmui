@@ -149,7 +149,6 @@ impl Loader {
                             },
                         ),
                 )
-                .into_any_element()
         });
 
         let mut row = Stack::horizontal().items_center().gap_1().children(dots);
@@ -237,30 +236,25 @@ impl Loader {
                 .repeat()
                 .with_easing(gpui::ease_in_out);
 
-            div()
-                .h(px(bar_h_max))
-                .flex()
-                .items_end()
-                .child(
-                    div()
-                        .id(self.id.slot_index("bar", index.to_string()))
-                        .w(px(bar_w))
-                        .h(px(bar_h_max))
-                        .rounded_full()
-                        .bg(color)
-                        .with_animation(
-                            self.id.slot_index("bar-anim", index.to_string()),
-                            animation,
-                            move |this, delta| {
-                                let progress = (delta + phase).fract();
-                                let wave = ((progress * TAU).sin() + 1.0) * 0.5;
-                                let h = bar_h_min + ((bar_h_max - bar_h_min) * wave);
-                                let opacity = 0.35 + (0.65 * wave);
-                                this.h(px(h)).opacity(opacity)
-                            },
-                        ),
-                )
-                .into_any_element()
+            div().h(px(bar_h_max)).flex().items_end().child(
+                div()
+                    .id(self.id.slot_index("bar", index.to_string()))
+                    .w(px(bar_w))
+                    .h(px(bar_h_max))
+                    .rounded_full()
+                    .bg(color)
+                    .with_animation(
+                        self.id.slot_index("bar-anim", index.to_string()),
+                        animation,
+                        move |this, delta| {
+                            let progress = (delta + phase).fract();
+                            let wave = ((progress * TAU).sin() + 1.0) * 0.5;
+                            let h = bar_h_min + ((bar_h_max - bar_h_min) * wave);
+                            let opacity = 0.35 + (0.65 * wave);
+                            this.h(px(h)).opacity(opacity)
+                        },
+                    ),
+            )
         });
 
         let mut row = Stack::horizontal().items_end().gap_1().children(bars);
@@ -309,7 +303,6 @@ impl Loader {
                         this.opacity(0.16 + (0.84 * intensity))
                     },
                 )
-                .into_any_element()
         });
 
         let oval = div().relative().w(px(ring)).h(px(ring)).child(

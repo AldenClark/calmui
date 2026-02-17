@@ -474,10 +474,7 @@ impl RenderOnce for ButtonGroup {
                     });
                 }
 
-                div()
-                    .group(self.id.clone())
-                    .child(button)
-                    .into_any_element()
+                div().group(self.id.clone()).child(button)
             })
             .collect::<Vec<_>>();
 
@@ -487,8 +484,7 @@ impl RenderOnce for ButtonGroup {
                 .group(self.id.clone())
                 .tab_group()
                 .gap_1()
-                .children(children)
-                .into_any_element(),
+                .children(children),
             GroupOrientation::Vertical => div()
                 .id(self.id.clone())
                 .group(self.id.clone())
@@ -496,8 +492,7 @@ impl RenderOnce for ButtonGroup {
                 .flex()
                 .flex_col()
                 .gap_1()
-                .children(children)
-                .into_any_element(),
+                .children(children),
         };
         root
     }

@@ -159,7 +159,7 @@ impl RenderOnce for Alert {
         self.theme.sync_from_provider(_cx);
         let visible = control::bool_state(&self.id, "visible", self.visible, self.default_visible);
         if !visible {
-            return div().id(self.id.clone()).into_any_element();
+            return div().id(self.id.clone());
         }
 
         let (bg, fg) = self.colors();
@@ -267,7 +267,6 @@ impl RenderOnce for Alert {
                     )
                     .children(show_right_actions.then_some(right)),
             )
-            .into_any_element()
     }
 }
 

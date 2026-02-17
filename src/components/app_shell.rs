@@ -875,7 +875,7 @@ impl RenderOnce for AppShell {
         }
         root.style().refine(&self.style);
 
-        root.into_any_element()
+        root
     }
 }
 

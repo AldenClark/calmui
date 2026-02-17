@@ -334,7 +334,7 @@ impl RenderOnce for ToastLayer {
             root = root.child(Self::anchor_for(position).children(cards));
         }
 
-        root.into_any_element()
+        root
     }
 }
 
@@ -450,7 +450,7 @@ impl ModalLayer {
                 .child(entry.title_ref().clone()),
         );
 
-        let mut close_action = div().into_any_element();
+        let mut close_action: AnyElement = div().into_any_element();
         if entry.close_button_enabled() {
             close_action = div()
                 .id(self.id.slot_index("modal-close", (id.0).to_string()))
@@ -496,7 +496,6 @@ impl ModalLayer {
                     .text_color(body_color)
                     .text_sm()
                     .child(body.clone())
-                    .into_any_element()
             }))
             .children(entry.render_content());
 

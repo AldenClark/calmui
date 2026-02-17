@@ -228,8 +228,7 @@ impl TitleBar {
         };
 
         let close = button(self.id.slot("win-close"), "\u{e8bb}", true)
-            .window_control_area(WindowControlArea::Close)
-            .into_any_element();
+            .window_control_area(WindowControlArea::Close);
 
         WindowControls {
             element: div()
@@ -411,7 +410,6 @@ impl RenderOnce for TitleBar {
                     .text_color(fg)
                     .truncate()
                     .child(title)
-                    .into_any_element()
             })
         };
 

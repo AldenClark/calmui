@@ -189,7 +189,6 @@ impl Progress {
                 .w(px(stripe_width))
                 .h_full()
                 .bg(color.alpha(alpha))
-                .into_any_element()
         });
 
         let secondary_key = key.clone();
@@ -200,7 +199,6 @@ impl Progress {
                 .w(px(stripe_width * 1.25))
                 .h_full()
                 .bg(color.alpha(alpha))
-                .into_any_element()
         });
 
         let primary_band = Stack::horizontal()
@@ -386,7 +384,7 @@ impl RenderOnce for Progress {
                 ));
             }
 
-            let fill = fill.into_any_element();
+            let fill = fill;
 
             left += width;
             track = track.child(fill);

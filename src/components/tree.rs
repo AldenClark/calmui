@@ -415,8 +415,7 @@ impl TreeRenderCtx {
                     .id(self.tree_id.slot_index("line-h", path.clone()))
                     .w(px(8.0))
                     .h(super::utils::hairline_px(window))
-                    .bg(resolve_hsla(&self.theme, &self.tokens.line))
-                    .into_any_element(),
+                    .bg(resolve_hsla(&self.theme, &self.tokens.line)),
             )
         } else {
             None

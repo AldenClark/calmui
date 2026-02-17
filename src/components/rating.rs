@@ -291,7 +291,7 @@ impl RenderOnce for Rating {
                     }
                 }
 
-                cell.into_any_element()
+                cell
             })
             .collect::<Vec<_>>();
 

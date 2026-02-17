@@ -593,7 +593,7 @@ impl Select {
                     );
                 }
 
-                row.into_any_element()
+                row
             })
             .collect::<Vec<_>>();
 
@@ -760,14 +760,13 @@ impl RenderOnce for Select {
         field = field.child(trigger);
 
         match self.layout {
-            FieldLayout::Vertical => container.child(field).into_any_element(),
+            FieldLayout::Vertical => container.child(field),
             FieldLayout::Horizontal => Stack::horizontal()
                 .id(self.id.clone())
                 .items_start()
                 .gap_3()
                 .child(div().w(gpui::px(168.0)).child(self.render_label_block()))
-                .child(div().flex_1().child(field))
-                .into_any_element(),
+                .child(div().flex_1().child(field)),
         }
     }
 }
@@ -1135,7 +1134,6 @@ impl MultiSelect {
                     .bg(resolve_hsla(&self.theme, &tokens.tag_bg))
                     .text_color(resolve_hsla(&self.theme, &tokens.tag_fg))
                     .child(div().max_w(px(120.0)).truncate().child(label))
-                    .into_any_element()
             });
 
             control = control.child(
@@ -1270,7 +1268,7 @@ impl MultiSelect {
                     );
                 }
 
-                row.into_any_element()
+                row
             })
             .collect::<Vec<_>>();
 
@@ -1436,14 +1434,13 @@ impl RenderOnce for MultiSelect {
         field = field.child(trigger);
 
         match self.layout {
-            FieldLayout::Vertical => container.child(field).into_any_element(),
+            FieldLayout::Vertical => container.child(field),
             FieldLayout::Horizontal => Stack::horizontal()
                 .id(self.id.clone())
                 .items_start()
                 .gap_3()
                 .child(div().w(gpui::px(168.0)).child(self.render_label_block()))
-                .child(div().flex_1().child(field))
-                .into_any_element(),
+                .child(div().flex_1().child(field)),
         }
     }
 }

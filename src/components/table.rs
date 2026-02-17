@@ -730,7 +730,7 @@ impl RenderOnce for Table {
                 header_row = header_row.child(cell);
             }
 
-            header_row_any = Some(header_row.into_any_element());
+            header_row_any = Some(header_row);
         }
 
         let visible_row_count = rows.len();
@@ -945,7 +945,7 @@ impl RenderOnce for Table {
                     }
                     items = items.child(item);
                 }
-                Some(items.into_any_element())
+                Some(items)
             } else {
                 None
             };
@@ -992,7 +992,6 @@ impl RenderOnce for Table {
                         .child(page_summary),
                 )
                 .child(right)
-                .into_any_element()
         };
 
         if pagination_enabled

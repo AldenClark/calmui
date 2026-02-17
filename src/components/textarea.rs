@@ -915,9 +915,9 @@ impl Textarea {
                                 .flex()
                                 .items_center()
                                 .child(if left.is_empty() {
-                                    "".to_string().into_any_element()
+                                    "".to_string()
                                 } else {
-                                    left.into_any_element()
+                                    left
                                 })
                                 .child(div().bg(selection_bg).child(if selected.is_empty() {
                                     " ".to_string()
@@ -925,9 +925,9 @@ impl Textarea {
                                     selected
                                 }))
                                 .child(if right.is_empty() {
-                                    "".to_string().into_any_element()
+                                    "".to_string()
                                 } else {
-                                    right.into_any_element()
+                                    right
                                 }),
                         );
                         line_start_char = line_end_char.saturating_add(1);
@@ -966,15 +966,15 @@ impl Textarea {
                             .flex()
                             .items_center()
                             .child(if left.is_empty() {
-                                " ".to_string().into_any_element()
+                                " ".to_string()
                             } else {
-                                left.into_any_element()
+                                left
                             })
                             .child(caret)
                             .child(if right.is_empty() {
-                                "".to_string().into_any_element()
+                                "".to_string()
                             } else {
-                                right.into_any_element()
+                                right
                             }),
                     );
                 } else if line.is_empty() {

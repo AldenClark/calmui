@@ -315,7 +315,7 @@ impl RenderOnce for Accordion {
                     root = root.child(body.with_enter_transition((panel_id, "enter"), self.motion));
                 }
 
-                root.into_any_element()
+                root
             })
             .collect::<Vec<_>>();
 

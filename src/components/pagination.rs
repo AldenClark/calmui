@@ -275,7 +275,7 @@ impl RenderOnce for Pagination {
                 );
             }
 
-            item.into_any_element()
+            item
         };
 
         let prev_disabled = current <= 1 || self.disabled;
@@ -337,7 +337,7 @@ impl RenderOnce for Pagination {
                         );
                     }
 
-                    children.push(page_item.into_any_element());
+                    children.push(page_item);
                 }
                 PaginationNode::Ellipsis => {
                     let mut dots = div()
@@ -345,7 +345,7 @@ impl RenderOnce for Pagination {
                         .text_color(resolve_hsla(&theme, &tokens.dots_fg))
                         .child("...");
                     dots = Self::apply_item_size(self.size, dots);
-                    children.push(dots.into_any_element());
+                    children.push(dots);
                 }
             }
         }

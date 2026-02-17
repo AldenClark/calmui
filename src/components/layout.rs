@@ -121,9 +121,9 @@ impl RenderOnce for Grid {
                 row = Self::apply_gap(row, gap_x);
                 let items = current_row
                     .drain(..)
-                    .map(|item| div().flex_1().min_w_0().child(item).into_any_element())
+                    .map(|item| div().flex_1().min_w_0().child(item))
                     .collect::<Vec<_>>();
-                rows.push(row.children(items).into_any_element());
+                rows.push(row.children(items));
             }
         }
 
@@ -135,9 +135,9 @@ impl RenderOnce for Grid {
             }
             let items = current_row
                 .drain(..)
-                .map(|item| div().flex_1().min_w_0().child(item).into_any_element())
+                .map(|item| div().flex_1().min_w_0().child(item))
                 .collect::<Vec<_>>();
-            rows.push(row.children(items).into_any_element());
+            rows.push(row.children(items));
         }
 
         Self::apply_gap(div().id(self.id).flex().flex_col().w_full(), gap_y)

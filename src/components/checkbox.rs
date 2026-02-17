@@ -494,10 +494,7 @@ impl RenderOnce for CheckboxGroup {
                         (handler)(next, window, cx);
                     }
                 });
-                div()
-                    .group(self.id.clone())
-                    .child(checkbox)
-                    .into_any_element()
+                div().group(self.id.clone()).child(checkbox)
             })
             .collect::<Vec<_>>();
 

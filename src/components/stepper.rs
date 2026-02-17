@@ -258,9 +258,9 @@ impl RenderOnce for Stepper {
                 let is_active = index == active;
 
                 let indicator_text = if is_completed {
-                    "✓".into_any_element()
+                    "✓".to_string()
                 } else {
-                    div().child((index + 1).to_string()).into_any_element()
+                    (index + 1).to_string()
                 };
 
                 let (indicator_bg, indicator_border, indicator_fg) = if is_completed {
@@ -375,7 +375,7 @@ impl RenderOnce for Stepper {
                         });
                 }
 
-                item.into_any_element()
+                item
             })
             .collect::<Vec<_>>();
 
@@ -403,7 +403,7 @@ impl RenderOnce for Stepper {
                         );
                     }
                 }
-                row.into_any_element()
+                row
             }
             GroupOrientation::Vertical => {
                 let mut col = Stack::vertical()
@@ -427,15 +427,15 @@ impl RenderOnce for Stepper {
                         );
                     }
                 }
-                col.into_any_element()
+                col
             }
         };
 
         if step_count == 0 {
             steps_view = div()
+                .id(self.id.slot("steps-empty"))
                 .text_color(resolve_hsla(&theme, &tokens.description))
-                .child("No steps")
-                .into_any_element();
+                .child("No steps");
         }
 
         let mut panel = div()

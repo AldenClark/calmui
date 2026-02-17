@@ -297,7 +297,6 @@ impl RenderOnce for Chip {
         }
 
         chip.with_enter_transition(self.id.slot("enter"), self.motion)
-            .into_any_element()
     }
 }
 
@@ -596,7 +595,7 @@ impl RenderOnce for ChipGroup {
                     });
                 }
 
-                div().group(self.id.clone()).child(chip).into_any_element()
+                div().group(self.id.clone()).child(chip)
             })
             .collect::<Vec<_>>();
 
@@ -607,15 +606,13 @@ impl RenderOnce for ChipGroup {
                 .tab_group()
                 .gap_2()
                 .flex_wrap()
-                .children(chips)
-                .into_any_element(),
+                .children(chips),
             GroupOrientation::Vertical => Stack::vertical()
                 .id(self.id.clone())
                 .group(self.id.clone())
                 .tab_group()
                 .gap_2()
-                .children(chips)
-                .into_any_element(),
+                .children(chips),
         }
     }
 }

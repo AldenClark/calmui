@@ -134,7 +134,7 @@ impl RenderOnce for Drawer {
         self.theme.sync_from_provider(_cx);
         let opened = self.resolved_opened();
         if !opened {
-            return div().into_any_element();
+            return div().id(self.id);
         }
 
         let is_controlled = self.opened.is_some();
@@ -162,7 +162,7 @@ impl RenderOnce for Drawer {
                 },
             );
 
-        let mut close_action = div().into_any_element();
+        let mut close_action = div().id(self.id.slot("close"));
         if self.close_button {
             let on_close = self.on_close.clone();
             let close_id = self.id.clone();
@@ -197,17 +197,15 @@ impl RenderOnce for Drawer {
                     if let Some(handler) = on_close.as_ref() {
                         (handler)(window, cx);
                     }
-                })
-                .into_any_element();
+                });
         }
 
-        let mut body = div().into_any_element();
+        let mut body = div();
         if let Some(text) = self.body.clone() {
             body = div()
                 .text_sm()
                 .text_color(resolve_hsla(&self.theme, &tokens.body))
-                .child(text)
-                .into_any_element();
+                .child(text);
         }
 
         let mut panel = div()
@@ -260,7 +258,6 @@ impl RenderOnce for Drawer {
             .size_full()
             .child(overlay)
             .child(host)
-            .into_any_element()
     }
 }
 

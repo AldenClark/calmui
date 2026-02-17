@@ -132,7 +132,7 @@ impl RenderOnce for LoadingOverlay {
         }
 
         if !self.visible {
-            return root.into_any_element();
+            return root;
         }
 
         let tokens = &self.theme.components.loading_overlay;
@@ -175,7 +175,7 @@ impl RenderOnce for LoadingOverlay {
                     .child(content),
             );
 
-        root.child(overlay).into_any_element()
+        root.child(overlay)
     }
 }
 

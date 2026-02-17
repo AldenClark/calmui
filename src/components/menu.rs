@@ -234,7 +234,7 @@ impl Menu {
                     );
                 }
 
-                row.into_any_element()
+                row
             })
             .collect::<Vec<_>>();
 

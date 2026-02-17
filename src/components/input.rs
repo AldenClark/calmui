@@ -619,14 +619,12 @@ impl RenderOnce for TextInput {
             FieldLayout::Vertical => Stack::vertical()
                 .gap_2()
                 .child(self.render_label_block())
-                .child(self.render_input_box(window))
-                .into_any_element(),
+                .child(self.render_input_box(window)),
             FieldLayout::Horizontal => Stack::horizontal()
                 .items_start()
                 .gap_3()
                 .child(div().w(gpui::px(168.0)).child(self.render_label_block()))
-                .child(div().flex_1().child(self.render_input_box(window)))
-                .into_any_element(),
+                .child(div().flex_1().child(self.render_input_box(window))),
         }
     }
 }
@@ -1087,9 +1085,7 @@ impl RenderOnce for PinInput {
             root = root.child(cell);
         }
 
-        let field = root
-            .with_enter_transition(self.id.slot("enter"), self.motion)
-            .into_any_element();
+        let field = root.with_enter_transition(self.id.slot("enter"), self.motion);
 
         if let Some(error) = self.error {
             Stack::vertical()
@@ -1107,7 +1103,7 @@ impl RenderOnce for PinInput {
                 )
                 .into_any_element()
         } else {
-            field
+            field.into_any_element()
         }
     }
 }

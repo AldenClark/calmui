@@ -443,7 +443,7 @@ impl RenderOnce for Slider {
                     });
             }
 
-            segment.into_any_element()
+            segment
         });
         track = track.children(segments);
 

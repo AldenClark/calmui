@@ -254,7 +254,7 @@ impl RenderOnce for SegmentedControl {
                     segment = segment.opacity(0.5).cursor_default();
                 }
 
-                segment.into_any_element()
+                segment
             })
             .collect::<Vec<_>>();
 

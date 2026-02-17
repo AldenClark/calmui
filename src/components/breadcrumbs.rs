@@ -205,7 +205,7 @@ impl RenderOnce for Breadcrumbs {
                         crumb = crumb.opacity(0.5).cursor_default();
                     }
 
-                    children.push(crumb.into_any_element());
+                    children.push(crumb);
                 }
                 CrumbNode::Ellipsis => {
                     let mut ellipsis = div()
@@ -213,7 +213,7 @@ impl RenderOnce for Breadcrumbs {
                         .text_color(resolve_hsla(&self.theme, &tokens.separator))
                         .child("...");
                     ellipsis = self.apply_item_size(ellipsis);
-                    children.push(ellipsis.into_any_element());
+                    children.push(ellipsis);
                 }
             }
 
@@ -223,7 +223,7 @@ impl RenderOnce for Breadcrumbs {
                     .text_color(resolve_hsla(&self.theme, &tokens.separator))
                     .child(self.separator.clone());
                 separator = self.apply_item_size(separator);
-                children.push(separator.into_any_element());
+                children.push(separator);
             }
         }
 

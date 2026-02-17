@@ -478,7 +478,7 @@ impl RenderOnce for RadioGroup {
                         }
                     }
                 });
-                div().group(self.id.clone()).child(radio).into_any_element()
+                div().group(self.id.clone()).child(radio)
             })
             .collect::<Vec<_>>();
 
