@@ -215,6 +215,31 @@ impl Select {
         self
     }
 
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
+    }
+
+    pub fn description(mut self, value: impl Into<SharedString>) -> Self {
+        self.description = Some(value.into());
+        self
+    }
+
+    pub fn error(mut self, value: impl Into<SharedString>) -> Self {
+        self.error = Some(value.into());
+        self
+    }
+
+    pub fn required(mut self, value: bool) -> Self {
+        self.required = value;
+        self
+    }
+
+    pub fn layout(mut self, value: FieldLayout) -> Self {
+        self.layout = value;
+        self
+    }
+
     pub fn opened(mut self, value: bool) -> Self {
         self.opened = Some(value);
         self.opened_controlled = true;
@@ -447,7 +472,7 @@ impl Select {
         let id_for_width = self.id.clone();
         control
             .child(
-                Icon::named_outline(if opened { "chevron-up" } else { "chevron-down" })
+                Icon::named(if opened { "chevron-up" } else { "chevron-down" })
                     .with_id(format!("{}-chevron", self.id))
                     .size(14.0)
                     .color(resolve_hsla(&self.theme, &tokens.icon)),
@@ -521,7 +546,7 @@ impl Select {
                                     .h(px(14.0))
                                     .children(
                                         selected.then_some(
-                                            Icon::named_outline("check")
+                                            Icon::named("check")
                                                 .with_id(format!(
                                                     "{}-selected-{}",
                                                     self.id, option.value
@@ -845,6 +870,31 @@ impl MultiSelect {
         self
     }
 
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
+    }
+
+    pub fn description(mut self, value: impl Into<SharedString>) -> Self {
+        self.description = Some(value.into());
+        self
+    }
+
+    pub fn error(mut self, value: impl Into<SharedString>) -> Self {
+        self.error = Some(value.into());
+        self
+    }
+
+    pub fn required(mut self, value: bool) -> Self {
+        self.required = value;
+        self
+    }
+
+    pub fn layout(mut self, value: FieldLayout) -> Self {
+        self.layout = value;
+        self
+    }
+
     pub fn opened(mut self, value: bool) -> Self {
         self.opened = Some(value);
         self.opened_controlled = true;
@@ -1120,7 +1170,7 @@ impl MultiSelect {
         let id_for_width = self.id.clone();
         control
             .child(
-                Icon::named_outline(if opened { "chevron-up" } else { "chevron-down" })
+                Icon::named(if opened { "chevron-up" } else { "chevron-down" })
                     .with_id(format!("{}-chevron", self.id))
                     .size(14.0)
                     .color(resolve_hsla(&self.theme, &tokens.icon)),
@@ -1191,7 +1241,7 @@ impl MultiSelect {
                                     .h(px(14.0))
                                     .children(
                                         checked.then_some(
-                                            Icon::named_outline("check")
+                                            Icon::named("check")
                                                 .with_id(format!(
                                                     "{}-selected-{}",
                                                     self.id, option.value

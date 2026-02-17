@@ -170,7 +170,7 @@ impl RenderOnce for Modal {
                 .text_color(resolve_hsla(&self.theme, &tokens.title))
                 .hover(|style| style.opacity(0.8))
                 .child(
-                    Icon::named_outline("x")
+                    Icon::named("x")
                         .with_id(format!("{}-close-icon", self.id))
                         .size(14.0)
                         .color(resolve_hsla(&self.theme, &tokens.title)),

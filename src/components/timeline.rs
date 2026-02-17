@@ -216,7 +216,7 @@ impl RenderOnce for Timeline {
 
             if let Some(icon) = item.marker_icon.take() {
                 bullet = bullet.child(
-                    Icon::named_outline(icon.to_string())
+                    Icon::named(icon.to_string())
                         .with_id(format!("{}-bullet-icon-{index}", self.id))
                         .size((bullet_size * 0.56).max(10.0))
                         .color(if is_active_marker {

@@ -11,6 +11,7 @@ static OPT_TEXT_STATE: LazyLock<Mutex<HashMap<String, Option<String>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 static LIST_STATE: LazyLock<Mutex<HashMap<String, Vec<String>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+pub const FOCUSED_SLOT: &str = "focused";
 
 fn key(id: &str, slot: &str) -> String {
     format!("{id}::{slot}")
@@ -33,6 +34,18 @@ pub fn set_bool_state(id: &str, slot: &str, value: bool) {
     if let Ok(mut state) = BOOL_STATE.lock() {
         state.insert(composed, value);
     }
+}
+
+pub fn focused_state(id: &str, controlled: Option<bool>, default: bool) -> bool {
+    bool_state(id, FOCUSED_SLOT, controlled, default)
+}
+
+pub fn set_focused_state(id: &str, value: bool) {
+    set_bool_state(id, FOCUSED_SLOT, value);
+}
+
+pub fn is_activation_key(key: &str) -> bool {
+    key == "space" || key == "enter"
 }
 
 pub fn text_state(id: &str, slot: &str, controlled: Option<String>, default: String) -> String {

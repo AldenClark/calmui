@@ -145,18 +145,17 @@ impl Button {
                     .into_any_element()
             };
 
-            let mut placeholder = Stack::horizontal().gap_2();
+            let mut placeholder = Stack::horizontal().gap_2().text_color(fg);
             if let Some(left) = self.left_slot.take() {
-                placeholder = placeholder.child(div().text_color(fg).child(left()));
+                placeholder = placeholder.child(left());
             }
             placeholder = placeholder.child(
                 div()
                     .font_weight(variant_text_weight(self.variant))
-                    .text_color(fg)
                     .child(self.label.clone()),
             );
             if let Some(right) = self.right_slot.take() {
-                placeholder = placeholder.child(div().text_color(fg).child(right()));
+                placeholder = placeholder.child(right());
             }
 
             return div()
@@ -177,20 +176,19 @@ impl Button {
                 .into_any_element();
         }
 
-        let mut row = Stack::horizontal().gap_2();
+        let mut row = Stack::horizontal().gap_2().text_color(fg);
         if let Some(left) = self.left_slot.take() {
-            row = row.child(div().text_color(fg).child(left()));
+            row = row.child(left());
         }
 
         row = row.child(
             div()
                 .font_weight(variant_text_weight(self.variant))
-                .text_color(fg)
                 .child(self.label.clone()),
         );
 
         if let Some(right) = self.right_slot.take() {
-            row = row.child(div().text_color(fg).child(right()));
+            row = row.child(right());
         }
 
         let _ = bg_token;

@@ -81,6 +81,8 @@ impl_option_overrides_methods!(InputOverrides {
 impl_option_overrides_methods!(RadioOverrides {
     control_bg: Hsla,
     border: Hsla,
+    border_hover: Hsla,
+    border_focus: Hsla,
     border_checked: Hsla,
     indicator: Hsla,
     label: Hsla,
@@ -91,6 +93,8 @@ impl_option_overrides_methods!(CheckboxOverrides {
     control_bg: Hsla,
     control_bg_checked: Hsla,
     border: Hsla,
+    border_hover: Hsla,
+    border_focus: Hsla,
     border_checked: Hsla,
     indicator: Hsla,
     label: Hsla,
@@ -100,6 +104,8 @@ impl_option_overrides_methods!(CheckboxOverrides {
 impl_option_overrides_methods!(SwitchOverrides {
     track_off_bg: Hsla,
     track_on_bg: Hsla,
+    track_hover_border: Hsla,
+    track_focus_border: Hsla,
     thumb_bg: Hsla,
     label: Hsla,
     description: Hsla,
@@ -121,6 +127,8 @@ impl_option_overrides_methods!(ChipOverrides {
     default_bg: Hsla,
     default_fg: Hsla,
     default_border: Hsla,
+    border_hover: Hsla,
+    border_focus: Hsla,
 });
 
 impl_option_overrides_methods!(BadgeOverrides {

@@ -144,7 +144,10 @@ impl RenderOnce for Radio {
         let tokens = &self.theme.components.radio;
         let dot_size = self.control_size_px();
         let indicator_size = (dot_size * 0.45).max(4.0);
-        let border = if checked {
+        let is_focused = control::focused_state(&self.id, None, false);
+        let border = if is_focused {
+            resolve_hsla(&self.theme, &tokens.border_focus)
+        } else if checked {
             resolve_hsla(&self.theme, &tokens.border_checked)
         } else {
             resolve_hsla(&self.theme, &tokens.border)
@@ -162,6 +165,10 @@ impl RenderOnce for Radio {
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(border)
             .bg(resolve_hsla(&self.theme, &tokens.control_bg));
+        if !self.disabled {
+            let hover_border = resolve_hsla(&self.theme, &tokens.border_hover);
+            control = control.hover(move |style| style.border_color(hover_border));
+        }
         if checked {
             control = control.child(
                 div()
@@ -174,6 +181,7 @@ impl RenderOnce for Radio {
 
         let mut row = Stack::horizontal()
             .id(self.id.clone())
+            .focusable()
             .cursor_pointer()
             .child(
                 Stack::vertical()
@@ -197,24 +205,89 @@ impl RenderOnce for Radio {
         if self.disabled {
             row = row.cursor_default().opacity(0.55);
         } else if let Some(handler) = self.on_change.clone() {
+            let handler_for_click = handler.clone();
+            let handler_for_key = handler.clone();
             let id = self.id.clone();
-            row = row.on_click(move |_, window, cx| {
-                if !checked {
-                    if !is_controlled {
+            let id_for_key = self.id.clone();
+            let id_for_blur = self.id.clone();
+            row = row
+                .on_click(move |_, window, cx| {
+                    control::set_focused_state(&id, true);
+                    window.refresh();
+                    if !checked {
+                        if !is_controlled {
+                            control::set_bool_state(&id, "checked", true);
+                            window.refresh();
+                        }
+                        (handler_for_click)(true, window, cx);
+                    }
+                })
+                .on_key_down(move |event, window, cx| {
+                    let key = event.keystroke.key.as_str();
+                    if control::is_activation_key(key) {
+                        control::set_focused_state(&id_for_key, true);
+                        window.refresh();
+                        if !checked {
+                            if !is_controlled {
+                                control::set_bool_state(&id_for_key, "checked", true);
+                                window.refresh();
+                            }
+                            (handler_for_key)(true, window, cx);
+                        }
+                    }
+                })
+                .on_mouse_down_out(move |_, window, _cx| {
+                    control::set_focused_state(&id_for_blur, false);
+                    window.refresh();
+                });
+        } else if !is_controlled {
+            let id = self.id.clone();
+            let id_for_key = self.id.clone();
+            let id_for_blur = self.id.clone();
+            row = row
+                .on_click(move |_, window, _cx| {
+                    control::set_focused_state(&id, true);
+                    window.refresh();
+                    if !checked {
                         control::set_bool_state(&id, "checked", true);
                         window.refresh();
                     }
-                    (handler)(true, window, cx);
-                }
-            });
-        } else if !is_controlled {
-            let id = self.id.clone();
-            row = row.on_click(move |_, window, _cx| {
-                if !checked {
-                    control::set_bool_state(&id, "checked", true);
+                })
+                .on_key_down(move |event, window, _cx| {
+                    let key = event.keystroke.key.as_str();
+                    if control::is_activation_key(key) {
+                        control::set_focused_state(&id_for_key, true);
+                        window.refresh();
+                        if !checked {
+                            control::set_bool_state(&id_for_key, "checked", true);
+                            window.refresh();
+                        }
+                    }
+                })
+                .on_mouse_down_out(move |_, window, _cx| {
+                    control::set_focused_state(&id_for_blur, false);
                     window.refresh();
-                }
-            });
+                });
+        } else {
+            let id = self.id.clone();
+            let id_for_key = self.id.clone();
+            let id_for_blur = self.id.clone();
+            row = row
+                .on_click(move |_, window, _cx| {
+                    control::set_focused_state(&id, true);
+                    window.refresh();
+                })
+                .on_key_down(move |event, window, _cx| {
+                    let key = event.keystroke.key.as_str();
+                    if control::is_activation_key(key) {
+                        control::set_focused_state(&id_for_key, true);
+                        window.refresh();
+                    }
+                })
+                .on_mouse_down_out(move |_, window, _cx| {
+                    control::set_focused_state(&id_for_blur, false);
+                    window.refresh();
+                });
         }
 
         row.with_enter_transition(format!("{}-enter", self.id), self.motion)

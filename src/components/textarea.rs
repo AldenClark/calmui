@@ -99,6 +99,31 @@ impl Textarea {
         self
     }
 
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
+    }
+
+    pub fn description(mut self, value: impl Into<SharedString>) -> Self {
+        self.description = Some(value.into());
+        self
+    }
+
+    pub fn error(mut self, value: impl Into<SharedString>) -> Self {
+        self.error = Some(value.into());
+        self
+    }
+
+    pub fn required(mut self, value: bool) -> Self {
+        self.required = value;
+        self
+    }
+
+    pub fn layout(mut self, value: FieldLayout) -> Self {
+        self.layout = value;
+        self
+    }
+
     pub fn min_rows(mut self, rows: usize) -> Self {
         self.min_rows = rows.max(1);
         self
@@ -543,7 +568,7 @@ impl Textarea {
         let tokens = &self.theme.components.textarea;
         let resolved_value = self.resolved_value();
         let current_value = resolved_value.to_string();
-        let tracked_focus = control::bool_state(&self.id, "focused", None, false);
+        let tracked_focus = control::focused_state(&self.id, None, false);
         let handle_focused = self
             .focus_handle
             .as_ref()
@@ -645,7 +670,7 @@ impl Textarea {
                 input
                     .track_focus(focus_handle)
                     .on_click(move |event: &ClickEvent, window, cx| {
-                        control::set_bool_state(&id_for_focus, "focused", true);
+                        control::set_focused_state(&id_for_focus, true);
                         let click_caret = Self::caret_from_click(
                             &id_for_focus,
                             event.position(),
@@ -670,7 +695,7 @@ impl Textarea {
             let vertical_padding_for_click = vertical_padding;
             let char_width_for_click = char_width;
             input = input.on_click(move |event: &ClickEvent, window, _cx| {
-                control::set_bool_state(&id_for_focus, "focused", true);
+                control::set_focused_state(&id_for_focus, true);
                 let click_caret = Self::caret_from_click(
                     &id_for_focus,
                     event.position(),
@@ -687,7 +712,7 @@ impl Textarea {
 
         let id_for_blur = self.id.clone();
         input = input.on_mouse_down_out(move |_, window, _cx| {
-            control::set_bool_state(&id_for_blur, "focused", false);
+            control::set_focused_state(&id_for_blur, false);
             window.refresh();
         });
 
@@ -728,7 +753,7 @@ impl Textarea {
             let current_value_for_input = current_value.clone();
             let current_caret_for_input = current_caret;
             input = input.on_key_down(move |event, window, cx| {
-                control::set_bool_state(&input_id, "focused", true);
+                control::set_focused_state(&input_id, true);
                 let len = current_value_for_input.chars().count();
                 let selection = Self::selection_bounds_for(&input_id, len);
                 let modifiers =

@@ -12,7 +12,7 @@ use crate::id::stable_auto_id;
 use super::Stack;
 use super::control;
 use super::icon::Icon;
-use super::utils::resolve_hsla;
+use super::utils::{deepened_surface_border, resolve_hsla};
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 type CloseHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)>;
@@ -138,11 +138,11 @@ impl Alert {
 
     fn default_icon(kind: AlertKind) -> IconSource {
         match kind {
-            AlertKind::Info => IconSource::named_outline("info-circle"),
-            AlertKind::Success => IconSource::named_outline("circle-check"),
-            AlertKind::Warning => IconSource::named_outline("alert-triangle"),
-            AlertKind::Error => IconSource::named_outline("alert-circle"),
-            AlertKind::Loading => IconSource::named_outline("loader-2"),
+            AlertKind::Info => IconSource::named("info-circle"),
+            AlertKind::Success => IconSource::named("circle-check"),
+            AlertKind::Warning => IconSource::named("alert-triangle"),
+            AlertKind::Error => IconSource::named("alert-circle"),
+            AlertKind::Loading => IconSource::named("loader-2"),
         }
     }
 }
@@ -206,7 +206,7 @@ impl RenderOnce for Alert {
             .hover(|style| style.bg(fg.opacity(0.16)))
             .active(|style| style.bg(fg.opacity(0.24)))
             .child(
-                Icon::named_outline("x")
+                Icon::named("x")
                     .with_id(format!("{}-close-icon", self.id))
                     .size(13.0)
                     .color(fg)
@@ -237,10 +237,7 @@ impl RenderOnce for Alert {
             .p_3()
             .rounded_md()
             .border(super::utils::quantized_stroke_px(window, 1.0))
-            .border_color(resolve_hsla(
-                &self.theme,
-                &self.theme.semantic.border_subtle,
-            ))
+            .border_color(deepened_surface_border(bg))
             .bg(bg)
             .text_color(fg)
             .child(

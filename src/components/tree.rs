@@ -368,7 +368,7 @@ impl TreeRenderCtx {
             .justify_center();
         if has_children {
             toggle = toggle.child(
-                Icon::named_outline(if is_expanded {
+                Icon::named(if is_expanded {
                     "chevron-down"
                 } else {
                     "chevron-right"

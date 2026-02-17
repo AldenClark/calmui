@@ -240,7 +240,7 @@ impl RenderOnce for Accordion {
                             })),
                     )
                     .child(
-                        Icon::named_outline(if is_open {
+                        Icon::named(if is_open {
                             "chevron-up"
                         } else {
                             "chevron-down"

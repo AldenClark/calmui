@@ -190,7 +190,7 @@ impl Menu {
 
                 if let Some(icon) = item.left_icon.clone() {
                     row = row.child(
-                        Icon::named_outline(icon.to_string())
+                        Icon::named(icon.to_string())
                             .with_id(format!("{}-item-icon-{}", self.id, item.value))
                             .size(14.0)
                             .color(resolve_hsla(&self.theme, &tokens.icon)),

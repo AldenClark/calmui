@@ -186,7 +186,7 @@ impl RenderOnce for Drawer {
                 .text_color(close_fg)
                 .hover(|style| style.opacity(0.82))
                 .child(
-                    Icon::named_outline("x")
+                    Icon::named("x")
                         .with_id(format!("{}-close-icon", self.id))
                         .size(14.0)
                         .color(close_fg),

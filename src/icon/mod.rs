@@ -1,67 +1,24 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use rust_embed::RustEmbed;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum IconVariant {
-    Outline,
-    Filled,
-}
-
-impl IconVariant {
-    pub fn fallback(self) -> Self {
-        match self {
-            Self::Outline => Self::Filled,
-            Self::Filled => Self::Outline,
-        }
-    }
-
-    fn folder(self) -> &'static str {
-        match self {
-            Self::Outline => "outline",
-            Self::Filled => "filled",
-        }
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IconName {
     value: String,
-    variant: IconVariant,
 }
 
 impl IconName {
     pub fn new(value: impl Into<String>) -> Self {
         Self {
             value: value.into(),
-            variant: IconVariant::Outline,
         }
     }
 
     pub fn as_str(&self) -> &str {
         &self.value
-    }
-
-    pub fn variant(&self) -> IconVariant {
-        self.variant
-    }
-
-    pub fn with_variant(mut self, variant: IconVariant) -> Self {
-        self.variant = variant;
-        self
-    }
-
-    pub fn outline(mut self) -> Self {
-        self.variant = IconVariant::Outline;
-        self
-    }
-
-    pub fn filled(mut self) -> Self {
-        self.variant = IconVariant::Filled;
-        self
     }
 }
 
@@ -74,71 +31,30 @@ impl IconSource {
     pub fn named(value: impl Into<String>) -> Self {
         Self::Named(IconName::new(value))
     }
-
-    pub fn named_outline(value: impl Into<String>) -> Self {
-        Self::Named(IconName::new(value).outline())
-    }
-
-    pub fn named_filled(value: impl Into<String>) -> Self {
-        Self::Named(IconName::new(value).filled())
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-struct VariantIndex {
-    root: Option<PathBuf>,
-    names: BTreeSet<String>,
-}
-
-impl VariantIndex {
-    fn set_root(mut self, root: PathBuf) -> Self {
-        self.root = Some(root);
-        self
-    }
-
-    fn insert_name(mut self, name: String) -> Self {
-        self.names.insert(name);
-        self
-    }
-
-    fn resolve(&self, name: &str) -> Option<PathBuf> {
-        if !self.names.contains(name) {
-            return None;
-        }
-
-        let root = self.root.as_ref()?;
-        Some(root.join(format!("{name}.svg")))
-    }
 }
 
 #[derive(Clone, Debug, Default)]
 struct PackIndex {
-    outline: VariantIndex,
-    filled: VariantIndex,
+    names: BTreeMap<String, PathBuf>,
 }
 
 impl PackIndex {
-    fn variant(&self, variant: IconVariant) -> &VariantIndex {
-        match variant {
-            IconVariant::Outline => &self.outline,
-            IconVariant::Filled => &self.filled,
-        }
-    }
-
-    fn set_variant_root(mut self, variant: IconVariant, root: PathBuf) -> Self {
-        match variant {
-            IconVariant::Outline => self.outline = self.outline.set_root(root),
-            IconVariant::Filled => self.filled = self.filled.set_root(root),
-        }
+    fn set_name_path(mut self, name: String, path: PathBuf) -> Self {
+        self.names.entry(name).or_insert(path);
         self
     }
 
-    fn insert_variant_name(mut self, variant: IconVariant, name: String) -> Self {
-        match variant {
-            IconVariant::Outline => self.outline = self.outline.insert_name(name),
-            IconVariant::Filled => self.filled = self.filled.insert_name(name),
-        }
+    fn add_alias(mut self, alias: String, path: PathBuf) -> Self {
+        self.names.entry(alias).or_insert(path);
         self
+    }
+
+    fn resolve(&self, name: &str) -> Option<PathBuf> {
+        self.names.get(name).cloned()
+    }
+
+    fn len(&self) -> usize {
+        self.names.len()
     }
 }
 
@@ -211,16 +127,14 @@ impl IconRegistry {
         let (pack_name, icon_name) = split_namespace(name.as_str(), &self.inner.default_pack);
         let pack = self.inner.packs.get(pack_name)?;
 
-        pack.variant(name.variant())
-            .resolve(icon_name)
-            .or_else(|| pack.variant(name.variant().fallback()).resolve(icon_name))
+        pack.resolve(icon_name)
     }
 
-    pub fn count(&self, pack: &str, variant: IconVariant) -> usize {
+    pub fn count(&self, pack: &str) -> usize {
         self.inner
             .packs
             .get(pack)
-            .map(|pack| pack.variant(variant).names.len())
+            .map(PackIndex::len)
             .unwrap_or_default()
     }
 
@@ -240,15 +154,26 @@ fn split_namespace<'a>(value: &'a str, default_pack: &'a str) -> (&'a str, &'a s
 
 fn load_pack_from_root(root: &Path) -> Result<PackIndex, std::io::Error> {
     let mut pack = PackIndex::default();
-    for variant in [IconVariant::Outline, IconVariant::Filled] {
-        let variant_root = root.join(variant.folder());
-        if !variant_root.exists() {
-            continue;
-        }
+    let outline_root = root.join("outline");
+    let filled_root = root.join("filled");
 
-        pack = pack.set_variant_root(variant, variant_root.clone());
-        for icon_name in read_icon_names(&variant_root)? {
-            pack = pack.insert_variant_name(variant, icon_name);
+    if outline_root.exists() {
+        for icon_name in read_icon_names(&outline_root)? {
+            let path = outline_root.join(format!("{icon_name}.svg"));
+            pack = pack.set_name_path(icon_name.clone(), path.clone());
+            if !icon_name.ends_with("-outline") {
+                pack = pack.add_alias(format!("{icon_name}-outline"), path);
+            }
+        }
+    }
+
+    if filled_root.exists() {
+        for icon_name in read_icon_names(&filled_root)? {
+            let path = filled_root.join(format!("{icon_name}.svg"));
+            pack = pack.set_name_path(icon_name.clone(), path.clone());
+            if !icon_name.ends_with("-filled") {
+                pack = pack.add_alias(format!("{icon_name}-filled"), path);
+            }
         }
     }
     Ok(pack)
@@ -370,13 +295,13 @@ mod tests {
     #[test]
     fn default_registry_contains_embedded_icons() {
         let registry = IconRegistry::new();
-        assert!(registry.count("tabler", IconVariant::Outline) >= 5);
+        assert!(registry.count("tabler") >= 5);
     }
 
     #[test]
     fn can_resolve_basic_icon() {
         let registry = IconRegistry::new();
-        let icon = IconName::new("info-circle").outline();
+        let icon = IconName::new("info-circle");
         let path = registry
             .resolve_named(&icon)
             .expect("info-circle should be resolvable");
@@ -386,17 +311,23 @@ mod tests {
     #[test]
     fn can_resolve_triangle_icons() {
         let registry = IconRegistry::new();
-        let up = IconName::new("triangle-up-filled").filled();
-        let down = IconName::new("triangle-down-filled").filled();
+        let up = IconName::new("triangle-up-filled");
+        let down = IconName::new("triangle-down-filled");
         assert!(registry.resolve_named(&up).is_some());
         assert!(registry.resolve_named(&down).is_some());
+    }
+
+    #[test]
+    fn can_resolve_filled_alias_for_shared_name() {
+        let registry = IconRegistry::new();
+        let icon = IconName::new("star-filled");
+        assert!(registry.resolve_named(&icon).is_some());
     }
 
     #[cfg(feature = "extend-icon")]
     #[test]
     fn extended_pack_contains_full_tabler_counts() {
         let registry = IconRegistry::new();
-        assert!(registry.count("tabler", IconVariant::Outline) >= 4_900);
-        assert!(registry.count("tabler", IconVariant::Filled) >= 900);
+        assert!(registry.count("tabler") >= 5_500);
     }
 }

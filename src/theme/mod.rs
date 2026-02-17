@@ -511,6 +511,8 @@ pub struct InputTokens {
 pub struct RadioTokens {
     pub control_bg: Hsla,
     pub border: Hsla,
+    pub border_hover: Hsla,
+    pub border_focus: Hsla,
     pub border_checked: Hsla,
     pub indicator: Hsla,
     pub label: Hsla,
@@ -522,6 +524,8 @@ pub struct CheckboxTokens {
     pub control_bg: Hsla,
     pub control_bg_checked: Hsla,
     pub border: Hsla,
+    pub border_hover: Hsla,
+    pub border_focus: Hsla,
     pub border_checked: Hsla,
     pub indicator: Hsla,
     pub label: Hsla,
@@ -532,6 +536,8 @@ pub struct CheckboxTokens {
 pub struct SwitchTokens {
     pub track_off_bg: Hsla,
     pub track_on_bg: Hsla,
+    pub track_hover_border: Hsla,
+    pub track_focus_border: Hsla,
     pub thumb_bg: Hsla,
     pub label: Hsla,
     pub description: Hsla,
@@ -554,6 +560,8 @@ pub struct ChipTokens {
     pub default_bg: Hsla,
     pub default_fg: Hsla,
     pub default_border: Hsla,
+    pub border_hover: Hsla,
+    pub border_focus: Hsla,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1081,6 +1089,14 @@ impl ComponentTokens {
                     border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    border_hover: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    border_focus: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                     border_checked: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
@@ -1106,6 +1122,14 @@ impl ComponentTokens {
                     border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    border_hover: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    border_focus: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                     border_checked: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
@@ -1128,6 +1152,16 @@ impl ComponentTokens {
                     track_on_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    track_hover_border: (Rgba::try_from(
+                        PaletteCatalog::scale(primary)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    track_focus_border: (Rgba::try_from(
+                        PaletteCatalog::scale(primary)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                     thumb_bg: white(),
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
                         .map(Into::into)
@@ -1198,6 +1232,14 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    border_hover: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    border_focus: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 badge: BadgeTokens {
                     filled_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
@@ -2155,6 +2197,14 @@ impl ComponentTokens {
                     border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    border_hover: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    border_focus: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                     border_checked: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
@@ -2184,6 +2234,14 @@ impl ComponentTokens {
                     border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    border_hover: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    border_focus: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                     border_checked: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
@@ -2206,6 +2264,16 @@ impl ComponentTokens {
                     track_on_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    track_hover_border: (Rgba::try_from(
+                        PaletteCatalog::scale(primary)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    track_focus_border: (Rgba::try_from(
+                        PaletteCatalog::scale(primary)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                     thumb_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
@@ -2282,6 +2350,14 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    border_hover: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    border_focus: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                 },
                 badge: BadgeTokens {
                     filled_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
@@ -3544,6 +3620,8 @@ impl InputOverrides {
 pub struct RadioOverrides {
     pub control_bg: Option<Hsla>,
     pub border: Option<Hsla>,
+    pub border_hover: Option<Hsla>,
+    pub border_focus: Option<Hsla>,
     pub border_checked: Option<Hsla>,
     pub indicator: Option<Hsla>,
     pub label: Option<Hsla>,
@@ -3557,6 +3635,12 @@ impl RadioOverrides {
         }
         if let Some(value) = &self.border {
             current.border = value.clone();
+        }
+        if let Some(value) = &self.border_hover {
+            current.border_hover = value.clone();
+        }
+        if let Some(value) = &self.border_focus {
+            current.border_focus = value.clone();
         }
         if let Some(value) = &self.border_checked {
             current.border_checked = value.clone();
@@ -3579,6 +3663,8 @@ pub struct CheckboxOverrides {
     pub control_bg: Option<Hsla>,
     pub control_bg_checked: Option<Hsla>,
     pub border: Option<Hsla>,
+    pub border_hover: Option<Hsla>,
+    pub border_focus: Option<Hsla>,
     pub border_checked: Option<Hsla>,
     pub indicator: Option<Hsla>,
     pub label: Option<Hsla>,
@@ -3595,6 +3681,12 @@ impl CheckboxOverrides {
         }
         if let Some(value) = &self.border {
             current.border = value.clone();
+        }
+        if let Some(value) = &self.border_hover {
+            current.border_hover = value.clone();
+        }
+        if let Some(value) = &self.border_focus {
+            current.border_focus = value.clone();
         }
         if let Some(value) = &self.border_checked {
             current.border_checked = value.clone();
@@ -3616,6 +3708,8 @@ impl CheckboxOverrides {
 pub struct SwitchOverrides {
     pub track_off_bg: Option<Hsla>,
     pub track_on_bg: Option<Hsla>,
+    pub track_hover_border: Option<Hsla>,
+    pub track_focus_border: Option<Hsla>,
     pub thumb_bg: Option<Hsla>,
     pub label: Option<Hsla>,
     pub description: Option<Hsla>,
@@ -3628,6 +3722,12 @@ impl SwitchOverrides {
         }
         if let Some(value) = &self.track_on_bg {
             current.track_on_bg = value.clone();
+        }
+        if let Some(value) = &self.track_hover_border {
+            current.track_hover_border = value.clone();
+        }
+        if let Some(value) = &self.track_focus_border {
+            current.track_focus_border = value.clone();
         }
         if let Some(value) = &self.thumb_bg {
             current.thumb_bg = value.clone();
@@ -3659,6 +3759,8 @@ pub struct ChipOverrides {
     pub default_bg: Option<Hsla>,
     pub default_fg: Option<Hsla>,
     pub default_border: Option<Hsla>,
+    pub border_hover: Option<Hsla>,
+    pub border_focus: Option<Hsla>,
 }
 
 impl ChipOverrides {
@@ -3707,6 +3809,12 @@ impl ChipOverrides {
         }
         if let Some(value) = &self.default_border {
             current.default_border = value.clone();
+        }
+        if let Some(value) = &self.border_hover {
+            current.border_hover = value.clone();
+        }
+        if let Some(value) = &self.border_focus {
+            current.border_focus = value.clone();
         }
         current
     }

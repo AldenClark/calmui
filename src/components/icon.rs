@@ -43,16 +43,6 @@ impl Icon {
         Self::new(IconSource::named(name))
     }
 
-    #[track_caller]
-    pub fn named_outline(name: impl Into<String>) -> Self {
-        Self::new(IconSource::named_outline(name))
-    }
-
-    #[track_caller]
-    pub fn named_filled(name: impl Into<String>) -> Self {
-        Self::new(IconSource::named_filled(name))
-    }
-
     pub fn source(mut self, source: IconSource) -> Self {
         self.source = source;
         self
@@ -78,11 +68,11 @@ impl Icon {
         self
     }
 
-    fn resolve_color(&self) -> gpui::Hsla {
+    fn resolve_color(&self) -> Option<gpui::Hsla> {
         match &self.color {
-            Some(IconColor::Token(token)) => resolve_hsla(&self.theme, token),
-            Some(IconColor::Raw(value)) => *value,
-            None => resolve_hsla(&self.theme, &self.theme.semantic.text_primary),
+            Some(IconColor::Token(token)) => Some(resolve_hsla(&self.theme, token)),
+            Some(IconColor::Raw(value)) => Some(*value),
+            None => None,
         }
     }
 }
@@ -102,22 +92,26 @@ impl RenderOnce for Icon {
         self.theme.sync_from_provider(_cx);
         let color = self.resolve_color();
         if let Some(path) = self.registry.resolve(&self.source) {
-            return svg()
+            let mut icon = svg()
                 .external_path(path.to_string_lossy().to_string())
                 .w(px(self.size))
                 .h(px(self.size))
-                .text_color(color)
-                .id(self.id)
-                .into_any_element();
+                .id(self.id);
+            if let Some(color) = color {
+                icon = icon.text_color(color);
+            }
+            return icon.into_any_element();
         }
 
-        div()
+        let mut fallback = div()
             .id(self.id)
             .w(px(self.size))
             .h(px(self.size))
-            .text_color(color)
-            .child("?")
-            .into_any_element()
+            .child("?");
+        if let Some(color) = color {
+            fallback = fallback.text_color(color);
+        }
+        fallback.into_any_element()
     }
 }
 

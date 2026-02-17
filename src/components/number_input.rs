@@ -148,6 +148,31 @@ impl NumberInput {
         self
     }
 
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
+    }
+
+    pub fn description(mut self, value: impl Into<SharedString>) -> Self {
+        self.description = Some(value.into());
+        self
+    }
+
+    pub fn error(mut self, value: impl Into<SharedString>) -> Self {
+        self.error = Some(value.into());
+        self
+    }
+
+    pub fn required(mut self, value: bool) -> Self {
+        self.required = value;
+        self
+    }
+
+    pub fn layout(mut self, value: FieldLayout) -> Self {
+        self.layout = value;
+        self
+    }
+
     pub fn left_slot(mut self, content: impl IntoElement + 'static) -> Self {
         self.left_slot = Some(Box::new(|| content.into_any_element()));
         self
@@ -563,7 +588,7 @@ impl NumberInput {
                 .border(super::utils::quantized_stroke_px(window, 1.0))
                 .border_color(controls_border)
                 .child(
-                    Icon::named_outline("chevron-up")
+                    Icon::named("chevron-up")
                         .with_id(format!("{}-chevron-up", self.id))
                         .size(12.0)
                         .color(controls_fg),
@@ -581,7 +606,7 @@ impl NumberInput {
                 .border(super::utils::quantized_stroke_px(window, 1.0))
                 .border_color(controls_border)
                 .child(
-                    Icon::named_outline("chevron-down")
+                    Icon::named("chevron-down")
                         .with_id(format!("{}-chevron-down", self.id))
                         .size(12.0)
                         .color(controls_fg),

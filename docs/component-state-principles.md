@@ -53,3 +53,7 @@
 - `Select / MultiSelect`
 - `Popover / Modal / Tooltip / HoverCard`
 - `ButtonGroup`
+
+## 7. 全量状态矩阵
+
+- 见：`docs/component-state-matrix.md`

@@ -84,7 +84,7 @@ pub use segmented_control::{SegmentedControl, SegmentedControlItem};
 pub use select::{MultiSelect, Select, SelectOption};
 pub use slider::{Slider, SliderOrientation};
 pub use stepper::{Stepper, StepperContentPosition, StepperStep};
-pub use switch::Switch;
+pub use switch::{Switch, SwitchLabelPosition};
 pub use table::{
     Table, TableAlign, TableCell, TablePaginationPosition, TableRow, TableSort, TableSortDirection,
 };

@@ -527,10 +527,12 @@ impl AppShell {
             Self::apply_surface(div().id(id).size_full(), chrome, default_bg).child(content);
 
         if chrome.bordered {
-            region = region.border(super::utils::quantized_stroke_px(window, 1.0)).border_color(resolve_hsla(
-                &self.theme,
-                &self.theme.semantic.border_subtle,
-            ));
+            region = region
+                .border(super::utils::quantized_stroke_px(window, 1.0))
+                .border_color(resolve_hsla(
+                    &self.theme,
+                    &self.theme.semantic.border_subtle,
+                ));
         }
 
         region

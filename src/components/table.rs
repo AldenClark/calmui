@@ -427,7 +427,6 @@ impl Table {
             Size::Xl => 44.0,
         }
     }
-
 }
 
 impl WithId for Table {
@@ -619,18 +618,14 @@ impl RenderOnce for Table {
         .filter(|value| *value > 1.0)
         .unwrap_or_else(|| Self::default_row_height_px(size));
         let row_extent = if auto_virtualization_enabled {
-            (self.virtual_row_height_px.unwrap_or(measured_row_height)
-                + line_thickness_px)
-            .max(1.0)
+            (self.virtual_row_height_px.unwrap_or(measured_row_height) + line_thickness_px).max(1.0)
         } else {
             default_row_extent
         };
 
         let scroll_height_for_virtual = resolved_scroll_height.unwrap_or(0.0);
         let max_scroll_y = if auto_virtualization_enabled {
-            ((total_rows as f32 * row_extent)
-                - line_thickness_px
-                - scroll_height_for_virtual)
+            ((total_rows as f32 * row_extent) - line_thickness_px - scroll_height_for_virtual)
                 .max(0.0)
         } else {
             0.0

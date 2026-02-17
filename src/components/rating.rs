@@ -183,11 +183,11 @@ impl RenderOnce for Rating {
                     self.allow_half && value >= (index_value - 0.5) && value < index_value;
 
                 let icon = if is_full {
-                    Icon::named_filled("star")
+                    Icon::named("star-filled")
                 } else if is_half {
-                    Icon::named_outline("star-half")
+                    Icon::named("star-half")
                 } else {
-                    Icon::named_outline("star")
+                    Icon::named("star")
                 }
                 .with_id(format!("{}-star-{index}", self.id))
                 .size(icon_size)

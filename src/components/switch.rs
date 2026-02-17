@@ -17,9 +17,16 @@ use super::utils::{apply_radius, resolve_hsla};
 
 type SwitchChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SwitchLabelPosition {
+    Left,
+    Right,
+}
+
 pub struct Switch {
     id: String,
-    label: SharedString,
+    label: Option<SharedString>,
+    label_position: SwitchLabelPosition,
     description: Option<SharedString>,
     checked: Option<bool>,
     default_checked: bool,
@@ -34,10 +41,11 @@ pub struct Switch {
 
 impl Switch {
     #[track_caller]
-    pub fn new(label: impl Into<SharedString>) -> Self {
+    pub fn new() -> Self {
         Self {
             id: stable_auto_id("switch"),
-            label: label.into(),
+            label: None,
+            label_position: SwitchLabelPosition::Right,
             description: None,
             checked: None,
             default_checked: false,
@@ -49,6 +57,16 @@ impl Switch {
             motion: MotionConfig::default(),
             on_change: None,
         }
+    }
+
+    pub fn label(mut self, label: impl Into<SharedString>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    pub fn label_position(mut self, value: SwitchLabelPosition) -> Self {
+        self.label_position = value;
+        self
     }
 
     pub fn description(mut self, description: impl Into<SharedString>) -> Self {
@@ -132,6 +150,7 @@ impl RenderOnce for Switch {
         self.theme.sync_from_provider(_cx);
         let checked = self.resolved_checked();
         let is_controlled = self.checked.is_some();
+        let is_focused = control::focused_state(&self.id, None, false);
         let (track_w, track_h) = self.switch_dimensions();
         let thumb_size = (track_h - 4.0).max(8.0);
         let thumb_inset = ((track_h - thumb_size) / 2.0).max(1.0);
@@ -148,6 +167,10 @@ impl RenderOnce for Switch {
         let track_bg = if checked { active } else { inactive };
         let label_fg = resolve_hsla(&self.theme, &tokens.label);
         let description_fg = resolve_hsla(&self.theme, &tokens.description);
+        let description_indent = match self.label_position {
+            SwitchLabelPosition::Left => 0.0,
+            SwitchLabelPosition::Right => track_w + 8.0,
+        };
 
         let mut thumb = div()
             .absolute()
@@ -163,27 +186,51 @@ impl RenderOnce for Switch {
             .w(px(track_w))
             .h(px(track_h))
             .border(super::utils::quantized_stroke_px(window, 1.0))
-            .border_color(track_bg)
+            .border_color(if is_focused {
+                resolve_hsla(&self.theme, &tokens.track_focus_border)
+            } else {
+                track_bg
+            })
             .bg(track_bg)
             .child(thumb);
         track = apply_radius(&self.theme, track, self.radius);
+        if !self.disabled {
+            let hover_border = resolve_hsla(&self.theme, &tokens.track_hover_border);
+            track = track.hover(move |style| style.border_color(hover_border));
+        }
+
+        let switch_with_label = match self.label_position {
+            SwitchLabelPosition::Left => Stack::horizontal()
+                .items_center()
+                .gap_2()
+                .children(
+                    self.label
+                        .clone()
+                        .map(|label| div().text_color(label_fg).child(label)),
+                )
+                .child(track),
+            SwitchLabelPosition::Right => Stack::horizontal()
+                .items_center()
+                .gap_2()
+                .child(track)
+                .children(
+                    self.label
+                        .clone()
+                        .map(|label| div().text_color(label_fg).child(label)),
+                ),
+        };
 
         let mut row = Stack::horizontal()
             .id(self.id.clone())
+            .focusable()
             .cursor_pointer()
             .child(
                 Stack::vertical()
                     .gap_0p5()
-                    .child(
-                        Stack::horizontal()
-                            .items_center()
-                            .gap_2()
-                            .child(track)
-                            .child(div().text_color(label_fg).child(self.label)),
-                    )
+                    .child(switch_with_label)
                     .children(self.description.map(|description| {
                         div()
-                            .ml(px(track_w + 8.0))
+                            .ml(px(description_indent))
                             .text_sm()
                             .text_color(description_fg)
                             .child(description)
@@ -193,21 +240,82 @@ impl RenderOnce for Switch {
         if self.disabled {
             row = row.cursor_default().opacity(0.55);
         } else if let Some(handler) = self.on_change.clone() {
+            let handler_for_click = handler.clone();
+            let handler_for_key = handler.clone();
             let id = self.id.clone();
-            row = row.on_click(move |_, window, cx| {
-                let next = !checked;
-                if !is_controlled {
-                    control::set_bool_state(&id, "checked", next);
+            let id_for_key = self.id.clone();
+            let id_for_blur = self.id.clone();
+            row = row
+                .on_click(move |_, window, cx| {
+                    control::set_focused_state(&id, true);
                     window.refresh();
-                }
-                (handler)(next, window, cx);
-            });
+                    let next = !checked;
+                    if !is_controlled {
+                        control::set_bool_state(&id, "checked", next);
+                        window.refresh();
+                    }
+                    (handler_for_click)(next, window, cx);
+                })
+                .on_key_down(move |event, window, cx| {
+                    let key = event.keystroke.key.as_str();
+                    if control::is_activation_key(key) {
+                        control::set_focused_state(&id_for_key, true);
+                        window.refresh();
+                        let next = !checked;
+                        if !is_controlled {
+                            control::set_bool_state(&id_for_key, "checked", next);
+                            window.refresh();
+                        }
+                        (handler_for_key)(next, window, cx);
+                    }
+                })
+                .on_mouse_down_out(move |_, window, _cx| {
+                    control::set_focused_state(&id_for_blur, false);
+                    window.refresh();
+                });
         } else if !is_controlled {
             let id = self.id.clone();
-            row = row.on_click(move |_, window, _cx| {
-                control::set_bool_state(&id, "checked", !checked);
-                window.refresh();
-            });
+            let id_for_key = self.id.clone();
+            let id_for_blur = self.id.clone();
+            row = row
+                .on_click(move |_, window, _cx| {
+                    control::set_focused_state(&id, true);
+                    window.refresh();
+                    control::set_bool_state(&id, "checked", !checked);
+                    window.refresh();
+                })
+                .on_key_down(move |event, window, _cx| {
+                    let key = event.keystroke.key.as_str();
+                    if control::is_activation_key(key) {
+                        control::set_focused_state(&id_for_key, true);
+                        control::set_bool_state(&id_for_key, "checked", !checked);
+                        window.refresh();
+                    }
+                })
+                .on_mouse_down_out(move |_, window, _cx| {
+                    control::set_focused_state(&id_for_blur, false);
+                    window.refresh();
+                });
+        } else {
+            let id = self.id.clone();
+            let id_for_key = self.id.clone();
+            let id_for_blur = self.id.clone();
+            row = row
+                .on_click(move |_, window, _cx| {
+                    control::set_focused_state(&id, true);
+                    window.refresh();
+                })
+                .on_key_down(move |event, window, _cx| {
+                    let key = event.keystroke.key.as_str();
+                    if control::is_activation_key(key) {
+                        control::set_focused_state(&id_for_key, true);
+                        window.refresh();
+                    }
+                })
+                .on_mouse_down_out(move |_, window, _cx| {
+                    control::set_focused_state(&id_for_blur, false);
+                    window.refresh();
+                });
         }
 
         row.with_enter_transition(format!("{}-enter", self.id), self.motion)

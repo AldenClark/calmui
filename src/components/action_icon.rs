@@ -11,6 +11,7 @@ use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
 use super::icon::Icon;
+use super::loader::{Loader, LoaderVariant};
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
 
@@ -23,6 +24,8 @@ pub struct ActionIcon {
     size: Size,
     radius: Radius,
     disabled: bool,
+    loading: bool,
+    loading_variant: LoaderVariant,
     theme: crate::theme::LocalTheme,
     style: gpui::StyleRefinement,
     motion: MotionConfig,
@@ -39,6 +42,8 @@ impl ActionIcon {
             size: Size::Md,
             radius: Radius::Sm,
             disabled: false,
+            loading: false,
+            loading_variant: LoaderVariant::Dots,
             theme: crate::theme::LocalTheme::default(),
             style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
@@ -54,6 +59,16 @@ impl ActionIcon {
 
     pub fn disabled(mut self, value: bool) -> Self {
         self.disabled = value;
+        self
+    }
+
+    pub fn loading(mut self, value: bool) -> Self {
+        self.loading = value;
+        self
+    }
+
+    pub fn loading_variant(mut self, value: LoaderVariant) -> Self {
+        self.loading_variant = value;
         self
     }
 
@@ -156,13 +171,22 @@ impl RenderOnce for ActionIcon {
         let fg = resolve_hsla(&self.theme, &fg_token);
         let size_px = self.box_size_px();
 
-        let fallback = Icon::named_outline("dots")
+        let fallback = Icon::named("dots")
             .with_id(format!("{}-fallback", self.id))
             .size(self.icon_size_px())
             .color(fg)
             .into_any_element();
 
-        let content = self.content.take().map(|value| value()).unwrap_or(fallback);
+        let content = if self.loading {
+            Loader::new()
+                .with_id(format!("{}-loader", self.id))
+                .variant(self.loading_variant)
+                .size(self.size)
+                .color(fg_token)
+                .into_any_element()
+        } else {
+            self.content.take().map(|value| value()).unwrap_or(fallback)
+        };
 
         let mut root = div()
             .id(self.id.clone())
@@ -184,7 +208,7 @@ impl RenderOnce for ActionIcon {
             root = root.border_color(bg);
         }
 
-        if self.disabled {
+        if self.disabled || self.loading {
             root = root.opacity(0.55).cursor_default();
         } else {
             root = root.cursor_pointer();

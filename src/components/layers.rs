@@ -13,7 +13,7 @@ use super::Stack;
 use super::icon::Icon;
 use super::overlay::{Overlay, OverlayCoverage, OverlayMaterialMode};
 use super::transition::TransitionExt;
-use super::utils::resolve_hsla;
+use super::utils::{deepened_surface_border, resolve_hsla};
 
 pub struct ToastLayer {
     id: String,
@@ -80,11 +80,11 @@ impl ToastLayer {
 
     fn default_icon(kind: ToastKind) -> IconSource {
         match kind {
-            ToastKind::Info => IconSource::named_outline("info-circle"),
-            ToastKind::Success => IconSource::named_outline("circle-check"),
-            ToastKind::Warning => IconSource::named_outline("alert-triangle"),
-            ToastKind::Error => IconSource::named_outline("alert-circle"),
-            ToastKind::Loading => IconSource::named_outline("loader-2"),
+            ToastKind::Info => IconSource::named("info-circle"),
+            ToastKind::Success => IconSource::named("circle-check"),
+            ToastKind::Warning => IconSource::named("alert-triangle"),
+            ToastKind::Error => IconSource::named("alert-circle"),
+            ToastKind::Loading => IconSource::named("loader-2"),
         }
     }
 
@@ -116,7 +116,7 @@ impl ToastLayer {
             .hover(|style| style.bg(fg.opacity(0.16)))
             .active(|style| style.bg(fg.opacity(0.24)))
             .child(
-                Icon::named_outline("x")
+                Icon::named("x")
                     .with_id(format!("{}-toast-close-icon-{}", self.id, toast_key))
                     .size(13.0)
                     .color(fg)
@@ -155,10 +155,7 @@ impl ToastLayer {
             .p_3()
             .rounded_md()
             .border(super::utils::quantized_stroke_px(window, 1.0))
-            .border_color(resolve_hsla(
-                &self.theme,
-                &self.theme.semantic.border_subtle,
-            ))
+            .border_color(deepened_surface_border(bg))
             .bg(bg)
             .text_color(fg)
             .child(
@@ -407,7 +404,7 @@ impl ModalLayer {
                             ))
                             .cursor_pointer()
                             .child(
-                                Icon::named_outline("x")
+                                Icon::named("x")
                                     .with_id(format!(
                                         "{}-modal-close-icon-{}",
                                         self.id,

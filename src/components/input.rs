@@ -116,6 +116,31 @@ impl TextInput {
         self
     }
 
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
+    }
+
+    pub fn description(mut self, value: impl Into<SharedString>) -> Self {
+        self.description = Some(value.into());
+        self
+    }
+
+    pub fn error(mut self, value: impl Into<SharedString>) -> Self {
+        self.error = Some(value.into());
+        self
+    }
+
+    pub fn required(mut self, value: bool) -> Self {
+        self.required = value;
+        self
+    }
+
+    pub fn layout(mut self, value: FieldLayout) -> Self {
+        self.layout = value;
+        self
+    }
+
     pub fn left_slot(mut self, content: impl IntoElement + 'static) -> Self {
         self.left_slot = Some(Box::new(|| content.into_any_element()));
         self
@@ -292,7 +317,7 @@ impl TextInput {
     fn render_input_box(&mut self, window: &Window) -> AnyElement {
         let tokens = &self.theme.components.input;
         let resolved_value = self.resolved_value();
-        let tracked_focus = control::bool_state(&self.id, "focused", None, false);
+        let tracked_focus = control::focused_state(&self.id, None, false);
         let handle_focused = self
             .focus_handle
             .as_ref()
@@ -335,21 +360,21 @@ impl TextInput {
             input = input
                 .track_focus(focus_handle)
                 .on_click(move |_, window, cx| {
-                    control::set_bool_state(&id_for_focus, "focused", true);
+                    control::set_focused_state(&id_for_focus, true);
                     window.focus(&handle_for_click, cx);
                     window.refresh();
                 });
         } else {
             let id_for_focus = self.id.clone();
             input = input.on_click(move |_, window, _cx| {
-                control::set_bool_state(&id_for_focus, "focused", true);
+                control::set_focused_state(&id_for_focus, true);
                 window.refresh();
             });
         }
 
         let id_for_blur = self.id.clone();
         input = input.on_mouse_down_out(move |_, window, _cx| {
-            control::set_bool_state(&id_for_blur, "focused", false);
+            control::set_focused_state(&id_for_blur, false);
             window.refresh();
         });
 
@@ -365,7 +390,7 @@ impl TextInput {
             let value_controlled = self.value_controlled;
 
             input = input.on_key_down(move |event, window, cx| {
-                control::set_bool_state(&focus_state_id, "focused", true);
+                control::set_focused_state(&focus_state_id, true);
                 if event.keystroke.key == "enter" {
                     if let Some(handler) = &on_submit {
                         (handler)(current_value.clone().into(), window, cx);
@@ -646,6 +671,31 @@ impl PasswordInput {
         self
     }
 
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.inner = self.inner.label(value);
+        self
+    }
+
+    pub fn description(mut self, value: impl Into<SharedString>) -> Self {
+        self.inner = self.inner.description(value);
+        self
+    }
+
+    pub fn error(mut self, value: impl Into<SharedString>) -> Self {
+        self.inner = self.inner.error(value);
+        self
+    }
+
+    pub fn required(mut self, value: bool) -> Self {
+        self.inner = self.inner.required(value);
+        self
+    }
+
+    pub fn layout(mut self, value: FieldLayout) -> Self {
+        self.inner = self.inner.layout(value);
+        self
+    }
+
     pub fn left_slot(mut self, content: impl IntoElement + 'static) -> Self {
         self.inner = self.inner.left_slot(content);
         self
@@ -775,6 +825,9 @@ pub struct PinInput {
     value: Option<SharedString>,
     value_controlled: bool,
     default_value: SharedString,
+    error: Option<SharedString>,
+    disabled: bool,
+    read_only: bool,
     length: usize,
     size: Size,
     radius: Radius,
@@ -793,6 +846,9 @@ impl PinInput {
             value: None,
             value_controlled: false,
             default_value: SharedString::default(),
+            error: None,
+            disabled: false,
+            read_only: false,
             length: length.max(1),
             size: Size::Md,
             radius: Radius::Sm,
@@ -812,6 +868,21 @@ impl PinInput {
 
     pub fn default_value(mut self, value: impl Into<SharedString>) -> Self {
         self.default_value = value.into();
+        self
+    }
+
+    pub fn disabled(mut self, value: bool) -> Self {
+        self.disabled = value;
+        self
+    }
+
+    pub fn read_only(mut self, value: bool) -> Self {
+        self.read_only = value;
+        self
+    }
+
+    pub fn error(mut self, value: impl Into<SharedString>) -> Self {
+        self.error = Some(value.into());
         self
     }
 
@@ -890,10 +961,12 @@ impl RenderOnce for PinInput {
         let length = self.length;
         let value_chars = value.chars().collect::<Vec<_>>();
         let active_index = value_chars.len().min(self.length.saturating_sub(1));
+        let tracked_focus = control::focused_state(&self.id, None, false);
         let is_focused = self
             .focus_handle
             .as_ref()
-            .is_some_and(|focus_handle| focus_handle.is_focused(window));
+            .is_some_and(|focus_handle| focus_handle.is_focused(window))
+            || tracked_focus;
         let caret_height = match self.size {
             Size::Xs => 13.0,
             Size::Sm => 15.0,
@@ -902,13 +975,23 @@ impl RenderOnce for PinInput {
             Size::Xl => 21.0,
         };
         let caret_color = resolve_hsla(&self.theme, &self.theme.components.input.fg);
+        let has_error = self.error.is_some();
+        let interactive = !self.disabled && !self.read_only;
 
-        let mut root = Stack::horizontal()
-            .id(self.id.clone())
-            .focusable()
-            .gap_2()
-            .cursor_text()
-            .on_key_down(move |event, window, cx| {
+        let mut root = Stack::horizontal().id(self.id.clone()).focusable().gap_2();
+
+        if self.disabled {
+            root = root.cursor_default();
+        } else if self.read_only {
+            root = root.cursor_default();
+        } else {
+            root = root.cursor_text();
+        }
+
+        if interactive {
+            let focus_state_id = self.id.clone();
+            root = root.on_key_down(move |event, window, cx| {
+                control::set_focused_state(&focus_state_id, true);
                 let mut next = value.clone();
                 if event.keystroke.key == "backspace" {
                     next.pop();
@@ -944,26 +1027,54 @@ impl RenderOnce for PinInput {
                     (handler)(next.into(), window, cx);
                 }
             });
+        }
 
-        if let Some(focus_handle) = &self.focus_handle {
+        if let Some(focus_handle) = &self.focus_handle
+            && !self.disabled
+        {
             let handle_for_click = focus_handle.clone();
+            let focus_state_id = self.id.clone();
             root = root
                 .track_focus(focus_handle)
                 .on_click(move |_, window, cx| {
+                    control::set_focused_state(&focus_state_id, true);
                     window.focus(&handle_for_click, cx);
+                    window.refresh();
                 });
+        } else if !self.disabled {
+            let focus_state_id = self.id.clone();
+            root = root.on_click(move |_, window, _cx| {
+                control::set_focused_state(&focus_state_id, true);
+                window.refresh();
+            });
         }
+
+        if self.disabled {
+            root = root.opacity(0.55);
+        }
+
+        let blur_state_id = self.id.clone();
+        root = root.on_mouse_down_out(move |_, window, _cx| {
+            control::set_focused_state(&blur_state_id, false);
+            window.refresh();
+        });
 
         for index in 0..self.length {
             let content = value_chars.get(index).map(|ch| ch.to_string());
+            let border = if self.disabled {
+                resolve_hsla(&self.theme, &self.theme.semantic.border_subtle)
+            } else if has_error {
+                resolve_hsla(&self.theme, &self.theme.components.input.border_error)
+            } else if is_focused {
+                resolve_hsla(&self.theme, &self.theme.components.input.border_focus)
+            } else {
+                resolve_hsla(&self.theme, &self.theme.components.input.border)
+            };
             let mut cell = div()
                 .w(gpui::px(34.0))
                 .h(gpui::px(40.0))
                 .border(quantized_stroke_px(window, 1.0))
-                .border_color(resolve_hsla(
-                    &self.theme,
-                    &self.theme.components.input.border,
-                ))
+                .border_color(border)
                 .bg(resolve_hsla(&self.theme, &self.theme.components.input.bg))
                 .flex()
                 .items_center()
@@ -973,6 +1084,7 @@ impl RenderOnce for PinInput {
                 cell = cell.child(content);
             } else if index == active_index
                 && value_chars.len() < self.length
+                && interactive
                 && (self.focus_handle.is_none() || is_focused)
             {
                 cell = cell.child(
@@ -998,8 +1110,28 @@ impl RenderOnce for PinInput {
             root = root.child(cell);
         }
 
-        root.with_enter_transition(format!("{}-enter", self.id), self.motion)
-            .into_any_element()
+        let field = root
+            .with_enter_transition(format!("{}-enter", self.id), self.motion)
+            .into_any_element();
+
+        if let Some(error) = self.error {
+            Stack::vertical()
+                .id(format!("{}-field", self.id))
+                .gap_1()
+                .child(field)
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(resolve_hsla(
+                            &self.theme,
+                            &self.theme.components.input.error,
+                        ))
+                        .child(error),
+                )
+                .into_any_element()
+        } else {
+            field
+        }
     }
 }
 
@@ -1031,6 +1163,7 @@ impl crate::contracts::ComponentThemeOverridable for PinInput {
 
 crate::impl_disableable!(TextInput);
 crate::impl_disableable!(PasswordInput);
+crate::impl_disableable!(PinInput);
 
 impl gpui::Styled for PinInput {
     fn style(&mut self) -> &mut gpui::StyleRefinement {

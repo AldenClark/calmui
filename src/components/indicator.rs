@@ -186,7 +186,9 @@ impl RenderOnce for Indicator {
             .font_weight(gpui::FontWeight::SEMIBOLD);
 
         if self.with_border {
-            badge = badge.border(super::utils::quantized_stroke_px(window, 1.0)).border_color(border);
+            badge = badge
+                .border(super::utils::quantized_stroke_px(window, 1.0))
+                .border_color(border);
         }
 
         if self.disabled {
