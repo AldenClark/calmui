@@ -64,7 +64,7 @@ pub use icon::Icon;
 pub use indicator::{Indicator, IndicatorPosition};
 pub use input::{PasswordInput, PinInput, TextInput};
 pub use layers::{ModalLayer, ToastLayer};
-pub use layout::{Grid, SimpleGrid, Stack, fixed_spacer, h_stack_layout, stack, v_stack_layout};
+pub use layout::{Grid, SimpleGrid, Space, Stack};
 pub use loader::{Loader, LoaderElement, LoaderVariant};
 pub use loading_overlay::LoadingOverlay;
 pub use markdown::Markdown;

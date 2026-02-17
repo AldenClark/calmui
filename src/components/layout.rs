@@ -238,20 +238,84 @@ impl ParentElement for SimpleGrid {
     }
 }
 
-pub fn stack() -> Div {
-    Stack::vertical()
+pub struct Space {
+    width_px: Option<f32>,
+    height_px: Option<f32>,
 }
 
-pub fn h_stack_layout() -> Div {
-    Stack::horizontal()
+impl Space {
+    #[track_caller]
+    pub fn new() -> Self {
+        Self {
+            width_px: None,
+            height_px: None,
+        }
+    }
+
+    pub fn w(mut self, value: Size) -> Self {
+        self.width_px = Some(Self::size_to_px(value));
+        self
+    }
+
+    pub fn h(mut self, value: Size) -> Self {
+        self.height_px = Some(Self::size_to_px(value));
+        self
+    }
+
+    pub fn size(mut self, value: Size) -> Self {
+        let size_px = Self::size_to_px(value);
+        self.width_px = Some(size_px);
+        self.height_px = Some(size_px);
+        self
+    }
+
+    pub fn w_px(mut self, value: f32) -> Self {
+        self.width_px = Some(value.max(0.0));
+        self
+    }
+
+    pub fn h_px(mut self, value: f32) -> Self {
+        self.height_px = Some(value.max(0.0));
+        self
+    }
+
+    pub fn size_px(mut self, value: f32) -> Self {
+        let size_px = value.max(0.0);
+        self.width_px = Some(size_px);
+        self.height_px = Some(size_px);
+        self
+    }
+
+    fn size_to_px(value: Size) -> f32 {
+        match value {
+            Size::Xs => 4.0,
+            Size::Sm => 6.0,
+            Size::Md => 8.0,
+            Size::Lg => 12.0,
+            Size::Xl => 16.0,
+        }
+    }
 }
 
-pub fn v_stack_layout() -> Div {
-    Stack::vertical()
+impl RenderOnce for Space {
+    fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+        let mut node = div();
+        if let Some(width_px) = self.width_px {
+            node = node.w(px(width_px));
+        }
+        if let Some(height_px) = self.height_px {
+            node = node.h(px(height_px));
+        }
+        node
+    }
 }
 
-pub fn fixed_spacer(width: f32, height: f32) -> impl IntoElement {
-    div().w(px(width.max(0.0))).h(px(height.max(0.0)))
+impl IntoElement for Space {
+    type Element = Component<Self>;
+
+    fn into_element(self) -> Self::Element {
+        Component::new(self)
+    }
 }
 
 impl crate::contracts::ComponentThemeOverridable for Grid {
