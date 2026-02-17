@@ -19,6 +19,7 @@ pub struct Icon {
     source: IconSource,
     size: f32,
     color: Option<IconColor>,
+    inherit_color: bool,
     theme: crate::theme::LocalTheme,
     style: gpui::StyleRefinement,
     registry: IconRegistry,
@@ -32,6 +33,7 @@ impl Icon {
             source,
             size: 16.0,
             color: None,
+            inherit_color: false,
             theme: crate::theme::LocalTheme::default(),
             style: gpui::StyleRefinement::default(),
             registry: IconRegistry::new(),
@@ -63,6 +65,11 @@ impl Icon {
         self
     }
 
+    pub fn inherit_color(mut self, value: bool) -> Self {
+        self.inherit_color = value;
+        self
+    }
+
     pub fn registry(mut self, registry: IconRegistry) -> Self {
         self.registry = registry;
         self
@@ -72,7 +79,8 @@ impl Icon {
         match &self.color {
             Some(IconColor::Token(token)) => Some(resolve_hsla(&self.theme, token)),
             Some(IconColor::Raw(value)) => Some(*value),
-            None => None,
+            None if self.inherit_color => None,
+            None => Some(resolve_hsla(&self.theme, &self.theme.semantic.text_primary)),
         }
     }
 }

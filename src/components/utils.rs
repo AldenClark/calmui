@@ -53,7 +53,7 @@ pub fn variant_text_weight(variant: Variant) -> FontWeight {
 }
 
 pub fn deepened_surface_border(bg: Hsla) -> Hsla {
-    bg.blend(gpui::black().opacity(0.24))
+    bg.blend(gpui::black().opacity(0.12))
 }
 
 pub fn offset_with_progress(offset_px: i16, progress: f32) -> f32 {
