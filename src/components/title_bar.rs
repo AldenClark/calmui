@@ -185,7 +185,9 @@ impl TitleBar {
         mut self,
         handler: impl Fn(&gpui::ClickEvent, &mut Window, &mut gpui::App) + 'static,
     ) -> Self {
-        self.on_close_window = Some(std::rc::Rc::new(handler));
+        if cfg!(target_os = "linux") {
+            self.on_close_window = Some(std::rc::Rc::new(handler));
+        }
         self
     }
 
@@ -225,22 +227,9 @@ impl TitleBar {
                 .child(text)
         };
 
-        let close = if let Some(on_close_window) = self.on_close_window.clone() {
-            button(format!("{}-win-close", self.id), "\u{e8bb}", true)
-                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                    window.prevent_default();
-                    cx.stop_propagation();
-                })
-                .on_click(move |event, window, cx| {
-                    cx.stop_propagation();
-                    (on_close_window)(event, window, cx);
-                })
-                .into_any_element()
-        } else {
-            button(format!("{}-win-close", self.id), "\u{e8bb}", true)
-                .window_control_area(WindowControlArea::Close)
-                .into_any_element()
-        };
+        let close = button(format!("{}-win-close", self.id), "\u{e8bb}", true)
+            .window_control_area(WindowControlArea::Close)
+            .into_any_element();
 
         WindowControls {
             element: div()
