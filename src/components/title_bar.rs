@@ -3,8 +3,7 @@ use std::time::Duration;
 
 use gpui::{
     AnyElement, Component, Hsla, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, WindowControlArea, div,
-    px, rgb,
+    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div, px, rgb,
 };
 
 use crate::contracts::WithId;
@@ -15,6 +14,7 @@ use super::control;
 use super::utils::resolve_hsla;
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
+type WindowCloseHandler = std::rc::Rc<dyn Fn(&gpui::ClickEvent, &mut Window, &mut gpui::App)>;
 
 static TITLEBAR_SHORTCUTS_INSTALLED: AtomicBool = AtomicBool::new(false);
 
@@ -81,6 +81,7 @@ pub struct TitleBar {
     pub(crate) immersive: bool,
     pub(crate) background: Option<Hsla>,
     pub(crate) show_window_controls: bool,
+    pub(crate) on_close_window: Option<WindowCloseHandler>,
     pub(crate) slot: Option<SlotRenderer>,
     theme: crate::theme::LocalTheme,
     style: gpui::StyleRefinement,
@@ -97,6 +98,7 @@ impl TitleBar {
             immersive: false,
             background: None,
             show_window_controls: true,
+            on_close_window: None,
             slot: None,
             theme: crate::theme::LocalTheme::default(),
             style: gpui::StyleRefinement::default(),
@@ -178,7 +180,22 @@ impl TitleBar {
         self.slot.is_some()
     }
 
+    pub fn on_close_window(
+        mut self,
+        handler: impl Fn(&gpui::ClickEvent, &mut Window, &mut gpui::App) + 'static,
+    ) -> Self {
+        self.on_close_window = Some(std::rc::Rc::new(handler));
+        self
+    }
+
     fn render_window_controls_windows(&self, window: &mut Window) -> WindowControls {
+        #[derive(Clone, Copy)]
+        enum WindowsWindowAction {
+            Minimize,
+            Zoom,
+            Close,
+        }
+
         let fg = resolve_hsla(&self.theme, &self.theme.components.title_bar.fg);
         let (neutral_hover_bg, neutral_active_bg) = match self.theme.color_scheme {
             ColorScheme::Dark => (gpui::white().opacity(0.14), gpui::white().opacity(0.22)),
@@ -190,30 +207,52 @@ impl TitleBar {
             "\u{e922}"
         };
 
-        let button = |id: String, text: &'static str, area: WindowControlArea, close: bool| {
-            let (hover_bg, active_bg, hover_fg) = if close {
-                let close_bg: gpui::Hsla = rgb(0xe81123).into();
-                (close_bg, close_bg.opacity(0.85), gpui::white())
-            } else {
-                (neutral_hover_bg, neutral_active_bg, fg)
+        let on_close_window = self.on_close_window.clone();
+        let button =
+            move |id: String, text: &'static str, action: WindowsWindowAction, close: bool| {
+                let (hover_bg, active_bg, hover_fg) = if close {
+                    let close_bg: gpui::Hsla = rgb(0xe81123).into();
+                    (close_bg, close_bg.opacity(0.85), gpui::white())
+                } else {
+                    (neutral_hover_bg, neutral_active_bg, fg)
+                };
+                div()
+                    .id(id)
+                    .w(px(45.0))
+                    .h(px(self.height_px))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .font_family("Segoe MDL2 Assets")
+                    .text_size(px(10.0))
+                    .bg(gpui::transparent_black())
+                    .text_color(fg)
+                    .cursor_pointer()
+                    .hover(move |style| style.bg(hover_bg).text_color(hover_fg))
+                    .active(move |style| style.bg(active_bg).text_color(hover_fg))
+                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        window.prevent_default();
+                        cx.stop_propagation();
+                    })
+                    .on_click({
+                        let on_close_window = on_close_window.clone();
+                        move |event, window, cx| {
+                            cx.stop_propagation();
+                            match action {
+                                WindowsWindowAction::Minimize => window.minimize_window(),
+                                WindowsWindowAction::Zoom => window.zoom_window(),
+                                WindowsWindowAction::Close => {
+                                    if let Some(handler) = on_close_window.as_ref() {
+                                        (handler)(event, window, cx);
+                                    } else {
+                                        window.remove_window();
+                                    }
+                                }
+                            }
+                        }
+                    })
+                    .child(text)
             };
-            div()
-                .id(id)
-                .w(px(45.0))
-                .h(px(self.height_px))
-                .flex()
-                .items_center()
-                .justify_center()
-                .font_family("Segoe MDL2 Assets")
-                .text_size(px(10.0))
-                .bg(gpui::transparent_black())
-                .text_color(fg)
-                .cursor_pointer()
-                .hover(move |style| style.bg(hover_bg).text_color(hover_fg))
-                .active(move |style| style.bg(active_bg).text_color(hover_fg))
-                .window_control_area(area)
-                .child(text)
-        };
 
         WindowControls {
             element: div()
@@ -224,19 +263,19 @@ impl TitleBar {
                 .child(button(
                     format!("{}-win-min", self.id),
                     "\u{e921}",
-                    WindowControlArea::Min,
+                    WindowsWindowAction::Minimize,
                     false,
                 ))
                 .child(button(
                     format!("{}-win-max", self.id),
                     max_or_restore_icon,
-                    WindowControlArea::Max,
+                    WindowsWindowAction::Zoom,
                     false,
                 ))
                 .child(button(
                     format!("{}-win-close", self.id),
                     "\u{e8bb}",
-                    WindowControlArea::Close,
+                    WindowsWindowAction::Close,
                     true,
                 ))
                 .into_any_element(),
@@ -256,32 +295,50 @@ impl TitleBar {
         let fg = resolve_hsla(&self.theme, &tokens.fg);
         let bg = resolve_hsla(&self.theme, &tokens.controls_bg);
 
-        let button = |id: String, text: &'static str, action: LinuxWindowAction, close: bool| {
-            let hover_bg = if close {
-                rgb(0xcc3344).into()
-            } else {
-                bg.opacity(0.9)
+        let on_close_window = self.on_close_window.clone();
+        let button =
+            move |id: String, text: &'static str, action: LinuxWindowAction, close: bool| {
+                let hover_bg = if close {
+                    rgb(0xcc3344).into()
+                } else {
+                    bg.opacity(0.9)
+                };
+                div()
+                    .id(id)
+                    .w(px(28.0))
+                    .h(px(24.0))
+                    .rounded_sm()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .bg(bg)
+                    .text_color(fg)
+                    .cursor_pointer()
+                    .hover(move |style| style.bg(hover_bg))
+                    .active(move |style| style.bg(hover_bg.opacity(0.85)))
+                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        window.prevent_default();
+                        cx.stop_propagation();
+                    })
+                    .on_click({
+                        let on_close_window = on_close_window.clone();
+                        move |event, window, cx| {
+                            cx.stop_propagation();
+                            match action {
+                                LinuxWindowAction::Minimize => window.minimize_window(),
+                                LinuxWindowAction::Zoom => window.zoom_window(),
+                                LinuxWindowAction::Close => {
+                                    if let Some(handler) = on_close_window.as_ref() {
+                                        (handler)(event, window, cx);
+                                    } else {
+                                        window.remove_window();
+                                    }
+                                }
+                            }
+                        }
+                    })
+                    .child(text)
             };
-            div()
-                .id(id)
-                .w(px(28.0))
-                .h(px(24.0))
-                .rounded_sm()
-                .flex()
-                .items_center()
-                .justify_center()
-                .bg(bg)
-                .text_color(fg)
-                .cursor_pointer()
-                .hover(move |style| style.bg(hover_bg))
-                .active(move |style| style.bg(hover_bg.opacity(0.85)))
-                .on_click(move |_, window, _| match action {
-                    LinuxWindowAction::Minimize => window.minimize_window(),
-                    LinuxWindowAction::Zoom => window.zoom_window(),
-                    LinuxWindowAction::Close => window.remove_window(),
-                })
-                .child(text)
-        };
 
         WindowControls {
             element: div()
