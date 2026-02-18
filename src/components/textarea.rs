@@ -1,9 +1,16 @@
-use std::{rc::Rc, time::Duration};
+use std::{
+    collections::HashMap,
+    ops::Range,
+    rc::Rc,
+    sync::{LazyLock, Mutex},
+    time::Duration,
+};
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, AppContext, ClickEvent, ClipboardItem, EmptyView,
-    FocusHandle, InteractiveElement, IntoElement, KeyDownEvent, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window, canvas, div, px,
+    Animation, AnimationExt, AnyElement, AppContext, Bounds, ClipboardItem, EmptyView, FocusHandle,
+    InputHandler, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement,
+    RenderOnce, SharedString, StatefulInteractiveElement, Styled, UTF16Selection, Window, canvas,
+    div, point, px,
 };
 
 use crate::contracts::{FieldLike, MotionAware, VariantConfigurable};
@@ -34,6 +41,353 @@ struct WrappedLine {
     end_char: usize,
 }
 
+static TEXTAREA_FOCUS_HANDLES: LazyLock<Mutex<HashMap<String, FocusHandle>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+#[derive(Clone)]
+struct TextareaImeHandler {
+    id: String,
+    value_controlled: bool,
+    rendered_value: String,
+    max_length: Option<usize>,
+    disabled: bool,
+    read_only: bool,
+    on_change: Option<ChangeHandler>,
+    line_height: f32,
+    vertical_padding: f32,
+    horizontal_padding: f32,
+    char_width: f32,
+}
+
+impl TextareaImeHandler {
+    fn current_value(&self) -> String {
+        control::text_state(
+            &self.id,
+            "value",
+            self.value_controlled.then_some(self.rendered_value.clone()),
+            self.rendered_value.clone(),
+        )
+    }
+
+    fn char_index_from_utf16(value: &str, utf16_index: usize) -> usize {
+        let mut utf16_count = 0usize;
+        let mut char_index = 0usize;
+        for ch in value.chars() {
+            if utf16_count >= utf16_index {
+                break;
+            }
+            utf16_count += ch.len_utf16();
+            char_index += 1;
+        }
+        char_index
+    }
+
+    fn utf16_from_char(value: &str, char_index: usize) -> usize {
+        value
+            .chars()
+            .take(char_index)
+            .map(|ch| ch.len_utf16())
+            .sum::<usize>()
+    }
+
+    fn char_range_from_utf16(value: &str, range_utf16: Range<usize>) -> Range<usize> {
+        let start = Self::char_index_from_utf16(value, range_utf16.start);
+        let end = Self::char_index_from_utf16(value, range_utf16.end);
+        if start <= end { start..end } else { end..start }
+    }
+
+    fn utf16_range_from_char(value: &str, range: Range<usize>) -> Range<usize> {
+        let start = Self::utf16_from_char(value, range.start);
+        let end = Self::utf16_from_char(value, range.end);
+        start..end
+    }
+
+    fn marked_range_chars(&self, len: usize) -> Option<(usize, usize)> {
+        let start = control::optional_text_state(&self.id, "marked-start", None, None)
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(usize::MAX);
+        let end = control::optional_text_state(&self.id, "marked-end", None, None)
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(usize::MAX);
+        if start == usize::MAX || end == usize::MAX {
+            return None;
+        }
+        let start = start.min(len);
+        let end = end.min(len);
+        (start < end).then_some((start, end))
+    }
+
+    fn set_marked_range_chars(&self, marked: Option<(usize, usize)>) {
+        if let Some((start, end)) = marked {
+            control::set_optional_text_state(&self.id, "marked-start", Some(start.to_string()));
+            control::set_optional_text_state(&self.id, "marked-end", Some(end.to_string()));
+        } else {
+            control::set_optional_text_state(&self.id, "marked-start", None);
+            control::set_optional_text_state(&self.id, "marked-end", None);
+        }
+    }
+
+    fn resolve_replacement_range(
+        &self,
+        value: &str,
+        replacement_range: Option<Range<usize>>,
+    ) -> (usize, usize) {
+        let len = value.chars().count();
+        if let Some(range_utf16) = replacement_range {
+            let range = Self::char_range_from_utf16(value, range_utf16);
+            return (range.start.min(len), range.end.min(len));
+        }
+        if let Some((start, end)) = self.marked_range_chars(len) {
+            return (start, end);
+        }
+        if let Some((start, end)) = Textarea::selection_bounds_for(&self.id, len) {
+            return (start, end);
+        }
+        let caret = control::text_state(&self.id, "caret-index", None, len.to_string())
+            .parse::<usize>()
+            .ok()
+            .unwrap_or(len)
+            .min(len);
+        (caret, caret)
+    }
+
+    fn normalized_text(text: &str) -> String {
+        text.replace("\r\n", "\n").replace('\r', "\n")
+    }
+
+    fn apply_max_length(
+        &self,
+        mut next: String,
+        mut caret: usize,
+        mut marked: Option<(usize, usize)>,
+        mut selection: Option<(usize, usize)>,
+    ) -> (
+        String,
+        usize,
+        Option<(usize, usize)>,
+        Option<(usize, usize)>,
+    ) {
+        if let Some(limit) = self.max_length
+            && next.chars().count() > limit
+        {
+            next = next.chars().take(limit).collect();
+            let next_len = next.chars().count();
+            caret = caret.min(next_len);
+            marked = marked.and_then(|(start, end)| {
+                let start = start.min(next_len);
+                let end = end.min(next_len);
+                (start < end).then_some((start, end))
+            });
+            selection = selection.and_then(|(start, end)| {
+                let start = start.min(next_len);
+                let end = end.min(next_len);
+                (start < end).then_some((start, end))
+            });
+        }
+        (next, caret, marked, selection)
+    }
+
+    fn apply_edit_result(
+        &self,
+        previous: &str,
+        next: String,
+        caret: usize,
+        selection: Option<(usize, usize)>,
+        marked: Option<(usize, usize)>,
+        window: &mut Window,
+        cx: &mut gpui::App,
+    ) {
+        let changed = next != previous;
+        if changed && !self.value_controlled {
+            control::set_text_state(&self.id, "value", next.clone());
+        }
+        control::set_text_state(&self.id, "caret-index", caret.to_string());
+        if let Some((start, end)) = selection {
+            Textarea::set_selection_for(&self.id, start, end);
+        } else {
+            Textarea::clear_selection_for(&self.id, caret);
+        }
+        control::set_text_state(&self.id, "selection-anchor", caret.to_string());
+        self.set_marked_range_chars(marked);
+
+        if changed && let Some(handler) = self.on_change.as_ref() {
+            (handler)(next.into(), window, cx);
+        }
+
+        window.refresh();
+    }
+}
+
+impl InputHandler for TextareaImeHandler {
+    fn selected_text_range(
+        &mut self,
+        _ignore_disabled_input: bool,
+        _window: &mut Window,
+        _cx: &mut gpui::App,
+    ) -> Option<UTF16Selection> {
+        let value = self.current_value();
+        let len = value.chars().count();
+        let caret = control::text_state(&self.id, "caret-index", None, len.to_string())
+            .parse::<usize>()
+            .ok()
+            .unwrap_or(len)
+            .min(len);
+        let range = if let Some((start, end)) = Textarea::selection_bounds_for(&self.id, len) {
+            start..end
+        } else {
+            caret..caret
+        };
+        let reversed = !range.is_empty() && caret == range.start;
+        Some(UTF16Selection {
+            range: Self::utf16_range_from_char(&value, range),
+            reversed,
+        })
+    }
+
+    fn marked_text_range(
+        &mut self,
+        _window: &mut Window,
+        _cx: &mut gpui::App,
+    ) -> Option<Range<usize>> {
+        let value = self.current_value();
+        let len = value.chars().count();
+        let (start, end) = self.marked_range_chars(len)?;
+        Some(Self::utf16_range_from_char(&value, start..end))
+    }
+
+    fn text_for_range(
+        &mut self,
+        range_utf16: Range<usize>,
+        adjusted_range: &mut Option<Range<usize>>,
+        _window: &mut Window,
+        _cx: &mut gpui::App,
+    ) -> Option<String> {
+        let value = self.current_value();
+        let len = value.chars().count();
+        let range = Self::char_range_from_utf16(&value, range_utf16);
+        let start = range.start.min(len);
+        let end = range.end.min(len).max(start);
+        adjusted_range.replace(Self::utf16_range_from_char(&value, start..end));
+        Some(value.chars().skip(start).take(end - start).collect())
+    }
+
+    fn replace_text_in_range(
+        &mut self,
+        replacement_range: Option<Range<usize>>,
+        text: &str,
+        window: &mut Window,
+        cx: &mut gpui::App,
+    ) {
+        if self.disabled || self.read_only {
+            return;
+        }
+        let value = self.current_value();
+        let (start, end) = self.resolve_replacement_range(&value, replacement_range);
+        let sanitized = Self::normalized_text(text);
+        let (next, caret) = Textarea::replace_char_range(&value, start, end, &sanitized);
+        let (next, caret, _marked, selection) = self.apply_max_length(next, caret, None, None);
+        self.apply_edit_result(&value, next, caret, selection, None, window, cx);
+    }
+
+    fn replace_and_mark_text_in_range(
+        &mut self,
+        range_utf16: Option<Range<usize>>,
+        new_text: &str,
+        new_selected_range_utf16: Option<Range<usize>>,
+        window: &mut Window,
+        cx: &mut gpui::App,
+    ) {
+        if self.disabled || self.read_only {
+            return;
+        }
+        let value = self.current_value();
+        let (start, end) = self.resolve_replacement_range(&value, range_utf16);
+        let sanitized = Self::normalized_text(new_text);
+        let inserted_chars = sanitized.chars().count();
+        let (next, fallback_caret) = Textarea::replace_char_range(&value, start, end, &sanitized);
+        let next_len = next.chars().count();
+        let marked = if inserted_chars > 0 {
+            let mark_end = (start + inserted_chars).min(next_len);
+            (start < mark_end).then_some((start, mark_end))
+        } else {
+            None
+        };
+
+        let selection = new_selected_range_utf16.and_then(|selection_utf16| {
+            let relative = Self::char_range_from_utf16(&sanitized, selection_utf16);
+            let selection_start = (start + relative.start).min(next_len);
+            let selection_end = (start + relative.end).min(next_len);
+            let (selection_start, selection_end) = if selection_start <= selection_end {
+                (selection_start, selection_end)
+            } else {
+                (selection_end, selection_start)
+            };
+            (selection_start < selection_end).then_some((selection_start, selection_end))
+        });
+
+        let caret = selection.map(|(_, end)| end).unwrap_or(fallback_caret);
+        let (next, caret, marked, selection) =
+            self.apply_max_length(next, caret, marked, selection);
+        self.apply_edit_result(&value, next, caret, selection, marked, window, cx);
+    }
+
+    fn unmark_text(&mut self, _window: &mut Window, _cx: &mut gpui::App) {
+        self.set_marked_range_chars(None);
+    }
+
+    fn bounds_for_range(
+        &mut self,
+        range_utf16: Range<usize>,
+        _window: &mut Window,
+        _cx: &mut gpui::App,
+    ) -> Option<Bounds<gpui::Pixels>> {
+        let value = self.current_value();
+        let range = Self::char_range_from_utf16(&value, range_utf16);
+        let wrap_columns =
+            Textarea::wrap_columns_for_box(&self.id, self.char_width, self.horizontal_padding);
+        let wrapped_lines = Textarea::wrapped_lines(&value, wrap_columns);
+        let (start_line, start_col) = Textarea::caret_visual_position(&wrapped_lines, range.start);
+        let (end_line, end_col) = Textarea::caret_visual_position(&wrapped_lines, range.end);
+        let (origin_x, origin_y, _width, _height) = Textarea::box_geometry(&self.id);
+        let left = origin_x + self.horizontal_padding + start_col as f32 * self.char_width.max(1.0);
+        let top = origin_y + self.vertical_padding + start_line as f32 * self.line_height.max(1.0);
+        let right = if start_line == end_line {
+            origin_x + self.horizontal_padding + end_col as f32 * self.char_width.max(1.0)
+        } else {
+            left + self.char_width.max(1.0)
+        };
+        let right = right.max(left + 1.0);
+        let bottom = (top + self.line_height.max(1.0)).max(top + 1.0);
+        Some(Bounds::from_corners(
+            point(px(left), px(top)),
+            point(px(right), px(bottom)),
+        ))
+    }
+
+    fn character_index_for_point(
+        &mut self,
+        point: gpui::Point<gpui::Pixels>,
+        _window: &mut Window,
+        _cx: &mut gpui::App,
+    ) -> Option<usize> {
+        let value = self.current_value();
+        let char_index = Textarea::caret_from_click(
+            &self.id,
+            point,
+            &value,
+            self.line_height,
+            self.vertical_padding,
+            self.horizontal_padding,
+            self.char_width,
+        );
+        Some(Self::utf16_from_char(&value, char_index))
+    }
+
+    fn accepts_text_input(&mut self, _window: &mut Window, _cx: &mut gpui::App) -> bool {
+        !self.disabled && !self.read_only
+    }
+}
+
 #[derive(IntoElement)]
 pub struct Textarea {
     id: ComponentId,
@@ -62,6 +416,41 @@ pub struct Textarea {
 }
 
 impl Textarea {
+    fn resolved_focus_handle(&self, cx: &gpui::App) -> FocusHandle {
+        if let Some(focus_handle) = self.focus_handle.as_ref() {
+            return focus_handle.clone();
+        }
+        if let Ok(mut handles) = TEXTAREA_FOCUS_HANDLES.lock() {
+            return handles
+                .entry(self.id.to_string())
+                .or_insert_with(|| cx.focus_handle())
+                .clone();
+        }
+        cx.focus_handle()
+    }
+
+    fn is_text_entry_keystroke(event: &KeyDownEvent) -> bool {
+        if event.keystroke.modifiers.control
+            || event.keystroke.modifiers.platform
+            || event.keystroke.modifiers.function
+        {
+            return false;
+        }
+
+        if event.keystroke.key == "enter" {
+            return true;
+        }
+
+        if let Some(key_char) = event.keystroke.key_char.as_ref() {
+            return !key_char.is_empty()
+                && !key_char
+                    .chars()
+                    .any(|ch| ch.is_control() && ch != '\n' && ch != '\t');
+        }
+
+        event.keystroke.key.chars().count() == 1
+    }
+
     #[track_caller]
     pub fn new() -> Self {
         Self {
@@ -658,15 +1047,13 @@ impl Textarea {
         block.into_any_element()
     }
 
-    fn render_input_box(&self, window: &Window) -> AnyElement {
+    fn render_input_box(&mut self, window: &mut Window, cx: &mut gpui::App) -> AnyElement {
         let tokens = &self.theme.components.textarea;
         let resolved_value = self.resolved_value();
         let current_value = resolved_value.to_string();
+        let focus_handle = self.resolved_focus_handle(cx);
         let tracked_focus = control::focused_state(&self.id, None, false);
-        let handle_focused = self
-            .focus_handle
-            .as_ref()
-            .is_some_and(|focus_handle| focus_handle.is_focused(window));
+        let handle_focused = focus_handle.is_focused(window);
         let is_focused = handle_focused || tracked_focus;
         let current_caret = control::text_state(
             &self.id,
@@ -756,76 +1143,20 @@ impl Textarea {
             .size_full()
         });
 
-        if let Some(focus_handle) = &self.focus_handle {
-            let handle_for_click = focus_handle.clone();
-            let id_for_focus = self.id.clone();
-            let value_for_click = current_value.clone();
-            let line_height_for_click = line_height;
-            let vertical_padding_for_click = vertical_padding;
-            let horizontal_padding_for_click = horizontal_padding;
-            let char_width_for_click = char_width;
-            input =
-                input
-                    .track_focus(focus_handle)
-                    .on_click(move |event: &ClickEvent, window, cx| {
-                        control::set_focused_state(&id_for_focus, true);
-                        let click_caret = Self::caret_from_click(
-                            &id_for_focus,
-                            event.position(),
-                            &value_for_click,
-                            line_height_for_click,
-                            vertical_padding_for_click,
-                            horizontal_padding_for_click,
-                            char_width_for_click,
-                        );
-                        let len = value_for_click.chars().count();
-                        let current_caret = control::text_state(
-                            &id_for_focus,
-                            "caret-index",
-                            None,
-                            len.to_string(),
-                        )
-                        .parse::<usize>()
-                        .ok()
-                        .map(|value| value.min(len))
-                        .unwrap_or(len);
-                        let existing_selection = Self::selection_bounds_for(&id_for_focus, len);
-                        control::set_text_state(
-                            &id_for_focus,
-                            "caret-index",
-                            click_caret.to_string(),
-                        );
-                        if event.modifiers().shift && !event.is_right_click() {
-                            let anchor = if let Some((start, end)) = existing_selection {
-                                if current_caret == start { end } else { start }
-                            } else {
-                                current_caret
-                            };
-                            Self::set_selection_for(&id_for_focus, anchor, click_caret);
-                        } else {
-                            let keep_selection = event.is_right_click()
-                                && existing_selection.is_some_and(|(start, end)| {
-                                    click_caret >= start && click_caret <= end
-                                });
-                            if !keep_selection {
-                                Self::clear_selection_for(&id_for_focus, click_caret);
-                            }
-                        }
-                        window.focus(&handle_for_click, cx);
-                        window.refresh();
-                    });
-        } else {
-            let id_for_focus = self.id.clone();
-            let value_for_click = current_value.clone();
-            let line_height_for_click = line_height;
-            let vertical_padding_for_click = vertical_padding;
-            let horizontal_padding_for_click = horizontal_padding;
-            let char_width_for_click = char_width;
-            input = input.on_click(move |event: &ClickEvent, window, _cx| {
+        let handle_for_click = focus_handle.clone();
+        let id_for_focus = self.id.clone();
+        let value_for_click = current_value.clone();
+        let line_height_for_click = line_height;
+        let vertical_padding_for_click = vertical_padding;
+        let horizontal_padding_for_click = horizontal_padding;
+        let char_width_for_click = char_width;
+        input = input.track_focus(&focus_handle).on_mouse_down(
+            MouseButton::Left,
+            move |event, window, cx| {
                 control::set_focused_state(&id_for_focus, true);
                 let click_caret = Self::caret_from_click(
                     &id_for_focus,
-                    event.position(),
+                    event.position,
                     &value_for_click,
                     line_height_for_click,
                     vertical_padding_for_click,
@@ -841,7 +1172,7 @@ impl Textarea {
                         .unwrap_or(len);
                 let existing_selection = Self::selection_bounds_for(&id_for_focus, len);
                 control::set_text_state(&id_for_focus, "caret-index", click_caret.to_string());
-                if event.modifiers().shift && !event.is_right_click() {
+                if event.modifiers.shift {
                     let anchor = if let Some((start, end)) = existing_selection {
                         if current_caret == start { end } else { start }
                     } else {
@@ -849,16 +1180,12 @@ impl Textarea {
                     };
                     Self::set_selection_for(&id_for_focus, anchor, click_caret);
                 } else {
-                    let keep_selection = event.is_right_click()
-                        && existing_selection
-                            .is_some_and(|(start, end)| click_caret >= start && click_caret <= end);
-                    if !keep_selection {
-                        Self::clear_selection_for(&id_for_focus, click_caret);
-                    }
+                    Self::clear_selection_for(&id_for_focus, click_caret);
                 }
+                window.focus(&handle_for_click, cx);
                 window.refresh();
-            });
-        }
+            },
+        );
 
         let id_for_blur = self.id.clone();
         input = input.on_mouse_down_out(move |_, window, _cx| {
@@ -1038,6 +1365,10 @@ impl Textarea {
                     return;
                 }
 
+                if Self::is_text_entry_keystroke(event) {
+                    return;
+                }
+
                 if let Some((next, next_caret)) = Self::with_value_update(
                     &current_value_for_input,
                     event,
@@ -1061,6 +1392,24 @@ impl Textarea {
                 }
             });
         }
+
+        window.handle_input(
+            &focus_handle,
+            TextareaImeHandler {
+                id: self.id.to_string(),
+                value_controlled: self.value_controlled,
+                rendered_value: current_value.clone(),
+                max_length: self.max_length,
+                disabled: self.disabled,
+                read_only: self.read_only,
+                on_change: self.on_change.clone(),
+                line_height,
+                vertical_padding,
+                horizontal_padding,
+                char_width,
+            },
+            cx,
+        );
 
         if current_value.is_empty() && !is_focused {
             input = input.child(
@@ -1242,13 +1591,13 @@ impl RenderOnce for Textarea {
                 .id(self.id.clone())
                 .gap_2()
                 .child(self.render_label_block())
-                .child(self.render_input_box(window)),
+                .child(self.render_input_box(window, _cx)),
             FieldLayout::Horizontal => Stack::horizontal()
                 .id(self.id.clone())
                 .items_start()
                 .gap_3()
                 .child(div().w(px(168.0)).child(self.render_label_block()))
-                .child(div().flex_1().child(self.render_input_box(window))),
+                .child(div().flex_1().child(self.render_input_box(window, _cx))),
         }
     }
 }
