@@ -27,6 +27,13 @@ struct TextareaSelectionDragState {
     anchor: usize,
 }
 
+#[derive(Clone)]
+struct WrappedLine {
+    text: String,
+    start_char: usize,
+    end_char: usize,
+}
+
 #[derive(IntoElement)]
 pub struct Textarea {
     id: ComponentId,
@@ -463,21 +470,26 @@ impl Textarea {
         value: &str,
         line_height: f32,
         vertical_padding: f32,
+        horizontal_padding: f32,
         char_width: f32,
     ) -> usize {
-        let (origin_x, origin_y, _width, _height) = Self::box_geometry(id);
-        let local_x = (f32::from(position.x) - origin_x).max(0.0);
+        let (origin_x, origin_y, width, _height) = Self::box_geometry(id);
+        let local_x = (f32::from(position.x) - origin_x - horizontal_padding).max(0.0);
         let local_y = (f32::from(position.y) - origin_y - vertical_padding).max(0.0);
+
+        let content_width = (width - horizontal_padding * 2.0).max(char_width.max(1.0));
+        let wrap_columns = (content_width / char_width.max(1.0)).floor() as usize;
+        let wrapped_lines = Self::wrapped_lines(value, wrap_columns.max(1));
 
         let target_line = (local_y / line_height.max(1.0)).floor() as usize;
         let target_col = (local_x / char_width.max(1.0)).floor() as usize;
-        let lines = value.split('\n').collect::<Vec<_>>();
-        if lines.is_empty() {
+        if wrapped_lines.is_empty() {
             return 0;
         }
-        let line_index = target_line.min(lines.len().saturating_sub(1));
-        let col = target_col.min(lines[line_index].chars().count());
-        Self::char_from_line_col(value, line_index, col)
+        let line_index = target_line.min(wrapped_lines.len().saturating_sub(1));
+        let line = &wrapped_lines[line_index];
+        let line_len = line.end_char.saturating_sub(line.start_char);
+        line.start_char + target_col.min(line_len)
     }
 
     fn line_height_px(&self) -> f32 {
@@ -500,6 +512,16 @@ impl Textarea {
         }
     }
 
+    fn horizontal_padding_px(&self) -> f32 {
+        match self.size {
+            Size::Xs => 8.0,
+            Size::Sm => 10.0,
+            Size::Md => 12.0,
+            Size::Lg => 14.0,
+            Size::Xl => 16.0,
+        }
+    }
+
     fn caret_height_px(&self) -> f32 {
         match self.size {
             Size::Xs => 13.0,
@@ -510,11 +532,82 @@ impl Textarea {
         }
     }
 
-    fn resolved_rows(&self, value: &str) -> (usize, bool) {
-        let lines = value.chars().filter(|ch| *ch == '\n').count() + 1;
-        let max_rows = self.max_rows.unwrap_or(lines.max(self.min_rows));
-        let rows = lines.clamp(self.min_rows, max_rows);
-        (rows, lines > rows)
+    fn wrap_columns_for_box(id: &str, char_width: f32, horizontal_padding: f32) -> usize {
+        let (_, _, width, _) = Self::box_geometry(id);
+        if width <= 0.0 {
+            return 10_000;
+        }
+        let content_width = (width - horizontal_padding * 2.0).max(char_width.max(1.0));
+        ((content_width / char_width.max(1.0)).floor() as usize).max(1)
+    }
+
+    fn wrapped_lines(value: &str, max_columns: usize) -> Vec<WrappedLine> {
+        let max_columns = max_columns.max(1);
+        if value.is_empty() {
+            return vec![WrappedLine {
+                text: String::new(),
+                start_char: 0,
+                end_char: 0,
+            }];
+        }
+
+        let mut wrapped = Vec::new();
+        let mut global_char_index = 0usize;
+        let physical_lines: Vec<&str> = value.split('\n').collect();
+
+        for (line_index, line) in physical_lines.iter().enumerate() {
+            let chars: Vec<char> = line.chars().collect();
+            let line_len = chars.len();
+
+            if line_len == 0 {
+                wrapped.push(WrappedLine {
+                    text: String::new(),
+                    start_char: global_char_index,
+                    end_char: global_char_index,
+                });
+            } else {
+                let mut local_start = 0usize;
+                while local_start < line_len {
+                    let local_end = local_start.saturating_add(max_columns).min(line_len);
+                    wrapped.push(WrappedLine {
+                        text: chars[local_start..local_end].iter().collect(),
+                        start_char: global_char_index + local_start,
+                        end_char: global_char_index + local_end,
+                    });
+                    local_start = local_end;
+                }
+            }
+
+            global_char_index += line_len;
+            if line_index + 1 < physical_lines.len() {
+                global_char_index += 1;
+            }
+        }
+
+        wrapped
+    }
+
+    fn caret_visual_position(wrapped_lines: &[WrappedLine], caret_index: usize) -> (usize, usize) {
+        if wrapped_lines.is_empty() {
+            return (0, 0);
+        }
+
+        for (line_index, line) in wrapped_lines.iter().enumerate() {
+            if caret_index >= line.start_char && caret_index <= line.end_char {
+                return (line_index, caret_index - line.start_char);
+            }
+        }
+
+        let last_index = wrapped_lines.len().saturating_sub(1);
+        let last = &wrapped_lines[last_index];
+        (last_index, last.end_char.saturating_sub(last.start_char))
+    }
+
+    fn resolved_rows(&self, visual_lines: usize) -> (usize, bool) {
+        let visual_lines = visual_lines.max(1);
+        let max_rows = self.max_rows.unwrap_or(visual_lines.max(self.min_rows));
+        let rows = visual_lines.clamp(self.min_rows, max_rows);
+        (rows, visual_lines > rows)
     }
 
     fn render_label_block(&self) -> AnyElement {
@@ -587,10 +680,13 @@ impl Textarea {
         .unwrap_or_else(|| current_value.chars().count());
         let selection = Self::selection_bounds_for(&self.id, current_value.chars().count());
 
-        let (rows, should_scroll) = self.resolved_rows(&current_value);
         let line_height = self.line_height_px();
         let vertical_padding = self.vertical_padding_px();
+        let horizontal_padding = self.horizontal_padding_px();
         let char_width = self.char_width_px();
+        let wrap_columns = Self::wrap_columns_for_box(&self.id, char_width, horizontal_padding);
+        let wrapped_lines = Self::wrapped_lines(&current_value, wrap_columns);
+        let (rows, should_scroll) = self.resolved_rows(wrapped_lines.len());
         let box_height = (rows as f32 * line_height) + (vertical_padding * 2.0) + 2.0;
 
         let mut input = div()
@@ -666,6 +762,7 @@ impl Textarea {
             let value_for_click = current_value.clone();
             let line_height_for_click = line_height;
             let vertical_padding_for_click = vertical_padding;
+            let horizontal_padding_for_click = horizontal_padding;
             let char_width_for_click = char_width;
             input =
                 input
@@ -678,6 +775,7 @@ impl Textarea {
                             &value_for_click,
                             line_height_for_click,
                             vertical_padding_for_click,
+                            horizontal_padding_for_click,
                             char_width_for_click,
                         );
                         control::set_text_state(
@@ -694,6 +792,7 @@ impl Textarea {
             let value_for_click = current_value.clone();
             let line_height_for_click = line_height;
             let vertical_padding_for_click = vertical_padding;
+            let horizontal_padding_for_click = horizontal_padding;
             let char_width_for_click = char_width;
             input = input.on_click(move |event: &ClickEvent, window, _cx| {
                 control::set_focused_state(&id_for_focus, true);
@@ -703,6 +802,7 @@ impl Textarea {
                     &value_for_click,
                     line_height_for_click,
                     vertical_padding_for_click,
+                    horizontal_padding_for_click,
                     char_width_for_click,
                 );
                 control::set_text_state(&id_for_focus, "caret-index", click_caret.to_string());
@@ -726,6 +826,7 @@ impl Textarea {
             let value_for_drag = current_value.clone();
             let line_height_for_drag = line_height;
             let vertical_padding_for_drag = vertical_padding;
+            let horizontal_padding_for_drag = horizontal_padding;
             let char_width_for_drag = char_width;
             input = input
                 .on_drag(drag_state, |_drag, _, _, cx| cx.new(|_| EmptyView))
@@ -740,6 +841,7 @@ impl Textarea {
                         &value_for_drag,
                         line_height_for_drag,
                         vertical_padding_for_drag,
+                        horizontal_padding_for_drag,
                         char_width_for_drag,
                     );
                     control::set_text_state(&id_for_drag, "caret-index", caret.to_string());
@@ -879,41 +981,32 @@ impl Textarea {
                     .child(self.placeholder.clone().unwrap_or_default()),
             );
         } else {
-            let lines = if current_value.is_empty() {
-                vec![String::new()]
-            } else {
-                current_value
-                    .split('\n')
-                    .map(|line| line.to_string())
-                    .collect()
-            };
-
             let mut content = Stack::vertical().w_full().gap_0();
-            let (caret_line, caret_col) = Self::line_col_from_char(&current_value, current_caret);
+            let (caret_line, caret_col) =
+                Self::caret_visual_position(&wrapped_lines, current_caret);
             let selection_bg =
                 resolve_hsla(&self.theme, &self.theme.semantic.focus_ring).alpha(0.28);
-            let mut line_start_char = 0usize;
-            for (line_index, line) in lines.into_iter().enumerate() {
-                let line_len = line.chars().count();
-                let line_end_char = line_start_char + line_len;
+            for (line_index, line) in wrapped_lines.iter().enumerate() {
                 if let Some((selection_start, selection_end)) = selection {
-                    let seg_start = selection_start.clamp(line_start_char, line_end_char);
-                    let seg_end = selection_end.clamp(line_start_char, line_end_char);
+                    let seg_start = selection_start.clamp(line.start_char, line.end_char);
+                    let seg_end = selection_end.clamp(line.start_char, line.end_char);
                     if seg_start < seg_end {
-                        let local_start = seg_start - line_start_char;
-                        let local_end = seg_end - line_start_char;
-                        let left = line.chars().take(local_start).collect::<String>();
+                        let local_start = seg_start - line.start_char;
+                        let local_end = seg_end - line.start_char;
+                        let left = line.text.chars().take(local_start).collect::<String>();
                         let selected = line
+                            .text
                             .chars()
                             .skip(local_start)
                             .take(local_end - local_start)
                             .collect::<String>();
-                        let right = line.chars().skip(local_end).collect::<String>();
+                        let right = line.text.chars().skip(local_end).collect::<String>();
                         content = content.child(
                             div()
                                 .w_full()
                                 .flex()
                                 .items_center()
+                                .whitespace_nowrap()
                                 .child(if left.is_empty() {
                                     "".to_string()
                                 } else {
@@ -930,7 +1023,6 @@ impl Textarea {
                                     right
                                 }),
                         );
-                        line_start_char = line_end_char.saturating_add(1);
                         continue;
                     }
                 }
@@ -941,8 +1033,8 @@ impl Textarea {
                     && is_focused
                     && selection.is_none()
                 {
-                    let left = line.chars().take(caret_col).collect::<String>();
-                    let right = line.chars().skip(caret_col).collect::<String>();
+                    let left = line.text.chars().take(caret_col).collect::<String>();
+                    let right = line.text.chars().skip(caret_col).collect::<String>();
                     let caret = div()
                         .id(self.id.slot("caret"))
                         .flex_none()
@@ -965,8 +1057,9 @@ impl Textarea {
                             .w_full()
                             .flex()
                             .items_center()
+                            .whitespace_nowrap()
                             .child(if left.is_empty() {
-                                " ".to_string()
+                                "".to_string()
                             } else {
                                 left
                             })
@@ -977,40 +1070,12 @@ impl Textarea {
                                 right
                             }),
                     );
-                } else if line.is_empty() {
+                } else if line.text.is_empty() {
                     content = content.child(div().w_full().child(" "));
                 } else {
-                    content = content.child(div().w_full().child(line));
+                    content =
+                        content.child(div().w_full().whitespace_nowrap().child(line.text.clone()));
                 }
-                line_start_char = line_end_char.saturating_add(1);
-            }
-
-            let show_caret = is_focused;
-            if !self.disabled
-                && !self.read_only
-                && show_caret
-                && current_value.is_empty()
-                && selection.is_none()
-            {
-                content = content.child(
-                    div()
-                        .id(self.id.slot("caret"))
-                        .flex_none()
-                        .w(super::utils::quantized_stroke_px(window, 1.5))
-                        .h(px(self.caret_height_px()))
-                        .bg(resolve_hsla(&self.theme, &tokens.fg))
-                        .rounded_sm()
-                        .with_animation(
-                            self.id.slot("caret-blink"),
-                            Animation::new(Duration::from_millis(CARET_BLINK_CYCLE_MS))
-                                .repeat()
-                                .with_easing(gpui::linear),
-                            |this, delta| {
-                                let visible = ((delta * 2.0).fract()) < 0.5;
-                                this.opacity(if visible { 1.0 } else { 0.0 })
-                            },
-                        ),
-                );
             }
 
             input = input.child(content);

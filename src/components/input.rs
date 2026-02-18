@@ -445,7 +445,7 @@ impl TextInput {
         }
 
         let value = self.display_value(&resolved_value);
-        let mut value_container = div().flex_1().min_w_0().flex().items_center().gap_1();
+        let mut value_container = div().flex_1().min_w_0().flex().items_center().gap_0();
         if value.is_empty() && !is_focused {
             value_container = value_container.child(
                 div()
