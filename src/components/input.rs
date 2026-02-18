@@ -8,9 +8,8 @@ use std::{
 
 use gpui::{
     Animation, AnimationExt, AnyElement, Bounds, ClipboardItem, FocusHandle, InputHandler,
-    InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, UTF16Selection, Window, canvas, div, point,
-    px,
+    InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce, SharedString,
+    StatefulInteractiveElement, Styled, UTF16Selection, Window, canvas, div, point, px,
 };
 
 use crate::contracts::{FieldLike, MotionAware, Sizeable, VariantConfigurable};
@@ -20,6 +19,12 @@ use crate::style::{FieldLayout, Radius, Size, Variant};
 
 use super::Stack;
 use super::control;
+use super::text_input_actions::{
+    CopySelection, CutSelection, DeleteBackward, DeleteForward, INPUT_KEY_CONTEXT, MoveEnd,
+    MoveHome, MoveLeft, MoveRight, PasteClipboard, SelectAll, SelectEnd, SelectHome, SelectLeft,
+    SelectRight, Submit, ensure_text_keybindings,
+};
+use super::text_input_state::InputState;
 use super::transition::TransitionExt;
 use super::utils::{apply_input_size, apply_radius, quantized_stroke_px, resolve_hsla};
 
@@ -28,7 +33,6 @@ type SubmitHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 const CARET_BLINK_TOGGLE_MS: u64 = 680;
 const CARET_BLINK_CYCLE_MS: u64 = CARET_BLINK_TOGGLE_MS * 2;
-const ENABLE_CUSTOM_CONTEXT_MENU: bool = false;
 
 #[derive(Clone, Copy)]
 struct PasswordRevealState {
@@ -433,11 +437,6 @@ pub struct TextInput {
 }
 
 impl TextInput {
-    fn is_enter_key(key: &str) -> bool {
-        let key = key.to_ascii_lowercase();
-        key == "enter" || key == "return" || key.contains("enter") || key.contains("return")
-    }
-
     fn resolved_focus_handle(&self, cx: &gpui::App) -> FocusHandle {
         if let Some(focus_handle) = self.focus_handle.as_ref() {
             return focus_handle.clone();
@@ -449,28 +448,6 @@ impl TextInput {
                 .clone();
         }
         cx.focus_handle()
-    }
-
-    fn is_text_entry_keystroke(event: &KeyDownEvent) -> bool {
-        if event.keystroke.modifiers.control
-            || event.keystroke.modifiers.platform
-            || event.keystroke.modifiers.function
-        {
-            return false;
-        }
-
-        if Self::is_enter_key(event.keystroke.key.as_str()) {
-            return false;
-        }
-
-        if let Some(key_char) = event.keystroke.key_char.as_ref() {
-            return !key_char.is_empty()
-                && !key_char
-                    .chars()
-                    .any(|ch| ch.is_control() && ch != '\n' && ch != '\t');
-        }
-
-        event.keystroke.key.chars().count() == 1
     }
 
     #[track_caller]
@@ -777,6 +754,81 @@ impl TextInput {
         Self::set_selection_for(id, caret, caret);
     }
 
+    fn editor_state_for(id: &str, current_value: &str) -> InputState {
+        let len = current_value.chars().count();
+        let caret = control::text_state(id, "caret-index", None, len.to_string())
+            .parse::<usize>()
+            .ok()
+            .unwrap_or(len)
+            .min(len);
+        let anchor = control::text_state(id, "selection-anchor", None, caret.to_string())
+            .parse::<usize>()
+            .ok()
+            .unwrap_or(caret)
+            .min(len);
+        let selection = Self::selection_bounds_for(id, len);
+        InputState::new(current_value.to_string(), caret, anchor, selection)
+    }
+
+    fn persist_editor_state(id: &str, state: &InputState) {
+        control::set_text_state(id, "caret-index", state.caret.to_string());
+        if let Some((start, end)) = state.selection {
+            Self::set_selection_for(id, start, end);
+        } else {
+            Self::clear_selection_for(id, state.caret);
+        }
+        control::set_text_state(id, "selection-anchor", state.anchor.to_string());
+    }
+
+    fn apply_editor_state(
+        id: &str,
+        previous_value: &str,
+        state: &InputState,
+        value_controlled: bool,
+        masked: bool,
+        mask_reveal_ms: u64,
+        on_change: Option<&ChangeHandler>,
+        window: &mut Window,
+        cx: &mut gpui::App,
+    ) {
+        let next_value = state.value.clone();
+        let value_changed = next_value != previous_value;
+
+        if value_changed && masked {
+            let previous_len = previous_value.chars().count();
+            let next_len = next_value.chars().count();
+            if next_len > previous_len {
+                Self::set_password_reveal(id, &next_value, mask_reveal_ms);
+                if mask_reveal_ms > 0 {
+                    let window_handle = window.window_handle();
+                    cx.spawn({
+                        async move |cx| {
+                            cx.background_executor()
+                                .timer(Duration::from_millis(mask_reveal_ms))
+                                .await;
+                            let _ = window_handle.update(cx, |_, window, _| {
+                                window.refresh();
+                            });
+                        }
+                    })
+                    .detach();
+                }
+            } else {
+                Self::clear_password_reveal(id);
+            }
+        }
+
+        if value_changed && !value_controlled {
+            control::set_text_state(id, "value", next_value.clone());
+        }
+        Self::persist_editor_state(id, state);
+        window.refresh();
+
+        if value_changed && let Some(handler) = on_change {
+            (handler)(next_value.into(), window, cx);
+        }
+    }
+
     fn replace_char_range(value: &str, start: usize, end: usize, insert: &str) -> (String, usize) {
         let start = start.min(value.chars().count());
         let end = end.min(value.chars().count()).max(start);
@@ -807,38 +859,6 @@ impl TextInput {
         (x, y, width, height)
     }
 
-    fn box_geometry(id: &str) -> (f32, f32, f32, f32) {
-        let x = control::text_state(id, "box-origin-x", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
-        let y = control::text_state(id, "box-origin-y", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
-        let width = control::text_state(id, "box-width", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
-        let height = control::text_state(id, "box-height", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
-        (x, y, width, height)
-    }
-
-    fn context_menu_position(id: &str) -> (f32, f32) {
-        let x = control::text_state(id, "context-menu-x", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
-        let y = control::text_state(id, "context-menu-y", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
-        (x, y)
-    }
-
     fn caret_from_click(
         id: &str,
         position: gpui::Point<gpui::Pixels>,
@@ -855,157 +875,8 @@ impl TextInput {
         Self::char_from_x(window, font_size, value, local_x).min(value.chars().count())
     }
 
-    fn open_context_menu_from_pointer(
-        id: &str,
-        position: gpui::Point<gpui::Pixels>,
-        current_value: &str,
-        window: &Window,
-        font_size: f32,
-    ) {
-        let click_caret = Self::caret_from_click(id, position, current_value, window, font_size);
-        let len = current_value.chars().count();
-        let selection = Self::selection_bounds_for(id, len);
-        let keep_selection =
-            selection.is_some_and(|(start, end)| click_caret >= start && click_caret <= end);
-        if !keep_selection {
-            control::set_text_state(id, "caret-index", click_caret.to_string());
-            Self::clear_selection_for(id, click_caret);
-            control::set_text_state(id, "selection-anchor", click_caret.to_string());
-        }
-
-        let (box_x, box_y, _box_w, _box_h) = Self::box_geometry(id);
-        let local_x = (f32::from(position.x) - box_x).max(0.0);
-        let local_y = (f32::from(position.y) - box_y).max(0.0);
-        control::set_text_state(id, "context-menu-x", local_x.to_string());
-        control::set_text_state(id, "context-menu-y", local_y.to_string());
-        control::set_bool_state(id, "context-open", ENABLE_CUSTOM_CONTEXT_MENU);
-        control::set_bool_state(id, "mouse-selecting", false);
-    }
-
-    fn with_value_update(
-        current: &str,
-        event: &KeyDownEvent,
-        max_length: Option<usize>,
-        caret_index: usize,
-        selection: Option<(usize, usize)>,
-    ) -> Option<(String, usize)> {
-        let key = event.keystroke.key.as_str();
-        let char_len = current.chars().count();
-        let caret_index = caret_index.min(char_len);
-        let selection = selection.map(|(start, end)| {
-            let start = start.min(char_len);
-            let end = end.min(char_len);
-            if start <= end {
-                (start, end)
-            } else {
-                (end, start)
-            }
-        });
-        let has_selection = selection.is_some_and(|(start, end)| start < end);
-
-        if key == "backspace" {
-            if let Some((start, end)) = selection
-                && start < end
-            {
-                return Some(Self::replace_char_range(current, start, end, ""));
-            }
-            if caret_index == 0 {
-                return Some((current.to_string(), 0));
-            }
-            let start = Self::byte_index_at_char(current, caret_index - 1);
-            let end = Self::byte_index_at_char(current, caret_index);
-            let mut next = current.to_string();
-            next.replace_range(start..end, "");
-            return Some((next, caret_index - 1));
-        }
-
-        if key == "delete" {
-            if let Some((start, end)) = selection
-                && start < end
-            {
-                return Some(Self::replace_char_range(current, start, end, ""));
-            }
-            if caret_index >= char_len {
-                return Some((current.to_string(), caret_index));
-            }
-            let start = Self::byte_index_at_char(current, caret_index);
-            let end = Self::byte_index_at_char(current, caret_index + 1);
-            let mut next = current.to_string();
-            next.replace_range(start..end, "");
-            return Some((next, caret_index));
-        }
-
-        if key == "left" {
-            if has_selection {
-                let (start, _) = selection.unwrap_or((caret_index, caret_index));
-                return Some((current.to_string(), start));
-            }
-            return Some((current.to_string(), caret_index.saturating_sub(1)));
-        }
-        if key == "right" {
-            if has_selection {
-                let (_, end) = selection.unwrap_or((caret_index, caret_index));
-                return Some((current.to_string(), end));
-            }
-            return Some((current.to_string(), (caret_index + 1).min(char_len)));
-        }
-        if key == "home" {
-            return Some((current.to_string(), 0));
-        }
-        if key == "end" {
-            return Some((current.to_string(), char_len));
-        }
-
-        let has_modifier = event.keystroke.modifiers.control
-            || event.keystroke.modifiers.platform
-            || event.keystroke.modifiers.function;
-        if has_modifier {
-            return None;
-        }
-
-        let inserted = event
-            .keystroke
-            .key_char
-            .clone()
-            .filter(|value| !value.is_empty())
-            .or_else(|| {
-                if key.chars().count() == 1 {
-                    Some(key.to_string())
-                } else {
-                    None
-                }
-            })?;
-
-        if inserted.contains('\n') || inserted.contains('\r') || Self::is_enter_key(key) {
-            return None;
-        }
-
-        let start = Self::byte_index_at_char(current, caret_index);
-        let (mut next, mut next_caret) = if let Some((selection_start, selection_end)) = selection {
-            if selection_start < selection_end {
-                Self::replace_char_range(current, selection_start, selection_end, &inserted)
-            } else {
-                let mut next = current.to_string();
-                next.insert_str(start, &inserted);
-                (next, caret_index + inserted.chars().count())
-            }
-        } else {
-            let mut next = current.to_string();
-            next.insert_str(start, &inserted);
-            (next, caret_index + inserted.chars().count())
-        };
-
-        if let Some(max_length) = max_length {
-            if next.chars().count() > max_length {
-                next = next.chars().take(max_length).collect();
-                next_caret = next_caret.min(next.chars().count());
-            }
-        }
-
-        Some((next, next_caret))
-    }
-
     fn render_input_box(&mut self, window: &mut Window, cx: &mut gpui::App) -> AnyElement {
+        ensure_text_keybindings(cx);
         let tokens = &self.theme.components.input;
         let resolved_value = self.resolved_value();
         let current_value = resolved_value.to_string();
@@ -1013,9 +884,6 @@ impl TextInput {
         let tracked_focus = control::focused_state(&self.id, None, false);
         let handle_focused = focus_handle.is_focused(window);
         let is_focused = handle_focused || tracked_focus;
-        if !ENABLE_CUSTOM_CONTEXT_MENU {
-            control::set_bool_state(&self.id, "context-open", false);
-        }
         let current_len = current_value.chars().count();
         let current_caret =
             control::text_state(&self.id, "caret-index", None, current_len.to_string())
@@ -1031,6 +899,7 @@ impl TextInput {
             .id(self.id.slot("box"))
             .relative()
             .focusable()
+            .key_context(INPUT_KEY_CONTEXT)
             .flex()
             .flex_row()
             .items_center()
@@ -1058,75 +927,28 @@ impl TextInput {
             input = input.cursor_text();
         }
         input = input.track_focus(&focus_handle);
-        input = input.child({
-            let id_for_metrics = self.id.clone();
-            canvas(
-                move |bounds, _, _cx| {
-                    control::set_text_state(
-                        &id_for_metrics,
-                        "box-origin-x",
-                        f32::from(bounds.origin.x).to_string(),
-                    );
-                    control::set_text_state(
-                        &id_for_metrics,
-                        "box-origin-y",
-                        f32::from(bounds.origin.y).to_string(),
-                    );
-                    control::set_text_state(
-                        &id_for_metrics,
-                        "box-width",
-                        f32::from(bounds.size.width).to_string(),
-                    );
-                    control::set_text_state(
-                        &id_for_metrics,
-                        "box-height",
-                        f32::from(bounds.size.height).to_string(),
-                    );
-                },
-                |_, _, _, _| {},
-            )
-            .absolute()
-            .size_full()
-        });
-
         let id_for_blur = self.id.clone();
         input = input.on_mouse_down_out(move |_, window, _cx| {
             control::set_focused_state(&id_for_blur, false);
             control::set_bool_state(&id_for_blur, "mouse-selecting", false);
-            control::set_bool_state(&id_for_blur, "context-open", false);
             window.refresh();
         });
 
         if !self.disabled && !self.read_only {
-            let on_change = self.on_change.clone();
-            let on_submit = self.on_submit.clone();
-            let rendered_value = current_value.clone();
-            let max_length = self.max_length;
-            let input_id = self.id.clone();
-            let focus_state_id = self.id.clone();
-            let masked = self.masked;
-            let mask_reveal_ms = self.mask_reveal_ms;
             let value_controlled = self.value_controlled;
             let value_for_mouse = current_value.clone();
             let value_for_mouse_down = value_for_mouse.clone();
             let value_for_mouse_move = value_for_mouse.clone();
-            let value_for_right_click = value_for_mouse.clone();
             let font_size_for_mouse = font_size;
             let focus_handle_for_mouse = focus_handle.clone();
-            let focus_handle_for_right_click = focus_handle.clone();
-            let focus_handle_for_right_up = focus_handle.clone();
             let id_for_mouse_down = self.id.clone();
             let id_for_mouse_move = self.id.clone();
             let id_for_mouse_up = self.id.clone();
             let id_for_mouse_up_out = self.id.clone();
-            let id_for_right_click = self.id.clone();
-            let id_for_right_up = self.id.clone();
-            let value_for_right_up = value_for_mouse.clone();
 
             input = input
                 .on_mouse_down(MouseButton::Left, move |event, window, cx| {
                     control::set_focused_state(&id_for_mouse_down, true);
-                    control::set_bool_state(&id_for_mouse_down, "context-open", false);
                     window.focus(&focus_handle_for_mouse, cx);
 
                     let current_value = control::text_state(
@@ -1220,252 +1042,413 @@ impl TextInput {
                 })
                 .on_mouse_up_out(MouseButton::Left, move |_, _, _| {
                     control::set_bool_state(&id_for_mouse_up_out, "mouse-selecting", false);
-                })
-                .on_mouse_down(MouseButton::Right, move |event, window, cx| {
-                    control::set_focused_state(&id_for_right_click, true);
-                    window.focus(&focus_handle_for_right_click, cx);
+                });
+        }
 
+        let max_length = self.max_length;
+        if !self.disabled {
+            let input_id = self.id.clone();
+            let rendered_value = current_value.clone();
+            let value_controlled = self.value_controlled;
+            let on_change = self.on_change.clone();
+            let masked = self.masked;
+            let mask_reveal_ms = self.mask_reveal_ms;
+            input = input
+                .on_action(move |_: &MoveLeft, window, cx| {
                     let current_value = control::text_state(
-                        &id_for_right_click,
+                        &input_id,
                         "value",
-                        value_controlled.then_some(value_for_right_click.clone()),
-                        value_for_right_click.clone(),
+                        value_controlled.then_some(rendered_value.clone()),
+                        rendered_value.clone(),
                     );
-                    Self::open_context_menu_from_pointer(
-                        &id_for_right_click,
-                        event.position,
+                    let mut state = Self::editor_state_for(&input_id, &current_value);
+                    state.move_left(false);
+                    Self::apply_editor_state(
+                        &input_id,
                         &current_value,
+                        &state,
+                        value_controlled,
+                        masked,
+                        mask_reveal_ms,
+                        on_change.as_ref(),
                         window,
-                        font_size_for_mouse,
+                        cx,
                     );
-                    window.refresh();
                 })
-                .on_mouse_up(MouseButton::Right, move |event, window, cx| {
-                    control::set_focused_state(&id_for_right_up, true);
-                    window.focus(&focus_handle_for_right_up, cx);
-                    let current_value = control::text_state(
-                        &id_for_right_up,
-                        "value",
-                        value_controlled.then_some(value_for_right_up.clone()),
-                        value_for_right_up.clone(),
-                    );
-                    Self::open_context_menu_from_pointer(
-                        &id_for_right_up,
-                        event.position,
-                        &current_value,
-                        window,
-                        font_size_for_mouse,
-                    );
-                    window.refresh();
+                .on_action({
+                    let input_id = self.id.clone();
+                    let rendered_value = current_value.clone();
+                    let on_change = self.on_change.clone();
+                    move |_: &MoveRight, window, cx| {
+                        let current_value = control::text_state(
+                            &input_id,
+                            "value",
+                            value_controlled.then_some(rendered_value.clone()),
+                            rendered_value.clone(),
+                        );
+                        let mut state = Self::editor_state_for(&input_id, &current_value);
+                        state.move_right(false);
+                        Self::apply_editor_state(
+                            &input_id,
+                            &current_value,
+                            &state,
+                            value_controlled,
+                            masked,
+                            mask_reveal_ms,
+                            on_change.as_ref(),
+                            window,
+                            cx,
+                        );
+                    }
+                })
+                .on_action({
+                    let input_id = self.id.clone();
+                    let rendered_value = current_value.clone();
+                    let on_change = self.on_change.clone();
+                    move |_: &MoveHome, window, cx| {
+                        let current_value = control::text_state(
+                            &input_id,
+                            "value",
+                            value_controlled.then_some(rendered_value.clone()),
+                            rendered_value.clone(),
+                        );
+                        let mut state = Self::editor_state_for(&input_id, &current_value);
+                        state.move_to(0, false);
+                        Self::apply_editor_state(
+                            &input_id,
+                            &current_value,
+                            &state,
+                            value_controlled,
+                            masked,
+                            mask_reveal_ms,
+                            on_change.as_ref(),
+                            window,
+                            cx,
+                        );
+                    }
+                })
+                .on_action({
+                    let input_id = self.id.clone();
+                    let rendered_value = current_value.clone();
+                    let on_change = self.on_change.clone();
+                    move |_: &MoveEnd, window, cx| {
+                        let current_value = control::text_state(
+                            &input_id,
+                            "value",
+                            value_controlled.then_some(rendered_value.clone()),
+                            rendered_value.clone(),
+                        );
+                        let mut state = Self::editor_state_for(&input_id, &current_value);
+                        state.move_to(state.len(), false);
+                        Self::apply_editor_state(
+                            &input_id,
+                            &current_value,
+                            &state,
+                            value_controlled,
+                            masked,
+                            mask_reveal_ms,
+                            on_change.as_ref(),
+                            window,
+                            cx,
+                        );
+                    }
+                })
+                .on_action({
+                    let input_id = self.id.clone();
+                    let rendered_value = current_value.clone();
+                    let on_change = self.on_change.clone();
+                    move |_: &SelectLeft, window, cx| {
+                        let current_value = control::text_state(
+                            &input_id,
+                            "value",
+                            value_controlled.then_some(rendered_value.clone()),
+                            rendered_value.clone(),
+                        );
+                        let mut state = Self::editor_state_for(&input_id, &current_value);
+                        state.move_left(true);
+                        Self::apply_editor_state(
+                            &input_id,
+                            &current_value,
+                            &state,
+                            value_controlled,
+                            masked,
+                            mask_reveal_ms,
+                            on_change.as_ref(),
+                            window,
+                            cx,
+                        );
+                    }
+                })
+                .on_action({
+                    let input_id = self.id.clone();
+                    let rendered_value = current_value.clone();
+                    let on_change = self.on_change.clone();
+                    move |_: &SelectRight, window, cx| {
+                        let current_value = control::text_state(
+                            &input_id,
+                            "value",
+                            value_controlled.then_some(rendered_value.clone()),
+                            rendered_value.clone(),
+                        );
+                        let mut state = Self::editor_state_for(&input_id, &current_value);
+                        state.move_right(true);
+                        Self::apply_editor_state(
+                            &input_id,
+                            &current_value,
+                            &state,
+                            value_controlled,
+                            masked,
+                            mask_reveal_ms,
+                            on_change.as_ref(),
+                            window,
+                            cx,
+                        );
+                    }
+                })
+                .on_action({
+                    let input_id = self.id.clone();
+                    let rendered_value = current_value.clone();
+                    let on_change = self.on_change.clone();
+                    move |_: &SelectHome, window, cx| {
+                        let current_value = control::text_state(
+                            &input_id,
+                            "value",
+                            value_controlled.then_some(rendered_value.clone()),
+                            rendered_value.clone(),
+                        );
+                        let mut state = Self::editor_state_for(&input_id, &current_value);
+                        state.move_to(0, true);
+                        Self::apply_editor_state(
+                            &input_id,
+                            &current_value,
+                            &state,
+                            value_controlled,
+                            masked,
+                            mask_reveal_ms,
+                            on_change.as_ref(),
+                            window,
+                            cx,
+                        );
+                    }
+                })
+                .on_action({
+                    let input_id = self.id.clone();
+                    let rendered_value = current_value.clone();
+                    let on_change = self.on_change.clone();
+                    move |_: &SelectEnd, window, cx| {
+                        let current_value = control::text_state(
+                            &input_id,
+                            "value",
+                            value_controlled.then_some(rendered_value.clone()),
+                            rendered_value.clone(),
+                        );
+                        let mut state = Self::editor_state_for(&input_id, &current_value);
+                        let len = state.len();
+                        state.move_to(len, true);
+                        Self::apply_editor_state(
+                            &input_id,
+                            &current_value,
+                            &state,
+                            value_controlled,
+                            masked,
+                            mask_reveal_ms,
+                            on_change.as_ref(),
+                            window,
+                            cx,
+                        );
+                    }
+                })
+                .on_action({
+                    let input_id = self.id.clone();
+                    let rendered_value = current_value.clone();
+                    let on_change = self.on_change.clone();
+                    move |_: &SelectAll, window, cx| {
+                        let current_value = control::text_state(
+                            &input_id,
+                            "value",
+                            value_controlled.then_some(rendered_value.clone()),
+                            rendered_value.clone(),
+                        );
+                        let mut state = Self::editor_state_for(&input_id, &current_value);
+                        let len = state.len();
+                        state.set_selection_from_anchor(0, len);
+                        Self::apply_editor_state(
+                            &input_id,
+                            &current_value,
+                            &state,
+                            value_controlled,
+                            masked,
+                            mask_reveal_ms,
+                            on_change.as_ref(),
+                            window,
+                            cx,
+                        );
+                    }
+                })
+                .on_action({
+                    let input_id = self.id.clone();
+                    let rendered_value = current_value.clone();
+                    move |_: &CopySelection, _window, cx| {
+                        let current_value = control::text_state(
+                            &input_id,
+                            "value",
+                            value_controlled.then_some(rendered_value.clone()),
+                            rendered_value.clone(),
+                        );
+                        let state = Self::editor_state_for(&input_id, &current_value);
+                        let selected = state.selected_text();
+                        if !selected.is_empty() {
+                            cx.write_to_clipboard(ClipboardItem::new_string(selected));
+                        }
+                    }
                 });
 
-            input = input.on_key_down(move |event, window, cx| {
-                control::set_focused_state(&focus_state_id, true);
-                let current_value = control::text_state(
-                    &input_id,
-                    "value",
-                    value_controlled.then_some(rendered_value.clone()),
-                    rendered_value.clone(),
-                );
-                let len = current_value.chars().count();
-                let current_caret =
-                    control::text_state(&input_id, "caret-index", None, len.to_string())
-                        .parse::<usize>()
-                        .ok()
-                        .map(|value| value.min(len))
-                        .unwrap_or(len);
-                let selection = Self::selection_bounds_for(&input_id, len);
-                let modifiers =
-                    event.keystroke.modifiers.control || event.keystroke.modifiers.platform;
-
-                let open_context_menu = event.keystroke.key == "menu"
-                    || (event.keystroke.modifiers.shift && event.keystroke.key == "f10");
-                if open_context_menu {
-                    control::set_bool_state(&input_id, "context-open", false);
-                    return;
-                }
-
-                if Self::is_enter_key(event.keystroke.key.as_str()) {
-                    if let Some(handler) = &on_submit {
-                        (handler)(current_value.clone().into(), window, cx);
-                    }
-                    return;
-                }
-
-                if modifiers && event.keystroke.key == "a" {
-                    control::set_text_state(&input_id, "caret-index", len.to_string());
-                    Self::set_selection_for(&input_id, 0, len);
-                    control::set_text_state(&input_id, "selection-anchor", "0".to_string());
-                    window.refresh();
-                    return;
-                }
-
-                if modifiers && event.keystroke.key == "c" {
-                    if let Some((start, end)) = selection {
-                        let selected = current_value
-                            .chars()
-                            .skip(start)
-                            .take(end.saturating_sub(start))
-                            .collect::<String>();
-                        if !selected.is_empty() {
-                            cx.write_to_clipboard(ClipboardItem::new_string(selected));
-                        }
-                    }
-                    return;
-                }
-
-                if modifiers && event.keystroke.key == "x" {
-                    if let Some((start, end)) = selection {
-                        let selected = current_value
-                            .chars()
-                            .skip(start)
-                            .take(end.saturating_sub(start))
-                            .collect::<String>();
-                        if !selected.is_empty() {
-                            cx.write_to_clipboard(ClipboardItem::new_string(selected));
-                            let (next, next_caret) =
-                                Self::replace_char_range(&current_value, start, end, "");
-                            control::set_text_state(
+            if !self.read_only {
+                input = input
+                    .on_action({
+                        let input_id = self.id.clone();
+                        let rendered_value = current_value.clone();
+                        let on_change = self.on_change.clone();
+                        move |_: &DeleteBackward, window, cx| {
+                            let current_value = control::text_state(
                                 &input_id,
-                                "caret-index",
-                                next_caret.to_string(),
+                                "value",
+                                value_controlled.then_some(rendered_value.clone()),
+                                rendered_value.clone(),
                             );
-                            Self::clear_selection_for(&input_id, next_caret);
-                            control::set_text_state(
+                            let mut state = Self::editor_state_for(&input_id, &current_value);
+                            if state.delete_backward() {
+                                state.clamp_to_max_length(max_length);
+                            }
+                            Self::apply_editor_state(
                                 &input_id,
-                                "selection-anchor",
-                                next_caret.to_string(),
+                                &current_value,
+                                &state,
+                                value_controlled,
+                                masked,
+                                mask_reveal_ms,
+                                on_change.as_ref(),
+                                window,
+                                cx,
                             );
-                            if !value_controlled {
-                                control::set_text_state(&input_id, "value", next.clone());
-                            }
-                            if let Some(handler) = on_change.as_ref() {
-                                (handler)(next.into(), window, cx);
-                            }
-                            window.refresh();
                         }
-                    }
-                    return;
-                }
-
-                if modifiers
-                    && event.keystroke.key == "v"
-                    && let Some(item) = cx.read_from_clipboard()
-                    && let Some(pasted) = item.text()
-                {
-                    let sanitized = pasted.replace('\r', " ").replace('\n', " ");
-                    if sanitized.is_empty() {
-                        return;
-                    }
-                    let (mut next, mut next_caret) = if let Some((start, end)) = selection {
-                        Self::replace_char_range(&current_value, start, end, &sanitized)
-                    } else {
-                        let byte_start = Self::byte_index_at_char(&current_value, current_caret);
-                        let mut next = current_value.clone();
-                        next.insert_str(byte_start, &sanitized);
-                        (next, current_caret + sanitized.chars().count())
-                    };
-                    if let Some(limit) = max_length
-                        && next.chars().count() > limit
-                    {
-                        next = next.chars().take(limit).collect();
-                        next_caret = next_caret.min(next.chars().count());
-                    }
-                    if masked {
-                        if next.chars().count() > current_value.chars().count() {
-                            Self::set_password_reveal(&input_id, &next, mask_reveal_ms);
-                        } else {
-                            Self::clear_password_reveal(&input_id);
-                        }
-                    }
-                    control::set_text_state(&input_id, "caret-index", next_caret.to_string());
-                    Self::clear_selection_for(&input_id, next_caret);
-                    control::set_text_state(&input_id, "selection-anchor", next_caret.to_string());
-                    if !value_controlled {
-                        control::set_text_state(&input_id, "value", next.clone());
-                    }
-                    if let Some(handler) = on_change.as_ref() {
-                        (handler)(next.into(), window, cx);
-                    }
-                    window.refresh();
-                    return;
-                }
-
-                if Self::is_text_entry_keystroke(event) {
-                    return;
-                }
-
-                if event.keystroke.modifiers.shift
-                    && matches!(
-                        event.keystroke.key.as_str(),
-                        "left" | "right" | "home" | "end"
-                    )
-                {
-                    let anchor = if let Some((start, end)) = selection {
-                        if current_caret == start { end } else { start }
-                    } else {
-                        current_caret
-                    };
-                    if let Some((_next, next_caret)) = Self::with_value_update(
-                        &current_value,
-                        event,
-                        max_length,
-                        current_caret,
-                        None,
-                    ) {
-                        control::set_text_state(&input_id, "caret-index", next_caret.to_string());
-                        Self::set_selection_for(&input_id, anchor, next_caret);
-                        control::set_text_state(&input_id, "selection-anchor", anchor.to_string());
-                        window.refresh();
-                    }
-                    return;
-                }
-
-                if let Some((next, next_caret)) = Self::with_value_update(
-                    &current_value,
-                    event,
-                    max_length,
-                    current_caret,
-                    selection,
-                ) {
-                    let value_changed = next != current_value;
-                    if value_changed && masked {
-                        let previous_len = current_value.chars().count();
-                        let next_len = next.chars().count();
-                        if next_len > previous_len {
-                            Self::set_password_reveal(&input_id, &next, mask_reveal_ms);
-                            if mask_reveal_ms > 0 {
-                                let window_handle = window.window_handle();
-                                cx.spawn({
-                                    async move |cx| {
-                                        cx.background_executor()
-                                            .timer(Duration::from_millis(mask_reveal_ms))
-                                            .await;
-                                        let _ = window_handle.update(cx, |_, window, _| {
-                                            window.refresh();
-                                        });
-                                    }
-                                })
-                                .detach();
+                    })
+                    .on_action({
+                        let input_id = self.id.clone();
+                        let rendered_value = current_value.clone();
+                        let on_change = self.on_change.clone();
+                        move |_: &DeleteForward, window, cx| {
+                            let current_value = control::text_state(
+                                &input_id,
+                                "value",
+                                value_controlled.then_some(rendered_value.clone()),
+                                rendered_value.clone(),
+                            );
+                            let mut state = Self::editor_state_for(&input_id, &current_value);
+                            if state.delete_forward() {
+                                state.clamp_to_max_length(max_length);
                             }
-                        } else {
-                            Self::clear_password_reveal(&input_id);
+                            Self::apply_editor_state(
+                                &input_id,
+                                &current_value,
+                                &state,
+                                value_controlled,
+                                masked,
+                                mask_reveal_ms,
+                                on_change.as_ref(),
+                                window,
+                                cx,
+                            );
                         }
-                    }
-
-                    if value_changed && !value_controlled {
-                        control::set_text_state(&input_id, "value", next.clone());
-                    }
-                    control::set_text_state(&input_id, "caret-index", next_caret.to_string());
-                    Self::clear_selection_for(&input_id, next_caret);
-                    control::set_text_state(&input_id, "selection-anchor", next_caret.to_string());
-                    window.refresh();
-
-                    if value_changed && let Some(handler) = &on_change {
-                        (handler)(next.into(), window, cx);
-                    }
-                }
-            });
+                    })
+                    .on_action({
+                        let input_id = self.id.clone();
+                        let rendered_value = current_value.clone();
+                        let on_change = self.on_change.clone();
+                        move |_: &CutSelection, window, cx| {
+                            let current_value = control::text_state(
+                                &input_id,
+                                "value",
+                                value_controlled.then_some(rendered_value.clone()),
+                                rendered_value.clone(),
+                            );
+                            let mut state = Self::editor_state_for(&input_id, &current_value);
+                            let selected = state.selected_text();
+                            if selected.is_empty() {
+                                return;
+                            }
+                            cx.write_to_clipboard(ClipboardItem::new_string(selected));
+                            if let Some((start, end)) = state.selection {
+                                state.replace_char_range(start, end, "");
+                            }
+                            Self::apply_editor_state(
+                                &input_id,
+                                &current_value,
+                                &state,
+                                value_controlled,
+                                masked,
+                                mask_reveal_ms,
+                                on_change.as_ref(),
+                                window,
+                                cx,
+                            );
+                        }
+                    })
+                    .on_action({
+                        let input_id = self.id.clone();
+                        let rendered_value = current_value.clone();
+                        let on_change = self.on_change.clone();
+                        move |_: &PasteClipboard, window, cx| {
+                            let Some(item) = cx.read_from_clipboard() else {
+                                return;
+                            };
+                            let Some(text) = item.text() else {
+                                return;
+                            };
+                            let sanitized = text.replace('\r', " ").replace('\n', " ");
+                            if sanitized.is_empty() {
+                                return;
+                            }
+                            let current_value = control::text_state(
+                                &input_id,
+                                "value",
+                                value_controlled.then_some(rendered_value.clone()),
+                                rendered_value.clone(),
+                            );
+                            let mut state = Self::editor_state_for(&input_id, &current_value);
+                            if state.insert_text(&sanitized) {
+                                state.clamp_to_max_length(max_length);
+                            }
+                            Self::apply_editor_state(
+                                &input_id,
+                                &current_value,
+                                &state,
+                                value_controlled,
+                                masked,
+                                mask_reveal_ms,
+                                on_change.as_ref(),
+                                window,
+                                cx,
+                            );
+                        }
+                    })
+                    .on_action({
+                        let input_id = self.id.clone();
+                        let rendered_value = current_value.clone();
+                        let on_submit = self.on_submit.clone();
+                        move |_: &Submit, window, cx| {
+                            let current_value = control::text_state(
+                                &input_id,
+                                "value",
+                                value_controlled.then_some(rendered_value.clone()),
+                                rendered_value.clone(),
+                            );
+                            if let Some(handler) = on_submit.as_ref() {
+                                (handler)(current_value.into(), window, cx);
+                            }
+                        }
+                    });
+            }
         }
 
         window.handle_input(
@@ -1642,230 +1625,6 @@ impl TextInput {
             }
         }
         input = input.child(value_container);
-
-        if !self.disabled && control::bool_state(&self.id, "context-open", None, false) {
-            let (menu_x, menu_y) = Self::context_menu_position(&self.id);
-            let input_id = self.id.clone();
-            let rendered_value = current_value.clone();
-            let value_controlled = self.value_controlled;
-            let max_length = self.max_length;
-            let masked = self.masked;
-            let mask_reveal_ms = self.mask_reveal_ms;
-            let on_change = self.on_change.clone();
-
-            let item_style = || {
-                div()
-                    .w_full()
-                    .px(px(10.0))
-                    .py(px(7.0))
-                    .text_sm()
-                    .cursor_pointer()
-                    .hover(|style| style.bg(gpui::black().opacity(0.08)))
-            };
-
-            let copy_id = input_id.clone();
-            let copy_value = rendered_value.clone();
-            let copy_action = item_style().child("Copy").on_mouse_down(
-                MouseButton::Left,
-                move |_, window: &mut Window, cx: &mut gpui::App| {
-                    let current = control::text_state(
-                        &copy_id,
-                        "value",
-                        value_controlled.then_some(copy_value.clone()),
-                        copy_value.clone(),
-                    );
-                    let len = current.chars().count();
-                    if let Some((start, end)) = Self::selection_bounds_for(&copy_id, len) {
-                        let selected = current
-                            .chars()
-                            .skip(start)
-                            .take(end.saturating_sub(start))
-                            .collect::<String>();
-                        if !selected.is_empty() {
-                            cx.write_to_clipboard(ClipboardItem::new_string(selected));
-                        }
-                    }
-                    control::set_bool_state(&copy_id, "context-open", false);
-                    window.refresh();
-                },
-            );
-
-            let cut_id = input_id.clone();
-            let cut_value = rendered_value.clone();
-            let cut_on_change = on_change.clone();
-            let cut_action = if !self.read_only {
-                Some(item_style().child("Cut").on_mouse_down(
-                    MouseButton::Left,
-                    move |_, window: &mut Window, cx: &mut gpui::App| {
-                        let current = control::text_state(
-                            &cut_id,
-                            "value",
-                            value_controlled.then_some(cut_value.clone()),
-                            cut_value.clone(),
-                        );
-                        let len = current.chars().count();
-                        if let Some((start, end)) = Self::selection_bounds_for(&cut_id, len) {
-                            let selected = current
-                                .chars()
-                                .skip(start)
-                                .take(end.saturating_sub(start))
-                                .collect::<String>();
-                            if !selected.is_empty() {
-                                cx.write_to_clipboard(ClipboardItem::new_string(selected));
-                                let (next, next_caret) =
-                                    Self::replace_char_range(&current, start, end, "");
-                                if !value_controlled {
-                                    control::set_text_state(&cut_id, "value", next.clone());
-                                }
-                                control::set_text_state(
-                                    &cut_id,
-                                    "caret-index",
-                                    next_caret.to_string(),
-                                );
-                                Self::clear_selection_for(&cut_id, next_caret);
-                                control::set_text_state(
-                                    &cut_id,
-                                    "selection-anchor",
-                                    next_caret.to_string(),
-                                );
-                                if let Some(handler) = cut_on_change.as_ref() {
-                                    (handler)(next.into(), window, cx);
-                                }
-                            }
-                        }
-                        control::set_bool_state(&cut_id, "context-open", false);
-                        window.refresh();
-                    },
-                ))
-            } else {
-                None
-            };
-
-            let paste_id = input_id.clone();
-            let paste_value = rendered_value.clone();
-            let paste_on_change = on_change.clone();
-            let paste_action = if !self.read_only {
-                Some(item_style().child("Paste").on_mouse_down(
-                    MouseButton::Left,
-                    move |_, window: &mut Window, cx: &mut gpui::App| {
-                        let Some(item) = cx.read_from_clipboard() else {
-                            control::set_bool_state(&paste_id, "context-open", false);
-                            window.refresh();
-                            return;
-                        };
-                        let Some(pasted) = item.text() else {
-                            control::set_bool_state(&paste_id, "context-open", false);
-                            window.refresh();
-                            return;
-                        };
-                        let sanitized = pasted.replace('\r', " ").replace('\n', " ");
-                        if sanitized.is_empty() {
-                            control::set_bool_state(&paste_id, "context-open", false);
-                            window.refresh();
-                            return;
-                        }
-
-                        let current = control::text_state(
-                            &paste_id,
-                            "value",
-                            value_controlled.then_some(paste_value.clone()),
-                            paste_value.clone(),
-                        );
-                        let len = current.chars().count();
-                        let caret =
-                            control::text_state(&paste_id, "caret-index", None, len.to_string())
-                                .parse::<usize>()
-                                .ok()
-                                .unwrap_or(len)
-                                .min(len);
-                        let selection = Self::selection_bounds_for(&paste_id, len);
-                        let (mut next, mut next_caret) = if let Some((start, end)) = selection {
-                            Self::replace_char_range(&current, start, end, &sanitized)
-                        } else {
-                            let start = Self::byte_index_at_char(&current, caret);
-                            let mut next = current.clone();
-                            next.insert_str(start, &sanitized);
-                            (next, caret + sanitized.chars().count())
-                        };
-
-                        if let Some(limit) = max_length
-                            && next.chars().count() > limit
-                        {
-                            next = next.chars().take(limit).collect();
-                            next_caret = next_caret.min(next.chars().count());
-                        }
-                        if masked {
-                            if next.chars().count() > current.chars().count() {
-                                Self::set_password_reveal(&paste_id, &next, mask_reveal_ms);
-                            } else {
-                                Self::clear_password_reveal(&paste_id);
-                            }
-                        }
-                        if !value_controlled {
-                            control::set_text_state(&paste_id, "value", next.clone());
-                        }
-                        control::set_text_state(&paste_id, "caret-index", next_caret.to_string());
-                        Self::clear_selection_for(&paste_id, next_caret);
-                        control::set_text_state(
-                            &paste_id,
-                            "selection-anchor",
-                            next_caret.to_string(),
-                        );
-                        if let Some(handler) = paste_on_change.as_ref() {
-                            (handler)(next.into(), window, cx);
-                        }
-                        control::set_bool_state(&paste_id, "context-open", false);
-                        window.refresh();
-                    },
-                ))
-            } else {
-                None
-            };
-
-            let select_all_id = input_id.clone();
-            let select_all_value = rendered_value.clone();
-            let select_all = item_style().child("Select All").on_mouse_down(
-                MouseButton::Left,
-                move |_, window: &mut Window, _cx: &mut gpui::App| {
-                    let current = control::text_state(
-                        &select_all_id,
-                        "value",
-                        value_controlled.then_some(select_all_value.clone()),
-                        select_all_value.clone(),
-                    );
-                    let len = current.chars().count();
-                    control::set_text_state(&select_all_id, "caret-index", len.to_string());
-                    Self::set_selection_for(&select_all_id, 0, len);
-                    control::set_text_state(&select_all_id, "selection-anchor", "0".to_string());
-                    control::set_bool_state(&select_all_id, "context-open", false);
-                    window.refresh();
-                },
-            );
-
-            let mut menu = div()
-                .id(self.id.slot("context-menu"))
-                .absolute()
-                .left(px(menu_x))
-                .top(px(menu_y))
-                .min_w(px(132.0))
-                .rounded_md()
-                .border(quantized_stroke_px(window, 1.0))
-                .border_color(resolve_hsla(&self.theme, &tokens.border))
-                .bg(resolve_hsla(&self.theme, &tokens.bg))
-                .shadow_sm()
-                .flex()
-                .flex_col()
-                .py(px(4.0));
-            menu = menu.child(copy_action);
-            if let Some(cut_action) = cut_action {
-                menu = menu.child(cut_action);
-            }
-            if let Some(paste_action) = paste_action {
-                menu = menu.child(paste_action);
-            }
-            menu = menu.child(select_all);
-            input = input.child(menu);
-        }
 
         if let Some(right_slot) = self.right_slot.take() {
             input = input.child(

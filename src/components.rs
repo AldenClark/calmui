@@ -39,6 +39,8 @@ mod switch;
 mod table;
 mod tabs;
 mod text;
+mod text_input_actions;
+mod text_input_state;
 mod textarea;
 mod timeline;
 mod title;
