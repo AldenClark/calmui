@@ -63,7 +63,7 @@ impl SegmentedControl {
             value: None,
             value_controlled: false,
             default_value: None,
-            full_width: true,
+            full_width: false,
             variant: Variant::Default,
             size: Size::Md,
             radius: Radius::Md,
@@ -132,11 +132,11 @@ impl SegmentedControl {
 
     fn apply_item_size<T: Styled>(size: Size, node: T) -> T {
         match size {
-            Size::Xs => node.text_xs().py_0p5().px_2(),
-            Size::Sm => node.text_sm().py_1().px_2p5(),
-            Size::Md => node.text_base().py_1p5().px_3(),
-            Size::Lg => node.text_lg().py_2().px_3p5(),
-            Size::Xl => node.text_xl().py_2p5().px_4(),
+            Size::Xs => node.text_xs().py_0p5().px_1p5(),
+            Size::Sm => node.text_sm().py_0p5().px_2(),
+            Size::Md => node.text_sm().py_1().px_2p5(),
+            Size::Lg => node.text_base().py_1p5().px_3(),
+            Size::Xl => node.text_lg().py_2().px_3p5(),
         }
     }
 
@@ -199,9 +199,15 @@ impl RenderOnce for SegmentedControl {
         let root_id = self.id.clone();
         let enter_id = self.id.clone();
         let motion = self.motion;
-        let divider = resolve_hsla(&theme, &tokens.border).alpha(0.72);
+        let divider = resolve_hsla(&theme, &tokens.border).alpha(0.6);
         let divider_width = super::utils::quantized_stroke_px(window, 1.0);
         let transparent = resolve_hsla(&theme, &gpui::transparent_black());
+        let active_border = resolve_hsla(&theme, &tokens.border).alpha(0.85);
+        let active_index = selected.as_ref().and_then(|value| {
+            self.items
+                .iter()
+                .position(|item| item.value.as_ref() == value.as_ref())
+        });
 
         let items = self
             .items
@@ -211,6 +217,10 @@ impl RenderOnce for SegmentedControl {
                 let is_active = selected
                     .as_ref()
                     .is_some_and(|value| value.as_ref() == item.value.as_ref());
+                let show_divider = index > 0
+                    && !active_index.is_some_and(|active| {
+                        active == index || active.saturating_add(1) == index
+                    });
 
                 let mut segment = div()
                     .id(self.id.slot_index("item", index.to_string()))
@@ -219,6 +229,17 @@ impl RenderOnce for SegmentedControl {
                     .items_center()
                     .justify_center()
                     .min_w_0()
+                    .border(divider_width)
+                    .border_color(if is_active {
+                        active_border
+                    } else {
+                        transparent
+                    })
+                    .font_weight(if is_active {
+                        gpui::FontWeight::SEMIBOLD
+                    } else {
+                        gpui::FontWeight::MEDIUM
+                    })
                     .text_color(if item.disabled {
                         resolve_hsla(&theme, &tokens.item_disabled_fg)
                     } else if is_active {
@@ -233,7 +254,7 @@ impl RenderOnce for SegmentedControl {
                     })
                     .child(div().truncate().child(item.label.clone()));
 
-                if index > 0 {
+                if show_divider {
                     segment = segment.child(
                         div()
                             .absolute()
@@ -293,6 +314,9 @@ impl RenderOnce for SegmentedControl {
             .children(items);
 
         root = apply_radius(&self.theme, root, self.radius);
+        if full_width {
+            root = root.w_full();
+        }
 
         root.with_enter_transition(enter_id.slot("enter"), motion)
     }
