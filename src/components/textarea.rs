@@ -848,6 +848,40 @@ impl Textarea {
             return 0;
         }
 
+        let click_x = f32::from(position.x);
+        let click_y = f32::from(position.y);
+        let mut hypotheses = vec![(viewport_origin_x, viewport_origin_y, true)];
+        if has_content_metrics {
+            hypotheses.push((content_origin_x, content_origin_y, false));
+            hypotheses.push((content_origin_x, content_origin_y, true));
+        }
+
+        if wrapped_lines.len() == 1 {
+            let line = &wrapped_lines[0];
+            let mut best_index = 0usize;
+            let mut best_dx = f32::INFINITY;
+            let eps = 0.001f32;
+            let mut local_x_candidates = vec![click_x.max(0.0)];
+            for (origin_x, _origin_y, _apply_scroll) in &hypotheses {
+                local_x_candidates.push((click_x - *origin_x).max(0.0));
+            }
+            local_x_candidates.sort_by(|a, b| a.total_cmp(b));
+            local_x_candidates.dedup_by(|a, b| (*a - *b).abs() <= eps);
+
+            for local_x in local_x_candidates {
+                let local_char = Self::char_from_x(window, font_size, &line.text, local_x)
+                    .min(line.end_char.saturating_sub(line.start_char));
+                let index = line.start_char + local_char;
+                let caret_local_x = Self::x_for_char(window, font_size, &line.text, local_char);
+                let dx = (caret_local_x - local_x).abs();
+                if dx < best_dx - eps || ((dx - best_dx).abs() <= eps && index >= best_index) {
+                    best_dx = dx;
+                    best_index = index;
+                }
+            }
+            return best_index;
+        }
+
         let line_height = line_height.max(1.0);
         let pick_index_for_local = |local_x: f32, local_y: f32| -> (usize, f32, f32) {
             let max_line_index = wrapped_lines.len().saturating_sub(1);
@@ -882,14 +916,6 @@ impl Textarea {
             }
             (best_index, best_caret_x, best_caret_y)
         };
-
-        let click_x = f32::from(position.x);
-        let click_y = f32::from(position.y);
-        let mut hypotheses = vec![(viewport_origin_x, viewport_origin_y, true)];
-        if has_content_metrics {
-            hypotheses.push((content_origin_x, content_origin_y, false));
-            hypotheses.push((content_origin_x, content_origin_y, true));
-        }
 
         let mut best_global_index = 0usize;
         let mut best_global_dist2 = f32::INFINITY;
