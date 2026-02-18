@@ -30,6 +30,14 @@ type OverlayOpenChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
 ///
 /// 该组件用于承载“顶部 / 主体 / 底部”三个区域，并提供统一主题 token。
 /// `AppShell` 只负责摆放该组件，不关心它的内部内容结构。
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SidebarMode {
+    /// 常规内联样式：标准圆角、无阴影。
+    Inline,
+    /// 浮层样式：半透明、大圆角、轻阴影。
+    Overlay,
+}
+
 #[derive(IntoElement)]
 pub struct Sidebar {
     /// 组件唯一 id。
@@ -39,6 +47,10 @@ pub struct Sidebar {
     width_px: Option<f32>,
     /// 自定义背景色；`None` 时使用 `theme.components.sidebar.bg`。
     background: Option<Hsla>,
+    /// 侧边栏视觉模式。
+    mode: SidebarMode,
+    /// 是否绘制边框。
+    bordered: bool,
     /// 顶部区域内容。
     header: Option<SlotRenderer>,
     /// 主体内容区域。
@@ -59,6 +71,8 @@ impl Sidebar {
             id: ComponentId::default(),
             width_px: None,
             background: None,
+            mode: SidebarMode::Inline,
+            bordered: true,
             header: None,
             content: None,
             footer: None,
@@ -76,6 +90,18 @@ impl Sidebar {
     /// 设置侧边栏背景色。
     pub fn background(mut self, value: impl Into<Hsla>) -> Self {
         self.background = Some(value.into());
+        self
+    }
+
+    /// 设置视觉模式。
+    pub fn mode(mut self, value: SidebarMode) -> Self {
+        self.mode = value;
+        self
+    }
+
+    /// 控制边框显示。
+    pub fn bordered(mut self, value: bool) -> Self {
+        self.bordered = value;
         self
     }
 
@@ -110,15 +136,33 @@ impl RenderOnce for Sidebar {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.sidebar;
         let bg_token = self.background.unwrap_or_else(|| tokens.bg.clone());
+        let mut bg = resolve_hsla(&self.theme, &bg_token);
+        let mut border_color = resolve_hsla(&self.theme, &tokens.border);
+        let (radius_px, with_shadow) = match self.mode {
+            SidebarMode::Inline => (10.0, false),
+            SidebarMode::Overlay => {
+                bg = bg.opacity(0.9);
+                border_color = border_color.opacity(0.75);
+                (18.0, true)
+            }
+        };
 
         let mut root = div()
             .id(self.id.clone())
             .h_full()
             .flex()
             .flex_col()
-            .bg(resolve_hsla(&self.theme, &bg_token))
-            .border(super::utils::quantized_stroke_px(window, 1.0))
-            .border_color(resolve_hsla(&self.theme, &tokens.border));
+            .bg(bg)
+            .rounded(px(radius_px));
+
+        if self.bordered {
+            root = root
+                .border(super::utils::quantized_stroke_px(window, 1.0))
+                .border_color(border_color);
+        }
+        if with_shadow {
+            root = root.shadow_sm();
+        }
 
         root = if let Some(width_px) = self.width_px {
             root.w(px(width_px))
