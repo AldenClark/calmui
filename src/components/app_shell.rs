@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::rc::Rc;
 
 use gpui::{
@@ -19,6 +20,8 @@ const INSPECTOR_OVERLAY_STATE_SLOT: &str = "inspector-overlay-opened";
 
 /// AppShell 区域插槽渲染器。
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
+/// 顶部区域渲染器；参数用于传入 AppShell 的沉浸模式状态。
+type TitleBarRenderer = Box<dyn FnOnce(bool) -> AnyElement>;
 /// AppShell overlay 区域开关变化回调。
 type OverlayOpenChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
 
@@ -250,7 +253,7 @@ pub struct AppShell {
     /// 组件唯一 id，用于受控/非受控状态 key。
     id: ComponentId,
     /// 顶部区域内容。
-    title_bar: Option<SlotRenderer>,
+    title_bar: Option<TitleBarRenderer>,
     /// 顶部区域是否采用沉浸模式。
     /// `true` 时标题栏悬浮在主体上方，不为主体留出高度。
     /// `false` 时标题栏占据普通布局高度。
@@ -341,8 +344,23 @@ impl AppShell {
     }
 
     /// 设置顶部区域内容。
-    pub fn title_bar(mut self, value: impl IntoElement + 'static) -> Self {
-        self.title_bar = Some(Box::new(|| value.into_any_element()));
+    pub fn title_bar<T>(mut self, value: T) -> Self
+    where
+        T: IntoElement + 'static,
+    {
+        // If caller passes calmui::TitleBar, keep its immersive mode aligned with AppShell.
+        let value_any: Box<dyn Any> = Box::new(value);
+        self.title_bar = Some(Box::new(move |immersive| match value_any
+            .downcast::<super::title_bar::TitleBar>()
+        {
+            Ok(title_bar) => title_bar.immersive(immersive).into_any_element(),
+            Err(value_any) => {
+                let value = *value_any
+                    .downcast::<T>()
+                    .expect("title_bar type downcast mismatch");
+                value.into_any_element()
+            }
+        }));
         self
     }
 
@@ -571,14 +589,14 @@ impl RenderOnce for AppShell {
         let mut title_bar_overlay: Option<AnyElement> = None;
         if let Some(title_bar) = self.title_bar.take() {
             let title_default_bg = resolve_hsla(&self.theme, &title_tokens.bg);
-            let mut title_chrome = self.title_bar_chrome.clone();
-            if self.title_bar_immersive
+            let force_borderless_immersive = self.title_bar_immersive
                 && cfg!(any(
                     target_os = "windows",
                     target_os = "linux",
                     target_os = "freebsd"
-                ))
-            {
+                ));
+            let mut title_chrome = self.title_bar_chrome.clone();
+            if force_borderless_immersive {
                 // Immersive title bar on Win/Linux should stay completely borderless,
                 // matching macOS behavior.
                 title_chrome.bordered = false;
@@ -587,7 +605,7 @@ impl RenderOnce for AppShell {
                 .wrap_region(
                     window,
                     self.id.slot("title-bar"),
-                    title_bar(),
+                    title_bar(self.title_bar_immersive),
                     &title_chrome,
                     title_default_bg,
                 )
