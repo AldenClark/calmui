@@ -2,15 +2,15 @@ use std::{
     collections::HashMap,
     ops::Range,
     rc::Rc,
-    sync::{LazyLock, Mutex},
+    sync::{Arc, LazyLock, Mutex},
     time::Duration,
 };
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, AppContext, Bounds, ClipboardItem, EmptyView, FocusHandle,
-    InputHandler, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, UTF16Selection, Window, canvas,
-    div, point, px,
+    Animation, AnimationExt, AnyElement, Bounds, ClipboardItem, FocusHandle, InputHandler,
+    InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, RenderOnce,
+    SharedString, StatefulInteractiveElement, Styled, UTF16Selection, Window, canvas, div, point,
+    px,
 };
 
 use crate::contracts::{FieldLike, MotionAware, VariantConfigurable};
@@ -27,12 +27,6 @@ type ChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
 
 const CARET_BLINK_TOGGLE_MS: u64 = 680;
 const CARET_BLINK_CYCLE_MS: u64 = CARET_BLINK_TOGGLE_MS * 2;
-
-#[derive(Clone)]
-struct TextareaSelectionDragState {
-    textarea_id: String,
-    anchor: usize,
-}
 
 #[derive(Clone)]
 struct WrappedLine {
@@ -56,7 +50,7 @@ struct TextareaImeHandler {
     line_height: f32,
     vertical_padding: f32,
     horizontal_padding: f32,
-    char_width: f32,
+    font_size: f32,
 }
 
 impl TextareaImeHandler {
@@ -338,23 +332,35 @@ impl InputHandler for TextareaImeHandler {
     fn bounds_for_range(
         &mut self,
         range_utf16: Range<usize>,
-        _window: &mut Window,
+        window: &mut Window,
         _cx: &mut gpui::App,
     ) -> Option<Bounds<gpui::Pixels>> {
         let value = self.current_value();
         let range = Self::char_range_from_utf16(&value, range_utf16);
-        let wrap_columns =
-            Textarea::wrap_columns_for_box(&self.id, self.char_width, self.horizontal_padding);
-        let wrapped_lines = Textarea::wrapped_lines(&value, wrap_columns);
+        let content_width = Textarea::content_width_for_box(&self.id, self.horizontal_padding);
+        let wrapped_lines =
+            Textarea::wrapped_lines_for_width(&value, content_width, window, self.font_size);
         let (start_line, start_col) = Textarea::caret_visual_position(&wrapped_lines, range.start);
         let (end_line, end_col) = Textarea::caret_visual_position(&wrapped_lines, range.end);
         let (origin_x, origin_y, _width, _height) = Textarea::box_geometry(&self.id);
-        let left = origin_x + self.horizontal_padding + start_col as f32 * self.char_width.max(1.0);
+        let start_line_text = wrapped_lines
+            .get(start_line)
+            .map(|line| line.text.as_str())
+            .unwrap_or_default();
+        let end_line_text = wrapped_lines
+            .get(end_line)
+            .map(|line| line.text.as_str())
+            .unwrap_or_default();
+        let left = origin_x
+            + self.horizontal_padding
+            + Textarea::x_for_char(window, self.font_size, start_line_text, start_col);
         let top = origin_y + self.vertical_padding + start_line as f32 * self.line_height.max(1.0);
         let right = if start_line == end_line {
-            origin_x + self.horizontal_padding + end_col as f32 * self.char_width.max(1.0)
+            origin_x
+                + self.horizontal_padding
+                + Textarea::x_for_char(window, self.font_size, end_line_text, end_col)
         } else {
-            left + self.char_width.max(1.0)
+            left + 1.0
         };
         let right = right.max(left + 1.0);
         let bottom = (top + self.line_height.max(1.0)).max(top + 1.0);
@@ -367,7 +373,7 @@ impl InputHandler for TextareaImeHandler {
     fn character_index_for_point(
         &mut self,
         point: gpui::Point<gpui::Pixels>,
-        _window: &mut Window,
+        window: &mut Window,
         _cx: &mut gpui::App,
     ) -> Option<usize> {
         let value = self.current_value();
@@ -375,10 +381,11 @@ impl InputHandler for TextareaImeHandler {
             &self.id,
             point,
             &value,
+            window,
+            self.font_size,
             self.line_height,
             self.vertical_padding,
             self.horizontal_padding,
-            self.char_width,
         );
         Some(Self::utf16_from_char(&value, char_index))
     }
@@ -416,6 +423,10 @@ pub struct Textarea {
 }
 
 impl Textarea {
+    fn is_enter_key(key: &str) -> bool {
+        key == "enter" || key == "return" || key.ends_with("enter")
+    }
+
     fn resolved_focus_handle(&self, cx: &gpui::App) -> FocusHandle {
         if let Some(focus_handle) = self.focus_handle.as_ref() {
             return focus_handle.clone();
@@ -437,8 +448,8 @@ impl Textarea {
             return false;
         }
 
-        if event.keystroke.key == "enter" {
-            return true;
+        if Self::is_enter_key(event.keystroke.key.as_str()) {
+            return false;
         }
 
         if let Some(key_char) = event.keystroke.key_char.as_ref() {
@@ -684,7 +695,7 @@ impl Textarea {
             return None;
         }
 
-        let inserted = if key == "enter" {
+        let inserted = if Self::is_enter_key(key) {
             Some("\n".to_string())
         } else {
             event
@@ -700,6 +711,10 @@ impl Textarea {
                     }
                 })
         }?;
+        let inserted = inserted.replace('\r', "\n");
+        if inserted.is_empty() {
+            return None;
+        }
 
         if inserted.chars().count() > 1 && inserted.contains('\u{7f}') {
             return None;
@@ -777,14 +792,51 @@ impl Textarea {
         index
     }
 
-    fn char_width_px(&self) -> f32 {
+    fn font_size_px(&self) -> f32 {
         match self.size {
-            Size::Xs => 6.8,
-            Size::Sm => 7.2,
-            Size::Md => 7.8,
-            Size::Lg => 8.6,
-            Size::Xl => 9.4,
+            Size::Xs => 12.0,
+            Size::Sm => 14.0,
+            Size::Md => 16.0,
+            Size::Lg => 18.0,
+            Size::Xl => 20.0,
         }
+    }
+
+    fn char_index_at_byte(value: &str, byte_index: usize) -> usize {
+        let mut byte_index = byte_index.min(value.len());
+        while byte_index > 0 && !value.is_char_boundary(byte_index) {
+            byte_index -= 1;
+        }
+        value[..byte_index].chars().count()
+    }
+
+    fn line_layout(window: &Window, font_size: f32, text: &str) -> Arc<gpui::LineLayout> {
+        let font_size = px(font_size);
+        let mut text_style = window.text_style();
+        text_style.font_size = font_size.into();
+        let run = text_style.to_run(text.len());
+        window
+            .text_system()
+            .layout_line(text, font_size, &[run], None)
+    }
+
+    fn x_for_char(window: &Window, font_size: f32, text: &str, char_index: usize) -> f32 {
+        if text.is_empty() {
+            return 0.0;
+        }
+        let char_index = char_index.min(text.chars().count());
+        let byte_index = Self::byte_index_at_char(text, char_index);
+        let layout = Self::line_layout(window, font_size, text);
+        f32::from(layout.x_for_index(byte_index))
+    }
+
+    fn char_from_x(window: &Window, font_size: f32, text: &str, x: f32) -> usize {
+        if text.is_empty() {
+            return 0;
+        }
+        let layout = Self::line_layout(window, font_size, text);
+        let byte_index = layout.closest_index_for_x(px(x.max(0.0))).min(text.len());
+        Self::char_index_at_byte(text, byte_index).min(text.chars().count())
     }
 
     fn selection_bounds_for(id: &str, len: usize) -> Option<(usize, usize)> {
@@ -853,32 +905,42 @@ impl Textarea {
         (x, y, width, height)
     }
 
+    fn context_menu_position(id: &str) -> (f32, f32) {
+        let x = control::text_state(id, "context-menu-x", None, "0".to_string())
+            .parse::<f32>()
+            .ok()
+            .unwrap_or(0.0);
+        let y = control::text_state(id, "context-menu-y", None, "0".to_string())
+            .parse::<f32>()
+            .ok()
+            .unwrap_or(0.0);
+        (x, y)
+    }
+
     fn caret_from_click(
         id: &str,
         position: gpui::Point<gpui::Pixels>,
         value: &str,
+        window: &Window,
+        font_size: f32,
         line_height: f32,
         vertical_padding: f32,
         horizontal_padding: f32,
-        char_width: f32,
     ) -> usize {
-        let (origin_x, origin_y, width, _height) = Self::box_geometry(id);
+        let (origin_x, origin_y, _width, _height) = Self::box_geometry(id);
         let local_x = (f32::from(position.x) - origin_x - horizontal_padding).max(0.0);
         let local_y = (f32::from(position.y) - origin_y - vertical_padding).max(0.0);
-
-        let content_width = (width - horizontal_padding * 2.0).max(char_width.max(1.0));
-        let wrap_columns = (content_width / char_width.max(1.0)).floor() as usize;
-        let wrapped_lines = Self::wrapped_lines(value, wrap_columns.max(1));
+        let content_width = Self::content_width_for_box(id, horizontal_padding);
+        let wrapped_lines = Self::wrapped_lines_for_width(value, content_width, window, font_size);
 
         let target_line = (local_y / line_height.max(1.0)).floor() as usize;
-        let target_col = ((local_x / char_width.max(1.0)) + 0.5).floor() as usize;
         if wrapped_lines.is_empty() {
             return 0;
         }
         let line_index = target_line.min(wrapped_lines.len().saturating_sub(1));
         let line = &wrapped_lines[line_index];
-        let line_len = line.end_char.saturating_sub(line.start_char);
-        line.start_char + target_col.min(line_len)
+        let local_char = Self::char_from_x(window, font_size, &line.text, local_x);
+        line.start_char + local_char.min(line.end_char.saturating_sub(line.start_char))
     }
 
     fn line_height_px(&self) -> f32 {
@@ -921,17 +983,34 @@ impl Textarea {
         }
     }
 
-    fn wrap_columns_for_box(id: &str, char_width: f32, horizontal_padding: f32) -> usize {
+    fn content_width_for_box(id: &str, horizontal_padding: f32) -> f32 {
         let (_, _, width, _) = Self::box_geometry(id);
         if width <= 0.0 {
-            return 10_000;
+            return 240.0;
         }
-        let content_width = (width - horizontal_padding * 2.0).max(char_width.max(1.0));
-        ((content_width / char_width.max(1.0)).floor() as usize).max(1)
+        (width - horizontal_padding * 2.0).max(1.0)
     }
 
-    fn wrapped_lines(value: &str, max_columns: usize) -> Vec<WrappedLine> {
-        let max_columns = max_columns.max(1);
+    fn wrap_chars_for_width(window: &Window, font_size: f32, text: &str, width: f32) -> usize {
+        let total_chars = text.chars().count();
+        if total_chars <= 1 {
+            return total_chars;
+        }
+        let layout = Self::line_layout(window, font_size, text);
+        if f32::from(layout.width) <= width.max(1.0) {
+            return total_chars;
+        }
+        let byte_index = layout.index_for_x(px(width.max(0.0))).unwrap_or(text.len());
+        let wrapped = Self::char_index_at_byte(text, byte_index);
+        wrapped.clamp(1, total_chars)
+    }
+
+    fn wrapped_lines_for_width(
+        value: &str,
+        content_width: f32,
+        window: &Window,
+        font_size: f32,
+    ) -> Vec<WrappedLine> {
         if value.is_empty() {
             return vec![WrappedLine {
                 text: String::new(),
@@ -945,8 +1024,7 @@ impl Textarea {
         let physical_lines: Vec<&str> = value.split('\n').collect();
 
         for (line_index, line) in physical_lines.iter().enumerate() {
-            let chars: Vec<char> = line.chars().collect();
-            let line_len = chars.len();
+            let line_len = line.chars().count();
 
             if line_len == 0 {
                 wrapped.push(WrappedLine {
@@ -955,15 +1033,22 @@ impl Textarea {
                     end_char: global_char_index,
                 });
             } else {
-                let mut local_start = 0usize;
-                while local_start < line_len {
-                    let local_end = local_start.saturating_add(max_columns).min(line_len);
+                let mut local_start_char = 0usize;
+                let mut local_start_byte = 0usize;
+                while local_start_char < line_len {
+                    let remaining = &line[local_start_byte..];
+                    let take_chars =
+                        Self::wrap_chars_for_width(window, font_size, remaining, content_width);
+                    let local_end = (local_start_char + take_chars).min(line_len);
+                    let local_end_byte =
+                        local_start_byte + Self::byte_index_at_char(remaining, take_chars);
                     wrapped.push(WrappedLine {
-                        text: chars[local_start..local_end].iter().collect(),
-                        start_char: global_char_index + local_start,
+                        text: line[local_start_byte..local_end_byte].to_string(),
+                        start_char: global_char_index + local_start_char,
                         end_char: global_char_index + local_end,
                     });
-                    local_start = local_end;
+                    local_start_char = local_end;
+                    local_start_byte = local_end_byte;
                 }
             }
 
@@ -1070,14 +1155,16 @@ impl Textarea {
         let line_height = self.line_height_px();
         let vertical_padding = self.vertical_padding_px();
         let horizontal_padding = self.horizontal_padding_px();
-        let char_width = self.char_width_px();
-        let wrap_columns = Self::wrap_columns_for_box(&self.id, char_width, horizontal_padding);
-        let wrapped_lines = Self::wrapped_lines(&current_value, wrap_columns);
+        let font_size = self.font_size_px();
+        let content_width = Self::content_width_for_box(&self.id, horizontal_padding);
+        let wrapped_lines =
+            Self::wrapped_lines_for_width(&current_value, content_width, window, font_size);
         let (rows, should_scroll) = self.resolved_rows(wrapped_lines.len());
         let box_height = (rows as f32 * line_height) + (vertical_padding * 2.0) + 2.0;
 
         let mut input = div()
             .id(self.id.slot("box"))
+            .relative()
             .focusable()
             .flex()
             .flex_col()
@@ -1111,6 +1198,7 @@ impl Textarea {
         } else {
             input = input.cursor_text();
         }
+        input = input.line_height(px(line_height));
 
         input = input.child({
             let id_for_metrics = self.id.clone();
@@ -1144,26 +1232,57 @@ impl Textarea {
         });
 
         let handle_for_click = focus_handle.clone();
+        let handle_for_right_click = focus_handle.clone();
+        let handle_for_right_up = focus_handle.clone();
         let id_for_focus = self.id.clone();
+        let id_for_right_click = self.id.clone();
+        let id_for_right_up = self.id.clone();
+        let id_for_mouse_move = self.id.clone();
+        let id_for_mouse_up = self.id.clone();
+        let id_for_mouse_up_out = self.id.clone();
         let value_for_click = current_value.clone();
+        let value_for_right_click = current_value.clone();
+        let value_for_right_up = current_value.clone();
+        let value_for_mouse_move = current_value.clone();
         let line_height_for_click = line_height;
+        let line_height_for_right_click = line_height;
+        let line_height_for_right_up = line_height;
+        let line_height_for_mouse_move = line_height;
         let vertical_padding_for_click = vertical_padding;
+        let vertical_padding_for_right_click = vertical_padding;
+        let vertical_padding_for_right_up = vertical_padding;
+        let vertical_padding_for_mouse_move = vertical_padding;
         let horizontal_padding_for_click = horizontal_padding;
-        let char_width_for_click = char_width;
+        let horizontal_padding_for_right_click = horizontal_padding;
+        let horizontal_padding_for_right_up = horizontal_padding;
+        let horizontal_padding_for_mouse_move = horizontal_padding;
+        let font_size_for_click = font_size;
+        let font_size_for_right_click = font_size;
+        let font_size_for_right_up = font_size;
+        let font_size_for_mouse_move = font_size;
+        let value_controlled_for_mouse = self.value_controlled;
         input = input.track_focus(&focus_handle).on_mouse_down(
             MouseButton::Left,
             move |event, window, cx| {
                 control::set_focused_state(&id_for_focus, true);
+                control::set_bool_state(&id_for_focus, "context-open", false);
+                let current_value_for_click = control::text_state(
+                    &id_for_focus,
+                    "value",
+                    value_controlled_for_mouse.then_some(value_for_click.clone()),
+                    value_for_click.clone(),
+                );
                 let click_caret = Self::caret_from_click(
                     &id_for_focus,
                     event.position,
-                    &value_for_click,
+                    &current_value_for_click,
+                    window,
+                    font_size_for_click,
                     line_height_for_click,
                     vertical_padding_for_click,
                     horizontal_padding_for_click,
-                    char_width_for_click,
                 );
-                let len = value_for_click.chars().count();
+                let len = current_value_for_click.chars().count();
                 let current_caret =
                     control::text_state(&id_for_focus, "caret-index", None, len.to_string())
                         .parse::<usize>()
@@ -1179,57 +1298,164 @@ impl Textarea {
                         current_caret
                     };
                     Self::set_selection_for(&id_for_focus, anchor, click_caret);
+                    control::set_text_state(&id_for_focus, "selection-anchor", anchor.to_string());
                 } else {
                     Self::clear_selection_for(&id_for_focus, click_caret);
+                    control::set_text_state(
+                        &id_for_focus,
+                        "selection-anchor",
+                        click_caret.to_string(),
+                    );
                 }
+                control::set_bool_state(&id_for_focus, "mouse-selecting", true);
                 window.focus(&handle_for_click, cx);
                 window.refresh();
             },
         );
+        input = input.on_mouse_move(move |event, window, _cx| {
+            if !control::bool_state(&id_for_mouse_move, "mouse-selecting", None, false) {
+                return;
+            }
+            let current_value_for_drag = control::text_state(
+                &id_for_mouse_move,
+                "value",
+                value_controlled_for_mouse.then_some(value_for_mouse_move.clone()),
+                value_for_mouse_move.clone(),
+            );
+            let caret = Self::caret_from_click(
+                &id_for_mouse_move,
+                event.position,
+                &current_value_for_drag,
+                window,
+                font_size_for_mouse_move,
+                line_height_for_mouse_move,
+                vertical_padding_for_mouse_move,
+                horizontal_padding_for_mouse_move,
+            );
+            let anchor = control::text_state(
+                &id_for_mouse_move,
+                "selection-anchor",
+                None,
+                caret.to_string(),
+            )
+            .parse::<usize>()
+            .ok()
+            .unwrap_or(caret);
+            control::set_text_state(&id_for_mouse_move, "caret-index", caret.to_string());
+            Self::set_selection_for(&id_for_mouse_move, anchor, caret);
+            window.refresh();
+        });
+        input = input
+            .on_mouse_up(MouseButton::Left, move |_, _, _| {
+                control::set_bool_state(&id_for_mouse_up, "mouse-selecting", false);
+            })
+            .on_mouse_up_out(MouseButton::Left, move |_, _, _| {
+                control::set_bool_state(&id_for_mouse_up_out, "mouse-selecting", false);
+            });
+        input = input.on_mouse_down(MouseButton::Right, move |event, window, cx| {
+            control::set_focused_state(&id_for_right_click, true);
+            window.focus(&handle_for_right_click, cx);
+
+            let current_value_for_click = control::text_state(
+                &id_for_right_click,
+                "value",
+                value_controlled_for_mouse.then_some(value_for_right_click.clone()),
+                value_for_right_click.clone(),
+            );
+            let click_caret = Self::caret_from_click(
+                &id_for_right_click,
+                event.position,
+                &current_value_for_click,
+                window,
+                font_size_for_right_click,
+                line_height_for_right_click,
+                vertical_padding_for_right_click,
+                horizontal_padding_for_right_click,
+            );
+            let len = current_value_for_click.chars().count();
+            let existing_selection = Self::selection_bounds_for(&id_for_right_click, len);
+            let keep_selection = existing_selection
+                .is_some_and(|(start, end)| click_caret >= start && click_caret <= end);
+            control::set_text_state(&id_for_right_click, "caret-index", click_caret.to_string());
+            if !keep_selection {
+                Self::clear_selection_for(&id_for_right_click, click_caret);
+                control::set_text_state(
+                    &id_for_right_click,
+                    "selection-anchor",
+                    click_caret.to_string(),
+                );
+            }
+
+            let (origin_x, origin_y, _width, _height) = Self::box_geometry(&id_for_right_click);
+            let local_x = (f32::from(event.position.x) - origin_x).max(0.0);
+            let local_y = (f32::from(event.position.y) - origin_y).max(0.0);
+            control::set_text_state(&id_for_right_click, "context-menu-x", local_x.to_string());
+            control::set_text_state(&id_for_right_click, "context-menu-y", local_y.to_string());
+            control::set_bool_state(&id_for_right_click, "context-open", true);
+            control::set_bool_state(&id_for_right_click, "mouse-selecting", false);
+            window.refresh();
+        });
+        input = input.on_mouse_up(MouseButton::Right, move |event, window, cx| {
+            control::set_focused_state(&id_for_right_up, true);
+            window.focus(&handle_for_right_up, cx);
+
+            let current_value_for_click = control::text_state(
+                &id_for_right_up,
+                "value",
+                value_controlled_for_mouse.then_some(value_for_right_up.clone()),
+                value_for_right_up.clone(),
+            );
+            let click_caret = Self::caret_from_click(
+                &id_for_right_up,
+                event.position,
+                &current_value_for_click,
+                window,
+                font_size_for_right_up,
+                line_height_for_right_up,
+                vertical_padding_for_right_up,
+                horizontal_padding_for_right_up,
+            );
+            let len = current_value_for_click.chars().count();
+            let existing_selection = Self::selection_bounds_for(&id_for_right_up, len);
+            let keep_selection = existing_selection
+                .is_some_and(|(start, end)| click_caret >= start && click_caret <= end);
+            control::set_text_state(&id_for_right_up, "caret-index", click_caret.to_string());
+            if !keep_selection {
+                Self::clear_selection_for(&id_for_right_up, click_caret);
+                control::set_text_state(
+                    &id_for_right_up,
+                    "selection-anchor",
+                    click_caret.to_string(),
+                );
+            }
+
+            let (origin_x, origin_y, _width, _height) = Self::box_geometry(&id_for_right_up);
+            let local_x = (f32::from(event.position.x) - origin_x).max(0.0);
+            let local_y = (f32::from(event.position.y) - origin_y).max(0.0);
+            control::set_text_state(&id_for_right_up, "context-menu-x", local_x.to_string());
+            control::set_text_state(&id_for_right_up, "context-menu-y", local_y.to_string());
+            control::set_bool_state(&id_for_right_up, "context-open", true);
+            control::set_bool_state(&id_for_right_up, "mouse-selecting", false);
+            window.refresh();
+        });
 
         let id_for_blur = self.id.clone();
         input = input.on_mouse_down_out(move |_, window, _cx| {
             control::set_focused_state(&id_for_blur, false);
+            control::set_bool_state(&id_for_blur, "context-open", false);
             window.refresh();
         });
 
         if !self.disabled && !self.read_only {
-            let drag_state = TextareaSelectionDragState {
-                textarea_id: self.id.to_string(),
-                anchor: current_caret,
-            };
-            let id_for_drag = self.id.to_string();
-            let value_for_drag = current_value.clone();
-            let line_height_for_drag = line_height;
-            let vertical_padding_for_drag = vertical_padding;
-            let horizontal_padding_for_drag = horizontal_padding;
-            let char_width_for_drag = char_width;
-            input = input
-                .on_drag(drag_state, |_drag, _, _, cx| cx.new(|_| EmptyView))
-                .on_drag_move::<TextareaSelectionDragState>(move |event, window, cx| {
-                    let drag = event.drag(cx);
-                    if drag.textarea_id != id_for_drag {
-                        return;
-                    }
-                    let caret = Self::caret_from_click(
-                        &id_for_drag,
-                        event.event.position,
-                        &value_for_drag,
-                        line_height_for_drag,
-                        vertical_padding_for_drag,
-                        horizontal_padding_for_drag,
-                        char_width_for_drag,
-                    );
-                    control::set_text_state(&id_for_drag, "caret-index", caret.to_string());
-                    Self::set_selection_for(&id_for_drag, drag.anchor, caret);
-                    window.refresh();
-                });
-
             let on_change = self.on_change.clone();
             let value_controlled = self.value_controlled;
             let input_id = self.id.clone();
             let max_length = self.max_length;
             let rendered_value_for_input = current_value.clone();
+            let font_size_for_input = font_size;
+            let line_height_for_input = line_height;
+            let vertical_padding_for_input = vertical_padding;
+            let horizontal_padding_for_input = horizontal_padding;
             input = input.on_key_down(move |event, window, cx| {
                 control::set_focused_state(&input_id, true);
                 let current_value_for_input = control::text_state(
@@ -1248,6 +1474,36 @@ impl Textarea {
                 let selection = Self::selection_bounds_for(&input_id, len);
                 let modifiers =
                     event.keystroke.modifiers.control || event.keystroke.modifiers.platform;
+
+                let open_context_menu = event.keystroke.key == "menu"
+                    || (event.keystroke.modifiers.shift && event.keystroke.key == "f10");
+                if open_context_menu {
+                    let content_width =
+                        Self::content_width_for_box(&input_id, horizontal_padding_for_input);
+                    let wrapped_lines = Self::wrapped_lines_for_width(
+                        &current_value_for_input,
+                        content_width,
+                        window,
+                        font_size_for_input,
+                    );
+                    let (caret_line, caret_col) =
+                        Self::caret_visual_position(&wrapped_lines, current_caret_for_input);
+                    let caret_x = wrapped_lines
+                        .get(caret_line)
+                        .map(|line| {
+                            Self::x_for_char(window, font_size_for_input, &line.text, caret_col)
+                        })
+                        .unwrap_or(0.0);
+                    let local_x = (horizontal_padding_for_input + caret_x).max(0.0);
+                    let local_y = (vertical_padding_for_input
+                        + (caret_line as f32 + 1.0) * line_height_for_input)
+                        .max(0.0);
+                    control::set_text_state(&input_id, "context-menu-x", local_x.to_string());
+                    control::set_text_state(&input_id, "context-menu-y", local_y.to_string());
+                    control::set_bool_state(&input_id, "context-open", true);
+                    window.refresh();
+                    return;
+                }
 
                 if event.keystroke.modifiers.shift
                     && matches!(
@@ -1406,7 +1662,7 @@ impl Textarea {
                 line_height,
                 vertical_padding,
                 horizontal_padding,
-                char_width,
+                font_size,
             },
             cx,
         );
@@ -1424,7 +1680,7 @@ impl Textarea {
                 Self::caret_visual_position(&wrapped_lines, current_caret);
             let selection_bg =
                 resolve_hsla(&self.theme, &self.theme.semantic.focus_ring).alpha(0.28);
-            for (line_index, line) in wrapped_lines.iter().enumerate() {
+            for line in &wrapped_lines {
                 if let Some((selection_start, selection_end)) = selection {
                     let seg_start = selection_start.clamp(line.start_char, line.end_char);
                     let seg_end = selection_end.clamp(line.start_char, line.end_char);
@@ -1465,50 +1721,7 @@ impl Textarea {
                     }
                 }
 
-                if line_index == caret_line
-                    && !self.disabled
-                    && !self.read_only
-                    && is_focused
-                    && selection.is_none()
-                {
-                    let left = line.text.chars().take(caret_col).collect::<String>();
-                    let right = line.text.chars().skip(caret_col).collect::<String>();
-                    let caret = div()
-                        .id(self.id.slot("caret"))
-                        .flex_none()
-                        .w(super::utils::quantized_stroke_px(window, 1.5))
-                        .h(px(self.caret_height_px()))
-                        .bg(resolve_hsla(&self.theme, &tokens.fg))
-                        .rounded_sm()
-                        .with_animation(
-                            self.id.slot("caret-blink"),
-                            Animation::new(Duration::from_millis(CARET_BLINK_CYCLE_MS))
-                                .repeat()
-                                .with_easing(gpui::linear),
-                            |this, delta| {
-                                let visible = ((delta * 2.0).fract()) < 0.5;
-                                this.opacity(if visible { 1.0 } else { 0.0 })
-                            },
-                        );
-                    content = content.child(
-                        div()
-                            .w_full()
-                            .flex()
-                            .items_center()
-                            .whitespace_nowrap()
-                            .child(if left.is_empty() {
-                                "".to_string()
-                            } else {
-                                left
-                            })
-                            .child(caret)
-                            .child(if right.is_empty() {
-                                "".to_string()
-                            } else {
-                                right
-                            }),
-                    );
-                } else if line.text.is_empty() {
+                if line.text.is_empty() {
                     content = content.child(div().w_full().child(" "));
                 } else {
                     content =
@@ -1516,7 +1729,232 @@ impl Textarea {
                 }
             }
 
-            input = input.child(content);
+            let mut content_host = div().relative().w_full().child(content);
+            if !self.disabled && !self.read_only && is_focused && selection.is_none() {
+                let caret_left = wrapped_lines
+                    .get(caret_line)
+                    .map(|line| Self::x_for_char(window, font_size, &line.text, caret_col))
+                    .unwrap_or(0.0);
+                let caret_top = caret_line as f32 * line_height;
+                let caret = div()
+                    .id(self.id.slot("caret"))
+                    .flex_none()
+                    .w(super::utils::quantized_stroke_px(window, 1.5))
+                    .h(px(self.caret_height_px()))
+                    .bg(resolve_hsla(&self.theme, &tokens.fg))
+                    .rounded_sm()
+                    .with_animation(
+                        self.id.slot("caret-blink"),
+                        Animation::new(Duration::from_millis(CARET_BLINK_CYCLE_MS))
+                            .repeat()
+                            .with_easing(gpui::linear),
+                        |this, delta| {
+                            let visible = ((delta * 2.0).fract()) < 0.5;
+                            this.opacity(if visible { 1.0 } else { 0.0 })
+                        },
+                    );
+                content_host = content_host.child(
+                    div()
+                        .absolute()
+                        .left(px(caret_left.max(0.0)))
+                        .top(px(caret_top.max(0.0)))
+                        .child(caret),
+                );
+            }
+
+            input = input.child(content_host);
+        }
+
+        if !self.disabled && control::bool_state(&self.id, "context-open", None, false) {
+            let (menu_x, menu_y) = Self::context_menu_position(&self.id);
+            let textarea_id = self.id.clone();
+            let rendered_value = current_value.clone();
+            let value_controlled = self.value_controlled;
+            let max_length = self.max_length;
+            let on_change = self.on_change.clone();
+            let read_only = self.read_only;
+
+            let item_style = || {
+                div()
+                    .w_full()
+                    .px(px(10.0))
+                    .py(px(7.0))
+                    .text_sm()
+                    .cursor_pointer()
+                    .hover(|style| style.bg(gpui::black().opacity(0.08)))
+            };
+
+            let copy_id = textarea_id.clone();
+            let copy_value = rendered_value.clone();
+            let copy_action = item_style().child("Copy").on_mouse_down(
+                MouseButton::Left,
+                move |_, window: &mut Window, cx: &mut gpui::App| {
+                    let current = control::text_state(
+                        &copy_id,
+                        "value",
+                        value_controlled.then_some(copy_value.clone()),
+                        copy_value.clone(),
+                    );
+                    let len = current.chars().count();
+                    if let Some((start, end)) = Self::selection_bounds_for(&copy_id, len) {
+                        let selected = Self::selected_text(&current, start, end);
+                        if !selected.is_empty() {
+                            cx.write_to_clipboard(ClipboardItem::new_string(selected));
+                        }
+                    }
+                    control::set_bool_state(&copy_id, "context-open", false);
+                    window.refresh();
+                },
+            );
+
+            let cut_id = textarea_id.clone();
+            let cut_value = rendered_value.clone();
+            let cut_on_change = on_change.clone();
+            let cut_action = if !read_only {
+                Some(item_style().child("Cut").on_mouse_down(
+                    MouseButton::Left,
+                    move |_, window: &mut Window, cx: &mut gpui::App| {
+                        let current = control::text_state(
+                            &cut_id,
+                            "value",
+                            value_controlled.then_some(cut_value.clone()),
+                            cut_value.clone(),
+                        );
+                        let len = current.chars().count();
+                        if let Some((start, end)) = Self::selection_bounds_for(&cut_id, len) {
+                            let selected = Self::selected_text(&current, start, end);
+                            if !selected.is_empty() {
+                                cx.write_to_clipboard(ClipboardItem::new_string(selected));
+                                let (next, next_caret) =
+                                    Self::replace_char_range(&current, start, end, "");
+                                if !value_controlled {
+                                    control::set_text_state(&cut_id, "value", next.clone());
+                                }
+                                control::set_text_state(
+                                    &cut_id,
+                                    "caret-index",
+                                    next_caret.to_string(),
+                                );
+                                Self::clear_selection_for(&cut_id, next_caret);
+                                if let Some(handler) = cut_on_change.as_ref() {
+                                    (handler)(next.into(), window, cx);
+                                }
+                            }
+                        }
+                        control::set_bool_state(&cut_id, "context-open", false);
+                        window.refresh();
+                    },
+                ))
+            } else {
+                None
+            };
+
+            let paste_id = textarea_id.clone();
+            let paste_value = rendered_value.clone();
+            let paste_on_change = on_change.clone();
+            let paste_action = if !read_only {
+                Some(item_style().child("Paste").on_mouse_down(
+                    MouseButton::Left,
+                    move |_, window: &mut Window, cx: &mut gpui::App| {
+                        let Some(item) = cx.read_from_clipboard() else {
+                            control::set_bool_state(&paste_id, "context-open", false);
+                            window.refresh();
+                            return;
+                        };
+                        let Some(pasted) = item.text() else {
+                            control::set_bool_state(&paste_id, "context-open", false);
+                            window.refresh();
+                            return;
+                        };
+
+                        let normalized = pasted.replace("\r\n", "\n").replace('\r', "\n");
+                        let current = control::text_state(
+                            &paste_id,
+                            "value",
+                            value_controlled.then_some(paste_value.clone()),
+                            paste_value.clone(),
+                        );
+                        let len = current.chars().count();
+                        let caret =
+                            control::text_state(&paste_id, "caret-index", None, len.to_string())
+                                .parse::<usize>()
+                                .ok()
+                                .unwrap_or(len)
+                                .min(len);
+                        let selection = Self::selection_bounds_for(&paste_id, len);
+                        let (mut next, mut next_caret) = if let Some((start, end)) = selection {
+                            Self::replace_char_range(&current, start, end, &normalized)
+                        } else {
+                            let start = Self::byte_index_at_char(&current, caret);
+                            let mut next = current.clone();
+                            next.insert_str(start, &normalized);
+                            (next, caret + normalized.chars().count())
+                        };
+
+                        if let Some(limit) = max_length
+                            && next.chars().count() > limit
+                        {
+                            next = next.chars().take(limit).collect();
+                            next_caret = next_caret.min(next.chars().count());
+                        }
+                        if !value_controlled {
+                            control::set_text_state(&paste_id, "value", next.clone());
+                        }
+                        control::set_text_state(&paste_id, "caret-index", next_caret.to_string());
+                        Self::clear_selection_for(&paste_id, next_caret);
+                        if let Some(handler) = paste_on_change.as_ref() {
+                            (handler)(next.into(), window, cx);
+                        }
+                        control::set_bool_state(&paste_id, "context-open", false);
+                        window.refresh();
+                    },
+                ))
+            } else {
+                None
+            };
+
+            let select_all_id = textarea_id.clone();
+            let select_all_value = rendered_value.clone();
+            let select_all = item_style().child("Select All").on_mouse_down(
+                MouseButton::Left,
+                move |_, window: &mut Window, _cx: &mut gpui::App| {
+                    let current = control::text_state(
+                        &select_all_id,
+                        "value",
+                        value_controlled.then_some(select_all_value.clone()),
+                        select_all_value.clone(),
+                    );
+                    let len = current.chars().count();
+                    control::set_text_state(&select_all_id, "caret-index", len.to_string());
+                    Self::set_selection_for(&select_all_id, 0, len);
+                    control::set_bool_state(&select_all_id, "context-open", false);
+                    window.refresh();
+                },
+            );
+
+            let mut menu = div()
+                .id(self.id.slot("context-menu"))
+                .absolute()
+                .left(px(menu_x))
+                .top(px(menu_y))
+                .min_w(px(132.0))
+                .rounded_md()
+                .border(super::utils::quantized_stroke_px(window, 1.0))
+                .border_color(resolve_hsla(&self.theme, &tokens.border))
+                .bg(resolve_hsla(&self.theme, &tokens.bg))
+                .shadow_sm()
+                .flex()
+                .flex_col()
+                .py(px(4.0));
+            menu = menu.child(copy_action);
+            if let Some(cut_action) = cut_action {
+                menu = menu.child(cut_action);
+            }
+            if let Some(paste_action) = paste_action {
+                menu = menu.child(paste_action);
+            }
+            menu = menu.child(select_all);
+            input = input.child(menu);
         }
 
         input
