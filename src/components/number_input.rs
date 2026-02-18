@@ -1,9 +1,8 @@
-use std::{rc::Rc, str::FromStr, time::Duration};
+use std::{rc::Rc, str::FromStr};
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, ClickEvent, FocusHandle, InteractiveElement, IntoElement,
-    KeyDownEvent, ParentElement, RenderOnce, SharedString, StatefulInteractiveElement, Styled,
-    Window, div, px,
+    AnyElement, ClickEvent, FocusHandle, InteractiveElement, IntoElement, ParentElement,
+    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
@@ -13,17 +12,13 @@ use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
 
-use super::Stack;
+use super::TextInput;
 use super::control;
 use super::icon::Icon;
-use super::transition::TransitionExt;
-use super::utils::{apply_input_size, apply_radius, resolve_hsla};
+use super::utils::{apply_radius, resolve_hsla};
 
 type ChangeHandler = Rc<dyn Fn(f64, &mut Window, &mut gpui::App)>;
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
-
-const CARET_BLINK_TOGGLE_MS: u64 = 680;
-const CARET_BLINK_CYCLE_MS: u64 = CARET_BLINK_TOGGLE_MS * 2;
 
 #[derive(IntoElement)]
 pub struct NumberInput {
@@ -105,20 +100,20 @@ impl NumberInput {
 
     pub fn min(mut self, value: f64) -> Self {
         self.min = Some(value);
-        if let Some(max) = self.max {
-            if max < value {
-                self.max = Some(value);
-            }
+        if let Some(max) = self.max
+            && max < value
+        {
+            self.max = Some(value);
         }
         self
     }
 
     pub fn max(mut self, value: f64) -> Self {
         self.max = Some(value);
-        if let Some(min) = self.min {
-            if min > value {
-                self.min = Some(value);
-            }
+        if let Some(min) = self.min
+            && min > value
+        {
+            self.min = Some(value);
         }
         self
     }
@@ -259,6 +254,41 @@ impl NumberInput {
         Decimal::from_str(text.trim()).ok()
     }
 
+    fn sanitize_numeric_text(raw: &str, max_length: Option<usize>) -> String {
+        let mut next = String::new();
+        let mut has_dot = false;
+
+        for ch in raw.chars() {
+            if ch.is_ascii_digit() {
+                next.push(ch);
+                continue;
+            }
+
+            if ch == '-' {
+                if next.is_empty() {
+                    next.push('-');
+                }
+                continue;
+            }
+
+            if ch == '.' && !has_dot {
+                if next.is_empty() || next == "-" {
+                    next.push('0');
+                }
+                next.push('.');
+                has_dot = true;
+            }
+        }
+
+        if let Some(limit) = max_length
+            && next.chars().count() > limit
+        {
+            next = next.chars().take(limit).collect();
+        }
+
+        next
+    }
+
     fn resolved_text(&self) -> String {
         let step = Self::decimal_from_f64(self.step.abs().max(0.000_001));
         let controlled = self
@@ -277,68 +307,13 @@ impl NumberInput {
         control::text_state(&self.id, "value-text", controlled, default)
     }
 
-    fn with_text_update(
-        current: &str,
-        event: &KeyDownEvent,
-        max_length: Option<usize>,
-    ) -> Option<String> {
-        let key = event.keystroke.key.as_str();
-
-        if key == "backspace" {
-            let mut next = current.to_string();
-            next.pop();
-            return Some(next);
-        }
-
-        if key == "enter" {
-            return None;
-        }
-
-        let has_modifier = event.keystroke.modifiers.control
-            || event.keystroke.modifiers.platform
-            || event.keystroke.modifiers.function;
-        if has_modifier {
-            return None;
-        }
-
-        let inserted = event
-            .keystroke
-            .key_char
-            .clone()
-            .filter(|value| !value.is_empty())
-            .or_else(|| {
-                if key.chars().count() == 1 {
-                    Some(key.to_string())
-                } else {
-                    None
-                }
-            })?;
-
-        let mut next = current.to_string();
-        for ch in inserted.chars() {
-            if ch.is_ascii_digit() {
-                next.push(ch);
-            } else if ch == '-' {
-                if next.is_empty() {
-                    next.push(ch);
-                }
-            } else if ch == '.' {
-                if !next.contains('.') {
-                    if next.is_empty() || next == "-" {
-                        next.push('0');
-                    }
-                    next.push('.');
-                }
-            }
-        }
-
-        if let Some(max_length) = max_length {
-            if next.chars().count() > max_length {
-                next = next.chars().take(max_length).collect();
-            }
-        }
-
-        Some(next)
+    fn current_text_for(id: &str, fallback: &str, value_controlled: bool) -> String {
+        control::text_state(
+            id,
+            "value-text",
+            value_controlled.then_some(fallback.to_string()),
+            fallback.to_string(),
+        )
     }
 
     fn stepped_value_text_for(
@@ -381,310 +356,145 @@ impl NumberInput {
         (formatted, as_f64)
     }
 
-    fn caret_height_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 13.0,
-            Size::Sm => 15.0,
-            Size::Md => 17.0,
-            Size::Lg => 19.0,
-            Size::Xl => 21.0,
+    fn compose_right_slot(
+        user_right_slot: Option<AnyElement>,
+        controls_slot: Option<AnyElement>,
+    ) -> Option<AnyElement> {
+        match (user_right_slot, controls_slot) {
+            (Some(user), Some(controls)) => Some(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(user)
+                    .child(controls)
+                    .into_any_element(),
+            ),
+            (Some(user), None) => Some(user),
+            (None, Some(controls)) => Some(controls),
+            (None, None) => None,
         }
     }
 
-    fn render_label_block(&self) -> AnyElement {
-        if self.label.is_none() && self.description.is_none() && self.error.is_none() {
-            return div().into_any_element();
-        }
-
+    fn render_controls_slot(&self, fallback_text: String) -> AnyElement {
         let tokens = &self.theme.components.number_input;
-        let mut block = Stack::vertical().gap_1();
+        let controls_bg = resolve_hsla(&self.theme, &tokens.controls_bg);
+        let controls_fg = resolve_hsla(&self.theme, &tokens.controls_fg);
+        let controls_border = resolve_hsla(&self.theme, &tokens.controls_border);
 
-        if let Some(label) = &self.label {
-            let mut label_row = Stack::horizontal().gap_1().child(
-                div()
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(resolve_hsla(&self.theme, &tokens.label))
-                    .child(label.clone()),
-            );
-
-            if self.required {
-                label_row = label_row.child(
-                    div()
-                        .text_color(resolve_hsla(&self.theme, &self.theme.semantic.status_error))
-                        .child("*"),
-                );
-            }
-
-            block = block.child(label_row);
-        }
-
-        if let Some(description) = &self.description {
-            block = block.child(
-                div()
-                    .text_sm()
-                    .text_color(resolve_hsla(&self.theme, &tokens.description))
-                    .child(description.clone()),
-            );
-        }
-
-        if let Some(error) = &self.error {
-            block = block.child(
-                div()
-                    .text_sm()
-                    .text_color(resolve_hsla(&self.theme, &tokens.error))
-                    .child(error.clone()),
-            );
-        }
-
-        block.into_any_element()
-    }
-
-    fn render_input_box(&mut self, window: &Window) -> AnyElement {
-        let tokens = &self.theme.components.number_input;
-        let current_text = self.resolved_text();
-        let is_focused = self
-            .focus_handle
-            .as_ref()
-            .is_some_and(|focus_handle| focus_handle.is_focused(window));
-
-        let mut input = div()
-            .id(self.id.slot("box"))
-            .focusable()
+        let mut up = div()
+            .id(self.id.slot("control-up"))
+            .w(px(18.0))
+            .h(px(12.0))
             .flex()
             .items_center()
-            .gap_2()
-            .w_full()
-            .bg(resolve_hsla(&self.theme, &tokens.bg))
-            .text_color(resolve_hsla(&self.theme, &tokens.fg))
-            .border(super::utils::quantized_stroke_px(window, 1.0));
+            .justify_center()
+            .bg(controls_bg)
+            .text_color(controls_fg)
+            .border(px(1.0))
+            .border_color(controls_border)
+            .child(
+                Icon::named("chevron-up")
+                    .with_id(self.id.slot("chevron-up"))
+                    .size(12.0)
+                    .color(controls_fg),
+            );
 
-        input = apply_input_size(input, self.size);
-        input = apply_radius(&self.theme, input, self.radius);
-
-        let border = if self.error.is_some() {
-            resolve_hsla(&self.theme, &tokens.border_error)
-        } else if is_focused {
-            resolve_hsla(&self.theme, &tokens.border_focus)
-        } else {
-            resolve_hsla(&self.theme, &tokens.border)
-        };
-        input = input.border_color(border);
-
-        if self.disabled {
-            input = input.cursor_default().opacity(0.55);
-        } else {
-            input = input.cursor_text();
-        }
-
-        if let Some(focus_handle) = &self.focus_handle {
-            let handle_for_click = focus_handle.clone();
-            input = input
-                .track_focus(focus_handle)
-                .on_click(move |_, window, cx| {
-                    window.focus(&handle_for_click, cx);
-                });
-        }
+        let mut down = div()
+            .id(self.id.slot("control-down"))
+            .w(px(18.0))
+            .h(px(12.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(controls_bg)
+            .text_color(controls_fg)
+            .border(px(1.0))
+            .border_color(controls_border)
+            .child(
+                Icon::named("chevron-down")
+                    .with_id(self.id.slot("chevron-down"))
+                    .size(12.0)
+                    .color(controls_fg),
+            );
 
         if !self.disabled && !self.read_only {
-            let on_change = self.on_change.clone();
+            let id = self.id.clone();
+            let fallback = fallback_text.clone();
             let value_controlled = self.value_controlled;
-            let input_id = self.id.clone();
-            let max_length = self.max_length;
+            let on_change = self.on_change.clone();
+            let step = self.step;
             let min = self.min;
             let max = self.max;
-            let current_text_for_input = current_text.clone();
-            input = input.on_key_down(move |event, window, cx| {
-                if let Some(next) =
-                    Self::with_text_update(&current_text_for_input, event, max_length)
-                {
+            let precision = self.precision;
+            let default_value = self.default_value;
+            let focus_handle = self.focus_handle.clone();
+            up = up
+                .cursor_pointer()
+                .on_click(move |_: &ClickEvent, window, cx| {
+                    let current = Self::current_text_for(&id, &fallback, value_controlled);
+                    let (next_text, next_value) = Self::stepped_value_text_for(
+                        &current,
+                        1.0,
+                        step,
+                        min,
+                        max,
+                        precision,
+                        default_value,
+                    );
                     if !value_controlled {
-                        control::set_text_state(&input_id, "value-text", next.clone());
-                        window.refresh();
+                        control::set_text_state(&id, "value-text", next_text);
                     }
-
-                    if let Some(parsed) = Self::parse_number(&next) {
-                        let mut clamped = parsed;
-                        if let Some(min) = min {
-                            clamped = clamped.max(Self::decimal_from_f64(min));
-                        }
-                        if let Some(max) = max {
-                            clamped = clamped.min(Self::decimal_from_f64(max));
-                        }
-                        if let Some(handler) = on_change.as_ref() {
-                            (handler)(clamped.to_f64().unwrap_or(0.0), window, cx);
-                        }
+                    if let Some(handler) = on_change.as_ref() {
+                        (handler)(next_value, window, cx);
                     }
-                }
-            });
-        }
+                    if let Some(handle) = focus_handle.as_ref() {
+                        window.focus(handle, cx);
+                    }
+                    window.refresh();
+                });
 
-        if let Some(left_slot) = self.left_slot.take() {
-            input = input.child(
-                div()
-                    .flex_none()
-                    .text_color(resolve_hsla(&self.theme, &self.theme.semantic.text_muted))
-                    .child(left_slot()),
-            );
-        }
-
-        let mut value_container = div().flex_1().min_w_0().flex().items_center().gap_1();
-        if current_text.is_empty() && !is_focused {
-            value_container = value_container.child(
-                div()
-                    .truncate()
-                    .text_color(resolve_hsla(&self.theme, &tokens.placeholder))
-                    .child(self.placeholder.clone().unwrap_or_default()),
-            );
+            let id = self.id.clone();
+            let fallback = fallback_text;
+            let value_controlled = self.value_controlled;
+            let on_change = self.on_change.clone();
+            let step = self.step;
+            let min = self.min;
+            let max = self.max;
+            let precision = self.precision;
+            let default_value = self.default_value;
+            let focus_handle = self.focus_handle.clone();
+            down = down
+                .cursor_pointer()
+                .on_click(move |_: &ClickEvent, window, cx| {
+                    let current = Self::current_text_for(&id, &fallback, value_controlled);
+                    let (next_text, next_value) = Self::stepped_value_text_for(
+                        &current,
+                        -1.0,
+                        step,
+                        min,
+                        max,
+                        precision,
+                        default_value,
+                    );
+                    if !value_controlled {
+                        control::set_text_state(&id, "value-text", next_text);
+                    }
+                    if let Some(handler) = on_change.as_ref() {
+                        (handler)(next_value, window, cx);
+                    }
+                    if let Some(handle) = focus_handle.as_ref() {
+                        window.focus(handle, cx);
+                    }
+                    window.refresh();
+                });
         } else {
-            value_container = value_container.child(div().truncate().child(current_text.clone()));
+            up = up.opacity(0.55);
+            down = down.opacity(0.55);
         }
 
-        let show_caret = self.focus_handle.is_none() || is_focused;
-        if !self.disabled && !self.read_only && show_caret {
-            value_container = value_container.child(
-                div()
-                    .id(self.id.slot("caret"))
-                    .flex_none()
-                    .w(super::utils::quantized_stroke_px(window, 1.5))
-                    .h(px(self.caret_height_px()))
-                    .bg(resolve_hsla(&self.theme, &tokens.fg))
-                    .rounded_sm()
-                    .with_animation(
-                        self.id.slot("caret-blink"),
-                        Animation::new(Duration::from_millis(CARET_BLINK_CYCLE_MS))
-                            .repeat()
-                            .with_easing(gpui::linear),
-                        |this, delta| {
-                            let visible = ((delta * 2.0).fract()) < 0.5;
-                            this.opacity(if visible { 1.0 } else { 0.0 })
-                        },
-                    ),
-            );
-        }
-        input = input.child(value_container);
-
-        if let Some(right_slot) = self.right_slot.take() {
-            input = input.child(
-                div()
-                    .flex_none()
-                    .text_color(resolve_hsla(&self.theme, &self.theme.semantic.text_muted))
-                    .child(right_slot()),
-            );
-        }
-
-        if self.controls {
-            let controls_bg = resolve_hsla(&self.theme, &tokens.controls_bg);
-            let controls_fg = resolve_hsla(&self.theme, &tokens.controls_fg);
-            let controls_border = resolve_hsla(&self.theme, &tokens.controls_border);
-
-            let mut up = div()
-                .id(self.id.slot("control-up"))
-                .w(px(18.0))
-                .h(px(12.0))
-                .flex()
-                .items_center()
-                .justify_center()
-                .bg(controls_bg)
-                .text_color(controls_fg)
-                .border(super::utils::quantized_stroke_px(window, 1.0))
-                .border_color(controls_border)
-                .child(
-                    Icon::named("chevron-up")
-                        .with_id(self.id.slot("chevron-up"))
-                        .size(12.0)
-                        .color(controls_fg),
-                );
-
-            let mut down = div()
-                .id(self.id.slot("control-down"))
-                .w(px(18.0))
-                .h(px(12.0))
-                .flex()
-                .items_center()
-                .justify_center()
-                .bg(controls_bg)
-                .text_color(controls_fg)
-                .border(super::utils::quantized_stroke_px(window, 1.0))
-                .border_color(controls_border)
-                .child(
-                    Icon::named("chevron-down")
-                        .with_id(self.id.slot("chevron-down"))
-                        .size(12.0)
-                        .color(controls_fg),
-                );
-
-            if !self.disabled && !self.read_only {
-                let id = self.id.clone();
-                let current = current_text.clone();
-                let value_controlled = self.value_controlled;
-                let on_change = self.on_change.clone();
-                let step = self.step;
-                let min = self.min;
-                let max = self.max;
-                let precision = self.precision;
-                let default_value = self.default_value;
-                up = up
-                    .cursor_pointer()
-                    .on_click(move |_: &ClickEvent, window, cx| {
-                        let (next_text, next_value) = Self::stepped_value_text_for(
-                            &current,
-                            1.0,
-                            step,
-                            min,
-                            max,
-                            precision,
-                            default_value,
-                        );
-                        if !value_controlled {
-                            control::set_text_state(&id, "value-text", next_text);
-                            window.refresh();
-                        }
-                        if let Some(handler) = on_change.as_ref() {
-                            (handler)(next_value, window, cx);
-                        }
-                    });
-
-                let id = self.id.clone();
-                let current = current_text;
-                let value_controlled = self.value_controlled;
-                let on_change = self.on_change.clone();
-                let step = self.step;
-                let min = self.min;
-                let max = self.max;
-                let precision = self.precision;
-                let default_value = self.default_value;
-                down = down
-                    .cursor_pointer()
-                    .on_click(move |_: &ClickEvent, window, cx| {
-                        let (next_text, next_value) = Self::stepped_value_text_for(
-                            &current,
-                            -1.0,
-                            step,
-                            min,
-                            max,
-                            precision,
-                            default_value,
-                        );
-                        if !value_controlled {
-                            control::set_text_state(&id, "value-text", next_text);
-                            window.refresh();
-                        }
-                        if let Some(handler) = on_change.as_ref() {
-                            (handler)(next_value, window, cx);
-                        }
-                    });
-            } else {
-                up = up.opacity(0.55);
-                down = down.opacity(0.55);
-            }
-
-            let controls = Stack::vertical().gap_0().child(up).child(down);
-            input = input.child(controls);
-        }
-
-        input
-            .with_enter_transition(self.id.slot("enter"), self.motion)
-            .into_any_element()
+        let controls = super::Stack::vertical().gap_0().child(up).child(down);
+        apply_radius(&self.theme, controls, self.radius).into_any_element()
     }
 }
 
@@ -747,21 +557,153 @@ impl MotionAware for NumberInput {
 }
 
 impl RenderOnce for NumberInput {
-    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
-        self.theme.sync_from_provider(_cx);
-        match self.layout {
-            FieldLayout::Vertical => Stack::vertical()
-                .id(self.id.clone())
-                .gap_2()
-                .child(self.render_label_block())
-                .child(self.render_input_box(window)),
-            FieldLayout::Horizontal => Stack::horizontal()
-                .id(self.id.clone())
-                .items_start()
-                .gap_3()
-                .child(div().w(px(168.0)).child(self.render_label_block()))
-                .child(div().flex_1().child(self.render_input_box(window))),
+    fn render(mut self, window: &mut gpui::Window, cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(cx);
+
+        let current_text = self.resolved_text();
+        let id = self.id.clone();
+        let value_controlled = self.value_controlled;
+        let on_change = self.on_change.clone();
+        let min = self.min;
+        let max = self.max;
+        let max_length = self.max_length;
+
+        let mut input = TextInput::new()
+            .with_id(self.id.clone())
+            .value(current_text.clone());
+
+        if let Some(placeholder) = self.placeholder.clone() {
+            input = input.placeholder(placeholder);
         }
+        if let Some(label) = self.label.clone() {
+            input = input.label(label);
+        }
+        if let Some(description) = self.description.clone() {
+            input = input.description(description);
+        }
+        if let Some(error) = self.error.clone() {
+            input = input.error(error);
+        }
+
+        input = input
+            .required(self.required)
+            .layout(self.layout)
+            .disabled(self.disabled)
+            .read_only(self.read_only);
+
+        input = VariantConfigurable::variant(input, self.variant);
+        input = VariantConfigurable::size(input, self.size);
+        input = VariantConfigurable::radius(input, self.radius);
+        input = MotionAware::motion(input, self.motion).on_change(
+            move |next_text: SharedString, window, cx| {
+                let sanitized = Self::sanitize_numeric_text(next_text.as_ref(), max_length);
+                if !value_controlled {
+                    control::set_text_state(&id, "value-text", sanitized.clone());
+                }
+
+                if let Some(parsed) = Self::parse_number(&sanitized) {
+                    let mut clamped = parsed;
+                    if let Some(min) = min {
+                        clamped = clamped.max(Self::decimal_from_f64(min));
+                    }
+                    if let Some(max) = max {
+                        clamped = clamped.min(Self::decimal_from_f64(max));
+                    }
+                    if let Some(handler) = on_change.as_ref() {
+                        (handler)(clamped.to_f64().unwrap_or(0.0), window, cx);
+                    }
+                }
+
+                window.refresh();
+            },
+        );
+
+        if let Some(max_length) = self.max_length {
+            input = input.max_length(max_length);
+        }
+        if let Some(focus_handle) = self.focus_handle.clone() {
+            input = input.focus_handle(focus_handle);
+        }
+
+        if let Some(left_slot) = self.left_slot.take() {
+            input = input.left_slot(left_slot());
+        }
+
+        let user_right_slot = self.right_slot.take().map(|slot| slot());
+        let controls_slot = self
+            .controls
+            .then(|| self.render_controls_slot(current_text.clone()));
+        if let Some(right_slot) = Self::compose_right_slot(user_right_slot, controls_slot) {
+            input = input.right_slot(right_slot);
+        }
+
+        gpui::Refineable::refine(gpui::Styled::style(&mut input), &self.style);
+
+        let field = input.render(window, cx).into_any_element();
+
+        if self.disabled || self.read_only {
+            return field;
+        }
+
+        let id_for_step = self.id.clone();
+        let fallback_for_step = current_text;
+        let value_controlled_for_step = self.value_controlled;
+        let on_change_for_step = self.on_change.clone();
+        let step = self.step;
+        let min = self.min;
+        let max = self.max;
+        let precision = self.precision;
+        let default_value = self.default_value;
+
+        div()
+            .id(self.id.slot("keyboard-proxy"))
+            .on_key_down(move |event, window, cx| {
+                if !control::focused_state(&id_for_step, None, false) {
+                    return;
+                }
+
+                let key = event.keystroke.key.as_str();
+                if key != "up" && key != "down" {
+                    return;
+                }
+
+                if event.keystroke.modifiers.control
+                    || event.keystroke.modifiers.platform
+                    || event.keystroke.modifiers.function
+                    || event.keystroke.modifiers.alt
+                {
+                    return;
+                }
+
+                let current = Self::current_text_for(
+                    &id_for_step,
+                    &fallback_for_step,
+                    value_controlled_for_step,
+                );
+                let direction = if key == "up" { 1.0 } else { -1.0 };
+                let (next_text, next_value) = Self::stepped_value_text_for(
+                    &current,
+                    direction,
+                    step,
+                    min,
+                    max,
+                    precision,
+                    default_value,
+                );
+
+                if !value_controlled_for_step {
+                    control::set_text_state(&id_for_step, "value-text", next_text);
+                }
+                if let Some(handler) = on_change_for_step.as_ref() {
+                    (handler)(next_value, window, cx);
+                }
+
+                cx.stop_propagation();
+                window.prevent_default();
+                window.refresh();
+            })
+            .child(field)
+            .into_any_element()
     }
 }
 

@@ -2042,6 +2042,86 @@ impl PinInput {
         let default = Self::normalize_value(self.default_value.clone(), self.length).to_string();
         control::text_state(&self.id, "value", controlled, default).into()
     }
+
+    fn normalized_digits(value: &str, length: usize) -> String {
+        value
+            .chars()
+            .filter(|ch| ch.is_ascii_digit())
+            .take(length)
+            .collect::<String>()
+    }
+
+    fn current_value_for(id: &str, rendered_value: &str, value_controlled: bool) -> String {
+        let raw = control::text_state(
+            id,
+            "value",
+            value_controlled.then_some(rendered_value.to_string()),
+            rendered_value.to_string(),
+        );
+        Self::normalized_digits(&raw, usize::MAX)
+    }
+
+    fn editor_state_for(
+        id: &str,
+        rendered_value: &str,
+        value_controlled: bool,
+        length: usize,
+    ) -> InputState {
+        let current_value = Self::current_value_for(id, rendered_value, value_controlled);
+        let len = current_value.chars().count().min(length);
+        let caret = control::text_state(id, "caret-index", None, len.to_string())
+            .parse::<usize>()
+            .ok()
+            .unwrap_or(len)
+            .min(len);
+        InputState::new(current_value, caret, caret, None)
+    }
+
+    fn apply_editor_state(
+        id: &str,
+        previous_value: &str,
+        state: &InputState,
+        value_controlled: bool,
+        length: usize,
+        on_change: Option<&ChangeHandler>,
+        window: &mut Window,
+        cx: &mut gpui::App,
+    ) {
+        let mut next_state = state.clone();
+        next_state.value = Self::normalized_digits(&next_state.value, length);
+        next_state.clamp_to_max_length(Some(length));
+        next_state.clear_selection();
+        let next_len = next_state.value.chars().count();
+        next_state.set_caret(next_len, false);
+
+        let changed = next_state.value != previous_value;
+        if changed && !value_controlled {
+            control::set_text_state(id, "value", next_state.value.clone());
+        }
+        control::set_text_state(id, "caret-index", next_state.caret.to_string());
+        window.refresh();
+
+        if changed && let Some(handler) = on_change {
+            (handler)(next_state.value.clone().into(), window, cx);
+        }
+    }
+
+    fn digit_from_key(event: &gpui::KeyDownEvent) -> Option<char> {
+        event
+            .keystroke
+            .key_char
+            .as_ref()
+            .and_then(|value| value.chars().next())
+            .filter(|ch| ch.is_ascii_digit())
+            .or_else(|| {
+                let key = event.keystroke.key.as_str();
+                if key.len() == 1 {
+                    key.chars().next().filter(|ch| ch.is_ascii_digit())
+                } else {
+                    None
+                }
+            })
+    }
 }
 
 impl PinInput {
@@ -2075,15 +2155,21 @@ impl MotionAware for PinInput {
 }
 
 impl RenderOnce for PinInput {
-    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
-        self.theme.sync_from_provider(_cx);
-        let on_change = self.on_change.clone();
-        let value = self.resolved_value().to_string();
-        let id = self.id.clone();
-        let value_controlled = self.value_controlled;
-        let length = self.length;
-        let value_chars = value.chars().collect::<Vec<_>>();
-        let active_index = value_chars.len().min(self.length.saturating_sub(1));
+    fn render(mut self, window: &mut gpui::Window, cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(cx);
+        ensure_text_keybindings(cx);
+
+        let rendered_value = self.resolved_value().to_string();
+        let normalized_value = Self::normalized_digits(&rendered_value, self.length);
+        let value_chars = normalized_value.chars().collect::<Vec<_>>();
+        let current_len = value_chars.len();
+        let current_caret =
+            control::text_state(&self.id, "caret-index", None, current_len.to_string())
+                .parse::<usize>()
+                .ok()
+                .unwrap_or(current_len)
+                .min(current_len);
+        let active_index = current_caret.min(self.length.saturating_sub(1));
         let tracked_focus = control::focused_state(&self.id, None, false);
         let is_focused = self
             .focus_handle
@@ -2101,7 +2187,11 @@ impl RenderOnce for PinInput {
         let has_error = self.error.is_some();
         let interactive = !self.disabled && !self.read_only;
 
-        let mut root = Stack::horizontal().id(self.id.clone()).focusable().gap_2();
+        let mut root = Stack::horizontal()
+            .id(self.id.clone())
+            .focusable()
+            .key_context(INPUT_KEY_CONTEXT)
+            .gap_2();
 
         if self.disabled {
             root = root.cursor_default();
@@ -2112,44 +2202,156 @@ impl RenderOnce for PinInput {
         }
 
         if interactive {
-            let focus_state_id = self.id.clone();
-            root = root.on_key_down(move |event, window, cx| {
-                control::set_focused_state(&focus_state_id, true);
-                let mut next = value.clone();
-                if event.keystroke.key == "backspace" {
-                    next.pop();
-                } else {
-                    let digit = event
-                        .keystroke
-                        .key_char
-                        .as_ref()
-                        .and_then(|c| c.chars().next())
-                        .filter(|ch| ch.is_ascii_digit())
-                        .or_else(|| {
-                            let key = event.keystroke.key.as_str();
-                            if key.len() == 1 {
-                                key.chars().next().filter(|ch| ch.is_ascii_digit())
-                            } else {
-                                None
-                            }
-                        });
-
-                    if let Some(ch) = digit {
-                        if next.chars().count() < length {
-                            next.push(ch);
-                        }
+            let input_id = self.id.clone();
+            let rendered_value_for_edit = normalized_value.clone();
+            let value_controlled = self.value_controlled;
+            let on_change = self.on_change.clone();
+            let length = self.length;
+            root = root
+                .on_action(move |_: &DeleteBackward, window, cx| {
+                    let current_value = Self::current_value_for(
+                        &input_id,
+                        &rendered_value_for_edit,
+                        value_controlled,
+                    );
+                    let mut state = Self::editor_state_for(
+                        &input_id,
+                        &rendered_value_for_edit,
+                        value_controlled,
+                        length,
+                    );
+                    if !state.delete_backward() {
+                        return;
                     }
-                }
+                    Self::apply_editor_state(
+                        &input_id,
+                        &current_value,
+                        &state,
+                        value_controlled,
+                        length,
+                        on_change.as_ref(),
+                        window,
+                        cx,
+                    );
+                })
+                .on_action({
+                    let input_id = self.id.clone();
+                    let rendered_value_for_edit = normalized_value.clone();
+                    let on_change = self.on_change.clone();
+                    move |_: &DeleteForward, window, cx| {
+                        let current_value = Self::current_value_for(
+                            &input_id,
+                            &rendered_value_for_edit,
+                            value_controlled,
+                        );
+                        let mut state = Self::editor_state_for(
+                            &input_id,
+                            &rendered_value_for_edit,
+                            value_controlled,
+                            length,
+                        );
+                        if !state.delete_forward() {
+                            return;
+                        }
+                        Self::apply_editor_state(
+                            &input_id,
+                            &current_value,
+                            &state,
+                            value_controlled,
+                            length,
+                            on_change.as_ref(),
+                            window,
+                            cx,
+                        );
+                    }
+                })
+                .on_action({
+                    let input_id = self.id.clone();
+                    let rendered_value_for_edit = normalized_value.clone();
+                    let on_change = self.on_change.clone();
+                    move |_: &PasteClipboard, window, cx| {
+                        let Some(item) = cx.read_from_clipboard() else {
+                            return;
+                        };
+                        let Some(pasted) = item.text() else {
+                            return;
+                        };
+                        let digits = pasted
+                            .chars()
+                            .filter(|ch| ch.is_ascii_digit())
+                            .collect::<String>();
+                        if digits.is_empty() {
+                            return;
+                        }
 
-                if !value_controlled {
-                    control::set_text_state(&id, "value", next.clone());
-                    window.refresh();
-                }
+                        let current_value = Self::current_value_for(
+                            &input_id,
+                            &rendered_value_for_edit,
+                            value_controlled,
+                        );
+                        let mut state = Self::editor_state_for(
+                            &input_id,
+                            &rendered_value_for_edit,
+                            value_controlled,
+                            length,
+                        );
+                        state.insert_text(&digits);
+                        state.clamp_to_max_length(Some(length));
+                        Self::apply_editor_state(
+                            &input_id,
+                            &current_value,
+                            &state,
+                            value_controlled,
+                            length,
+                            on_change.as_ref(),
+                            window,
+                            cx,
+                        );
+                    }
+                })
+                .on_key_down({
+                    let input_id = self.id.clone();
+                    let rendered_value_for_edit = normalized_value.clone();
+                    let on_change = self.on_change.clone();
+                    move |event, window, cx| {
+                        if event.keystroke.modifiers.control
+                            || event.keystroke.modifiers.platform
+                            || event.keystroke.modifiers.function
+                            || event.keystroke.modifiers.alt
+                        {
+                            return;
+                        }
 
-                if let Some(handler) = &on_change {
-                    (handler)(next.into(), window, cx);
-                }
-            });
+                        let Some(digit) = Self::digit_from_key(event) else {
+                            return;
+                        };
+                        control::set_focused_state(&input_id, true);
+                        let current_value = Self::current_value_for(
+                            &input_id,
+                            &rendered_value_for_edit,
+                            value_controlled,
+                        );
+                        let mut state = Self::editor_state_for(
+                            &input_id,
+                            &rendered_value_for_edit,
+                            value_controlled,
+                            length,
+                        );
+                        state.insert_text(&digit.to_string());
+                        state.clamp_to_max_length(Some(length));
+                        Self::apply_editor_state(
+                            &input_id,
+                            &current_value,
+                            &state,
+                            value_controlled,
+                            length,
+                            on_change.as_ref(),
+                            window,
+                            cx,
+                        );
+                        cx.stop_propagation();
+                    }
+                });
         }
 
         if let Some(focus_handle) = &self.focus_handle
@@ -2157,17 +2359,36 @@ impl RenderOnce for PinInput {
         {
             let handle_for_click = focus_handle.clone();
             let focus_state_id = self.id.clone();
+            let input_id = self.id.clone();
+            let rendered_value_for_focus = normalized_value.clone();
+            let value_controlled = self.value_controlled;
+            let length = self.length;
             root = root
                 .track_focus(focus_handle)
                 .on_click(move |_, window, cx| {
                     control::set_focused_state(&focus_state_id, true);
+                    let current_value = Self::current_value_for(
+                        &input_id,
+                        &rendered_value_for_focus,
+                        value_controlled,
+                    );
+                    let caret = current_value.chars().count().min(length);
+                    control::set_text_state(&input_id, "caret-index", caret.to_string());
                     window.focus(&handle_for_click, cx);
                     window.refresh();
                 });
         } else if !self.disabled {
             let focus_state_id = self.id.clone();
+            let input_id = self.id.clone();
+            let rendered_value_for_focus = normalized_value.clone();
+            let value_controlled = self.value_controlled;
+            let length = self.length;
             root = root.on_click(move |_, window, _cx| {
                 control::set_focused_state(&focus_state_id, true);
+                let current_value =
+                    Self::current_value_for(&input_id, &rendered_value_for_focus, value_controlled);
+                let caret = current_value.chars().count().min(length);
+                control::set_text_state(&input_id, "caret-index", caret.to_string());
                 window.refresh();
             });
         }
@@ -2202,6 +2423,26 @@ impl RenderOnce for PinInput {
                 .flex()
                 .items_center()
                 .justify_center();
+
+            if interactive {
+                let input_id = self.id.clone();
+                let rendered_for_click = normalized_value.clone();
+                let value_controlled = self.value_controlled;
+                let length = self.length;
+                cell =
+                    cell.cursor_text()
+                        .on_mouse_down(MouseButton::Left, move |_, window, _cx| {
+                            control::set_focused_state(&input_id, true);
+                            let current_value = Self::current_value_for(
+                                &input_id,
+                                &rendered_for_click,
+                                value_controlled,
+                            );
+                            let caret = current_value.chars().count().min(length);
+                            control::set_text_state(&input_id, "caret-index", caret.to_string());
+                            window.refresh();
+                        });
+            }
 
             if let Some(content) = content {
                 cell = cell.child(content);
