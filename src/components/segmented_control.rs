@@ -7,11 +7,11 @@ use gpui::{
 
 use crate::contracts::{MotionAware, VariantConfigurable};
 use crate::id::ComponentId;
-use crate::motion::MotionConfig;
+use crate::motion::{MotionConfig, MotionLevel, TransitionPreset};
 use crate::style::{Radius, Size, Variant};
 
 use super::control;
-use super::transition::TransitionExt;
+use super::transition::{TransitionExt, TransitionStage};
 use super::utils::{apply_radius, resolve_hsla};
 
 type ChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
@@ -203,11 +203,13 @@ impl RenderOnce for SegmentedControl {
         let divider_width = super::utils::quantized_stroke_px(window, 1.0);
         let transparent = resolve_hsla(&theme, &gpui::transparent_black());
         let active_border = resolve_hsla(&theme, &tokens.border).alpha(0.85);
-        let active_index = selected.as_ref().and_then(|value| {
+        let selected_index = selected.as_ref().and_then(|value| {
             self.items
                 .iter()
                 .position(|item| item.value.as_ref() == value.as_ref())
         });
+        let previous_index = control::optional_text_state(&self.id, "prev-index", None, None)
+            .and_then(|value| value.parse::<usize>().ok());
 
         let items = self
             .items
@@ -218,13 +220,14 @@ impl RenderOnce for SegmentedControl {
                     .as_ref()
                     .is_some_and(|value| value.as_ref() == item.value.as_ref());
                 let show_divider = index > 0
-                    && !active_index.is_some_and(|active| {
+                    && !selected_index.is_some_and(|active| {
                         active == index || active.saturating_add(1) == index
                     });
 
                 let mut segment = div()
                     .id(self.id.slot_index("item", index.to_string()))
                     .relative()
+                    .overflow_hidden()
                     .flex()
                     .items_center()
                     .justify_center()
@@ -247,12 +250,41 @@ impl RenderOnce for SegmentedControl {
                     } else {
                         resolve_hsla(&theme, &tokens.item_fg)
                     })
-                    .bg(if is_active {
-                        active_bg
-                    } else {
-                        transparent
-                    })
-                    .child(div().truncate().child(item.label.clone()));
+                    .bg(transparent);
+
+                if is_active {
+                    let indicator = div()
+                        .id(self.id.slot_index("indicator", index.to_string()))
+                        .absolute()
+                        .left_0()
+                        .top_0()
+                        .right_0()
+                        .bottom_0()
+                        .bg(active_bg);
+
+                    let mut profile = motion.enter;
+                    profile.preset = match (previous_index, selected_index) {
+                        (Some(prev), Some(current)) if current < prev => TransitionPreset::FadeLeft,
+                        _ => TransitionPreset::FadeRight,
+                    };
+                    profile.offset_px = profile.offset_px.max(12);
+                    profile.start_opacity_pct = profile.start_opacity_pct.max(40);
+                    profile.duration_ms = profile.duration_ms.max(180);
+                    if motion.level == MotionLevel::None {
+                        profile.preset = TransitionPreset::None;
+                        profile.offset_px = 0;
+                        profile.start_opacity_pct = 100;
+                        profile.duration_ms = 1;
+                    }
+
+                    segment = segment.child(
+                        apply_radius(&self.theme, indicator, self.radius).with_transition_profile(
+                            self.id.slot_index("indicator-enter", index.to_string()),
+                            profile,
+                            TransitionStage::Enter,
+                        ),
+                    );
+                }
 
                 if show_divider {
                     segment = segment.child(
@@ -265,6 +297,8 @@ impl RenderOnce for SegmentedControl {
                             .bg(divider),
                     );
                 }
+
+                segment = segment.child(div().relative().truncate().child(item.label.clone()));
 
                 segment = Self::apply_item_size(size, segment);
 
@@ -280,12 +314,14 @@ impl RenderOnce for SegmentedControl {
                     let on_change = on_change.clone();
                     let value = item.value.clone();
                     let id = control_id.clone();
+                    let previous = selected_index.map(|value| value.to_string());
                     let hover_bg = resolve_hsla(&theme, &tokens.item_hover_bg);
                     segment = segment.cursor_pointer();
                     if !is_active {
                         segment = segment.hover(move |style| style.bg(hover_bg));
                     }
                     segment = segment.on_click(move |_: &ClickEvent, window, cx| {
+                        control::set_optional_text_state(&id, "prev-index", previous.clone());
                         if !controlled {
                             control::set_optional_text_state(&id, "value", Some(value.to_string()));
                             window.refresh();
