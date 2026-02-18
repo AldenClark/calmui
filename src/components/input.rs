@@ -12,7 +12,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, UTF16Selection, Window, canvas, div, point, px,
 };
 
-use crate::contracts::{FieldLike, MotionAware, Sizeable, VariantConfigurable};
+use crate::contracts::{FieldLike, MotionAware, Sized, VariantConfigurable};
 use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
@@ -555,6 +555,16 @@ impl TextInput {
 
     pub fn max_length(mut self, max_length: usize) -> Self {
         self.max_length = Some(max_length.max(1));
+        self
+    }
+
+    pub fn size(mut self, value: Size) -> Self {
+        self.size = value;
+        self
+    }
+
+    pub fn radius(mut self, value: Radius) -> Self {
+        self.radius = value;
         self
     }
 
@@ -1857,6 +1867,16 @@ impl PasswordInput {
         self
     }
 
+    pub fn size(mut self, value: Size) -> Self {
+        self.inner = self.inner.size(value);
+        self
+    }
+
+    pub fn radius(mut self, value: Radius) -> Self {
+        self.inner = self.inner.radius(value);
+        self
+    }
+
     pub fn focus_handle(mut self, focus_handle: FocusHandle) -> Self {
         self.inner = self.inner.focus_handle(focus_handle);
         self
@@ -1920,7 +1940,7 @@ impl VariantConfigurable for PasswordInput {
     }
 
     fn size(mut self, value: Size) -> Self {
-        self.inner = Sizeable::size(self.inner, value);
+        self.inner = Sized::with_size(self.inner, value);
         self
     }
 
@@ -2022,6 +2042,16 @@ impl PinInput {
 
     pub fn focus_handle(mut self, focus_handle: FocusHandle) -> Self {
         self.focus_handle = Some(focus_handle);
+        self
+    }
+
+    pub fn size(mut self, value: Size) -> Self {
+        self.size = value;
+        self
+    }
+
+    pub fn radius(mut self, value: Radius) -> Self {
+        self.radius = value;
         self
     }
 

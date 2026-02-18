@@ -5,7 +5,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, Radiusable, Sizeable, VariantConfigurable};
+use crate::contracts::{MotionAware, Radiused, Sized, VariantConfigurable};
 use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
@@ -468,8 +468,8 @@ impl RenderOnce for CheckboxGroup {
                     .value(option.value.clone())
                     .checked(checked)
                     .disabled(option.disabled);
-                checkbox = Sizeable::size(checkbox, self.size);
-                checkbox = Radiusable::radius(checkbox, self.radius);
+                checkbox = Sized::with_size(checkbox, self.size);
+                checkbox = Radiused::with_radius(checkbox, self.radius);
                 checkbox = checkbox.motion(self.motion);
 
                 if let Some(description) = option.description {

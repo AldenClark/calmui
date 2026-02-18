@@ -5,7 +5,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, Radiusable, Sizeable, VariantConfigurable};
+use crate::contracts::{MotionAware, Radiused, Sized, VariantConfigurable};
 use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
@@ -456,8 +456,8 @@ impl RenderOnce for RadioGroup {
                     .value(option.value.clone())
                     .checked(checked)
                     .disabled(option.disabled);
-                radio = Sizeable::size(radio, self.size);
-                radio = Radiusable::radius(radio, self.radius);
+                radio = Sized::with_size(radio, self.size);
+                radio = Radiused::with_radius(radio, self.radius);
                 radio = radio.motion(self.motion);
 
                 if let Some(description) = option.description {

@@ -5,7 +5,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, Radiusable, Sizeable, VariantConfigurable};
+use crate::contracts::{MotionAware, Radiused, Sized, VariantConfigurable};
 use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
@@ -516,8 +516,8 @@ impl RenderOnce for ChipGroup {
                     .checked(checked)
                     .disabled(option.disabled)
                     .variant(self.variant);
-                chip = Sizeable::size(chip, self.size);
-                chip = Radiusable::radius(chip, self.radius);
+                chip = Sized::with_size(chip, self.size);
+                chip = Radiused::with_radius(chip, self.radius);
                 chip = chip.motion(self.motion);
 
                 if let Some(handler) = self.on_change.clone() {

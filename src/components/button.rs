@@ -5,7 +5,7 @@ use gpui::{
     ParentElement, RenderOnce, SharedString, Styled, Window, div,
 };
 
-use crate::contracts::{MotionAware, Radiusable, Sizeable, VariantConfigurable};
+use crate::contracts::{MotionAware, Radiused, Sized, VariantConfigurable};
 use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
@@ -486,8 +486,8 @@ impl RenderOnce for ButtonGroup {
                 let mut button = Button::new(item.label.clone())
                     .with_id(self.id.slot_index("item", index.to_string()))
                     .variant(variant);
-                button = Sizeable::size(button, self.size);
-                button = Radiusable::radius(button, self.radius);
+                button = Sized::with_size(button, self.size);
+                button = Radiused::with_radius(button, self.radius);
                 button = button.motion(self.motion);
 
                 if item.disabled {

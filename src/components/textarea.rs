@@ -539,6 +539,16 @@ impl Textarea {
         self
     }
 
+    pub fn size(mut self, value: Size) -> Self {
+        self.size = value;
+        self
+    }
+
+    pub fn radius(mut self, value: Radius) -> Self {
+        self.radius = value;
+        self
+    }
+
     pub fn focus_handle(mut self, focus_handle: FocusHandle) -> Self {
         self.focus_handle = Some(focus_handle);
         self

@@ -4,7 +4,7 @@ use gpui::{
 };
 use std::time::Duration;
 
-use crate::contracts::Variantable;
+use crate::contracts::Varianted;
 use crate::feedback::{ToastEntry, ToastKind, ToastManager, ToastPosition};
 use crate::icon::{IconRegistry, IconSource};
 use crate::id::ComponentId;
@@ -508,7 +508,7 @@ impl ModalLayer {
                     .gap_2()
                     .child(
                         Button::new(entry.cancel_label_ref().clone())
-                            .variant(crate::style::Variant::Default)
+                            .with_variant(crate::style::Variant::Default)
                             .on_click(move |_, window, _| {
                                 manager_for_cancel.cancel(id);
                                 window.refresh();
@@ -516,7 +516,7 @@ impl ModalLayer {
                     )
                     .child(
                         Button::new(entry.confirm_label_ref().clone())
-                            .variant(crate::style::Variant::Filled)
+                            .with_variant(crate::style::Variant::Filled)
                             .on_click(move |_, window, _| {
                                 manager_for_confirm.confirm(id);
                                 window.refresh();
@@ -527,7 +527,7 @@ impl ModalLayer {
             panel = panel.child(
                 div().mt_3().flex().justify_end().child(
                     Button::new(entry.complete_label_ref().clone())
-                        .variant(crate::style::Variant::Filled)
+                        .with_variant(crate::style::Variant::Filled)
                         .on_click(move |_, window, _| {
                             manager_for_complete.complete(id);
                             window.refresh();

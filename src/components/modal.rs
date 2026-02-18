@@ -5,7 +5,7 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, Variantable};
+use crate::contracts::{MotionAware, Varianted};
 use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::overlay::{ModalCloseReason, ModalKind, ModalStateChange};
@@ -503,7 +503,7 @@ impl Modal {
                     .gap_2()
                     .child(
                         Button::new(self.cancel_label.clone())
-                            .variant(Variant::Default)
+                            .with_variant(Variant::Default)
                             .on_click(move |_, window, _| {
                                 if !is_controlled {
                                     control::set_bool_state(&id_for_cancel, "opened", false);
@@ -523,7 +523,7 @@ impl Modal {
                     )
                     .child(
                         Button::new(self.confirm_label.clone())
-                            .variant(Variant::Filled)
+                            .with_variant(Variant::Filled)
                             .on_click(move |_, window, _| {
                                 if !is_controlled {
                                     control::set_bool_state(&id_for_confirm, "opened", false);
@@ -550,7 +550,7 @@ impl Modal {
             panel = panel.child(
                 div().mt_3().flex().justify_end().child(
                     Button::new(self.complete_label.clone())
-                        .variant(Variant::Filled)
+                        .with_variant(Variant::Filled)
                         .on_click(move |_, window, _| {
                             if !is_controlled {
                                 control::set_bool_state(&id_for_complete, "opened", false);

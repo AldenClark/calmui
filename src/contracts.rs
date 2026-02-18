@@ -7,73 +7,73 @@ pub trait StyleRecipe<Props> {
     fn resolve_styles(&self, props: &Props, state: ComponentState) -> StyleMap;
 }
 
-pub(crate) trait VariantConfigurable: Sized {
+pub(crate) trait VariantConfigurable: std::marker::Sized {
     fn variant(self, value: Variant) -> Self;
     fn size(self, value: Size) -> Self;
     fn radius(self, value: Radius) -> Self;
 }
 
-pub trait Variantable: Sized {
-    fn variant(self, value: Variant) -> Self;
+pub trait Varianted: std::marker::Sized {
+    fn with_variant(self, value: Variant) -> Self;
 }
 
-impl<T> Variantable for T
+impl<T> Varianted for T
 where
     T: VariantConfigurable,
 {
-    fn variant(self, value: Variant) -> Self {
+    fn with_variant(self, value: Variant) -> Self {
         VariantConfigurable::variant(self, value)
     }
 }
 
-pub trait Sizeable: Sized {
-    fn size(self, value: Size) -> Self;
+pub trait Sized: std::marker::Sized {
+    fn with_size(self, value: Size) -> Self;
 }
 
-impl<T> Sizeable for T
+impl<T> Sized for T
 where
     T: VariantConfigurable,
 {
-    fn size(self, value: Size) -> Self {
+    fn with_size(self, value: Size) -> Self {
         VariantConfigurable::size(self, value)
     }
 }
 
-pub trait Radiusable: Sized {
-    fn radius(self, value: Radius) -> Self;
+pub trait Radiused: std::marker::Sized {
+    fn with_radius(self, value: Radius) -> Self;
 }
 
-impl<T> Radiusable for T
+impl<T> Radiused for T
 where
     T: VariantConfigurable,
 {
-    fn radius(self, value: Radius) -> Self {
+    fn with_radius(self, value: Radius) -> Self {
         VariantConfigurable::radius(self, value)
     }
 }
 
-pub trait Disableable: Sized {
+pub trait Disableable: std::marker::Sized {
     fn disabled(self, value: bool) -> Self;
 }
 
-pub trait Clickable: Sized {
+pub trait Clickable: std::marker::Sized {
     fn on_click(self, handler: impl Fn(&ClickEvent, &mut Window, &mut gpui::App) + 'static)
     -> Self;
 }
 
-pub trait Focusable: Sized {
+pub trait Focusable: std::marker::Sized {
     fn focus_handle(self, value: FocusHandle) -> Self;
 }
 
-pub trait Openable: Sized {
+pub trait Openable: std::marker::Sized {
     fn opened(self, value: bool) -> Self;
 }
 
-pub trait Visible: Sized {
+pub trait Visible: std::marker::Sized {
     fn visible(self, value: bool) -> Self;
 }
 
-pub trait Placeable<P>: Sized {
+pub trait Placeable<P>: std::marker::Sized {
     fn placement(self, value: P) -> Self;
 }
 
@@ -165,7 +165,7 @@ macro_rules! impl_variant_size_radius_via_methods {
     };
 }
 
-pub trait FieldLike: Sized {
+pub trait FieldLike: std::marker::Sized {
     fn label(self, value: impl Into<SharedString>) -> Self;
     fn description(self, value: impl Into<SharedString>) -> Self;
     fn error(self, value: impl Into<SharedString>) -> Self;
@@ -173,11 +173,11 @@ pub trait FieldLike: Sized {
     fn layout(self, value: FieldLayout) -> Self;
 }
 
-pub trait MotionAware: Sized {
+pub trait MotionAware: std::marker::Sized {
     fn motion(self, value: MotionConfig) -> Self;
 }
 
-pub trait ComponentThemeOverridable: Sized {
+pub trait ComponentThemeOverridable: std::marker::Sized {
     fn local_theme_mut(&mut self) -> &mut LocalTheme;
 
     fn with_theme_overrides(mut self, overrides: ComponentOverrides) -> Self {
@@ -197,7 +197,7 @@ pub trait ComponentThemeOverridable: Sized {
     }
 }
 
-pub trait Themable: ComponentThemeOverridable + Sized {
+pub trait Themable: ComponentThemeOverridable + std::marker::Sized {
     type ThemeOverrides: Default;
 
     fn component_overrides_mut(overrides: &mut ComponentOverrides) -> &mut Self::ThemeOverrides;
