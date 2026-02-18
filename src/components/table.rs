@@ -433,6 +433,202 @@ impl Table {
     }
 }
 
+struct TableControllerInput<'a> {
+    id: &'a str,
+    total_rows: usize,
+    page_size: usize,
+    page_size_options: Vec<usize>,
+    pagination_enabled: bool,
+    page_controlled: bool,
+    page: Option<usize>,
+    default_page: usize,
+    max_height_px: Option<f32>,
+    sticky_header: bool,
+    has_headers: bool,
+    virtual_window: Option<(usize, usize)>,
+    auto_virtualization: bool,
+    virtualization_min_rows: usize,
+    virtualization_overscan_rows: usize,
+    virtual_row_height_px: Option<f32>,
+    default_row_height_px: f32,
+    line_thickness_px: f32,
+}
+
+#[derive(Clone, Debug)]
+struct TableController {
+    page_size_options: Vec<usize>,
+    resolved_page_size: usize,
+    page_count: usize,
+    resolved_page: usize,
+    resolved_scroll_height: Option<f32>,
+    auto_virtualization_enabled: bool,
+    row_extent: f32,
+    scroll_y: f32,
+    max_scroll_y: f32,
+    window_start: usize,
+    window_count: usize,
+}
+
+impl TableController {
+    fn resolve(input: TableControllerInput<'_>) -> Self {
+        let mut page_size_options = input
+            .page_size_options
+            .into_iter()
+            .map(|value| value.max(1))
+            .collect::<Vec<_>>();
+        page_size_options.sort_unstable();
+        page_size_options.dedup();
+        if page_size_options.is_empty() {
+            page_size_options.push(input.page_size);
+        }
+
+        let resolved_page_size = if input.pagination_enabled {
+            let size = control::usize_state(input.id, "page-size", None, input.page_size).max(1);
+            if !page_size_options.contains(&size) {
+                page_size_options.push(size);
+                page_size_options.sort_unstable();
+                page_size_options.dedup();
+            }
+            size
+        } else {
+            input.page_size
+        };
+
+        let page_count = if input.pagination_enabled {
+            ((input.total_rows + resolved_page_size.saturating_sub(1)) / resolved_page_size).max(1)
+        } else {
+            1
+        };
+
+        let resolved_page = if input.pagination_enabled {
+            let controlled_page = input
+                .page
+                .unwrap_or(input.default_page)
+                .clamp(1, page_count);
+            control::usize_state(
+                input.id,
+                "page",
+                input.page_controlled.then_some(controlled_page),
+                input.default_page.clamp(1, page_count),
+            )
+            .clamp(1, page_count)
+        } else {
+            1
+        };
+
+        let resolved_scroll_height = input.max_height_px.map(|max_height| {
+            if input.sticky_header && input.has_headers {
+                (max_height - 42.0).max(40.0)
+            } else {
+                max_height
+            }
+        });
+
+        let auto_virtualization_enabled = input.auto_virtualization
+            && !input.pagination_enabled
+            && input.virtual_window.is_none()
+            && resolved_scroll_height.is_some()
+            && input.total_rows >= input.virtualization_min_rows;
+
+        let default_row_extent = input.default_row_height_px + input.line_thickness_px;
+        let measured_row_height = control::f32_state(
+            input.id,
+            "virtual-row-height",
+            None,
+            input.default_row_height_px,
+        )
+        .max(1.0);
+        let row_extent = if auto_virtualization_enabled {
+            (input.virtual_row_height_px.unwrap_or(measured_row_height) + input.line_thickness_px)
+                .max(1.0)
+        } else {
+            default_row_extent
+        };
+
+        let scroll_height_for_virtual = resolved_scroll_height.unwrap_or(0.0);
+        let max_scroll_y = if auto_virtualization_enabled {
+            ((input.total_rows as f32 * row_extent)
+                - input.line_thickness_px
+                - scroll_height_for_virtual)
+                .max(0.0)
+        } else {
+            0.0
+        };
+
+        let scroll_y = if auto_virtualization_enabled {
+            control::f32_state(input.id, "virtual-scroll-y", None, 0.0).clamp(0.0, max_scroll_y)
+        } else {
+            0.0
+        };
+
+        let (window_start, window_count) = if input.pagination_enabled {
+            (
+                (resolved_page - 1) * resolved_page_size,
+                resolved_page_size.max(1),
+            )
+        } else if auto_virtualization_enabled {
+            let overscan = input.virtualization_overscan_rows.max(1);
+            let visible_count = ((scroll_height_for_virtual / row_extent).ceil() as usize)
+                .saturating_add(overscan.saturating_mul(2))
+                .saturating_add(2)
+                .max(1);
+            let start = ((scroll_y / row_extent).floor() as usize).saturating_sub(overscan);
+            (start, visible_count)
+        } else {
+            input
+                .virtual_window
+                .map(|(start, count)| (start, count.max(1)))
+                .unwrap_or((0, input.total_rows.saturating_add(1)))
+        };
+
+        if auto_virtualization_enabled {
+            control::set_usize_state(input.id, "virtual-window-start", window_start);
+            control::set_f32_state(input.id, "virtual-scroll-y", scroll_y);
+        }
+
+        Self {
+            page_size_options,
+            resolved_page_size,
+            page_count,
+            resolved_page,
+            resolved_scroll_height,
+            auto_virtualization_enabled,
+            row_extent,
+            scroll_y,
+            max_scroll_y,
+            window_start,
+            window_count,
+        }
+    }
+
+    fn slice_rows(&self, rows: Vec<(usize, Vec<String>, TableRow)>) -> Vec<(usize, TableRow)> {
+        let total_rows = rows.len();
+        rows.into_iter()
+            .skip(self.window_start.min(total_rows))
+            .take(self.window_count.max(1))
+            .map(|(source_index, _, row)| (source_index, row))
+            .collect::<Vec<_>>()
+    }
+
+    fn top_spacer_height(&self) -> f32 {
+        if self.auto_virtualization_enabled {
+            (self.window_start as f32 * self.row_extent).max(0.0)
+        } else {
+            0.0
+        }
+    }
+
+    fn bottom_spacer_height(&self, total_rows: usize, visible_rows: usize) -> f32 {
+        if self.auto_virtualization_enabled {
+            let remaining_rows =
+                total_rows.saturating_sub(self.window_start.saturating_add(visible_rows));
+            (remaining_rows as f32 * self.row_extent).max(0.0)
+        } else {
+            0.0
+        }
+    }
+}
+
 impl Table {
     pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
         self.id = id.into();
@@ -541,131 +737,37 @@ impl RenderOnce for Table {
         }
 
         let total_rows = rows_with_meta.len();
-        let mut page_size_options = self
-            .page_size_options
-            .iter()
-            .copied()
-            .map(|value| value.max(1))
-            .collect::<Vec<_>>();
-        page_size_options.sort_unstable();
-        page_size_options.dedup();
-        if page_size_options.is_empty() {
-            page_size_options.push(page_size);
-        }
-        let resolved_page_size = if pagination_enabled {
-            let default = page_size.to_string();
-            let size = control::text_state(&table_id, "page-size", None, default)
-                .parse::<usize>()
-                .ok()
-                .unwrap_or(page_size)
-                .max(1);
-            if !page_size_options.contains(&size) {
-                page_size_options.push(size);
-                page_size_options.sort_unstable();
-                page_size_options.dedup();
-            }
-            size
-        } else {
-            page_size
-        };
-        let page_count = if pagination_enabled {
-            ((total_rows + resolved_page_size.saturating_sub(1)) / resolved_page_size).max(1)
-        } else {
-            1
-        };
-        let resolved_page = if pagination_enabled {
-            let controlled = page_controlled.then_some(
-                self.page
-                    .unwrap_or(self.default_page)
-                    .clamp(1, page_count)
-                    .to_string(),
-            );
-            let default = self.default_page.clamp(1, page_count).to_string();
-            control::text_state(&table_id, "page", controlled, default)
-                .parse::<usize>()
-                .ok()
-                .unwrap_or(1)
-                .clamp(1, page_count)
-        } else {
-            1
-        };
-
-        let resolved_scroll_height = max_height_px.map(|max_height| {
-            if sticky_header && !headers.is_empty() {
-                (max_height - 42.0).max(40.0)
-            } else {
-                max_height
-            }
+        let controller = TableController::resolve(TableControllerInput {
+            id: &table_id,
+            total_rows,
+            page_size,
+            page_size_options: self.page_size_options.clone(),
+            pagination_enabled,
+            page_controlled,
+            page: self.page,
+            default_page: self.default_page,
+            max_height_px,
+            sticky_header,
+            has_headers: !headers.is_empty(),
+            virtual_window,
+            auto_virtualization: self.auto_virtualization,
+            virtualization_min_rows: self.virtualization_min_rows,
+            virtualization_overscan_rows: self.virtualization_overscan_rows,
+            virtual_row_height_px: self.virtual_row_height_px,
+            default_row_height_px: Self::default_row_height_px(size),
+            line_thickness_px,
         });
-
-        let auto_virtualization_enabled = self.auto_virtualization
-            && !pagination_enabled
-            && virtual_window.is_none()
-            && resolved_scroll_height.is_some()
-            && total_rows >= self.virtualization_min_rows;
-
-        let default_row_extent = self
-            .virtual_row_height_px
-            .unwrap_or_else(|| Self::default_row_height_px(size))
-            + line_thickness_px;
-        let measured_row_height = control::text_state(
-            &table_id,
-            "virtual-row-height",
-            None,
-            Self::default_row_height_px(size).to_string(),
-        )
-        .parse::<f32>()
-        .ok()
-        .filter(|value| *value > 1.0)
-        .unwrap_or_else(|| Self::default_row_height_px(size));
-        let row_extent = if auto_virtualization_enabled {
-            (self.virtual_row_height_px.unwrap_or(measured_row_height) + line_thickness_px).max(1.0)
-        } else {
-            default_row_extent
-        };
-
-        let scroll_height_for_virtual = resolved_scroll_height.unwrap_or(0.0);
-        let max_scroll_y = if auto_virtualization_enabled {
-            ((total_rows as f32 * row_extent) - line_thickness_px - scroll_height_for_virtual)
-                .max(0.0)
-        } else {
-            0.0
-        };
-        let scroll_y = if auto_virtualization_enabled {
-            control::text_state(&table_id, "virtual-scroll-y", None, "0".to_string())
-                .parse::<f32>()
-                .ok()
-                .unwrap_or(0.0)
-                .clamp(0.0, max_scroll_y)
-        } else {
-            0.0
-        };
-
-        let (window_start, window_count) = if pagination_enabled {
-            (
-                ((resolved_page - 1) * resolved_page_size),
-                resolved_page_size,
-            )
-        } else if auto_virtualization_enabled {
-            let overscan = self.virtualization_overscan_rows.max(1);
-            let visible_count = ((scroll_height_for_virtual / row_extent).ceil() as usize)
-                .saturating_add(overscan.saturating_mul(2))
-                .saturating_add(2);
-            let start = ((scroll_y / row_extent).floor() as usize).saturating_sub(overscan);
-            (start, visible_count.max(1))
-        } else {
-            virtual_window.unwrap_or((0, total_rows.saturating_add(1)))
-        };
-        let rows = rows_with_meta
-            .into_iter()
-            .skip(window_start.min(total_rows))
-            .take(window_count.max(1))
-            .map(|(source_index, _, row)| (source_index, row))
-            .collect::<Vec<_>>();
-        if auto_virtualization_enabled {
-            control::set_text_state(&table_id, "virtual-window-start", window_start.to_string());
-            control::set_text_state(&table_id, "virtual-scroll-y", scroll_y.to_string());
-        }
+        let page_size_options = controller.page_size_options.clone();
+        let page_count = controller.page_count;
+        let resolved_page = controller.resolved_page;
+        let resolved_page_size = controller.resolved_page_size;
+        let resolved_scroll_height = controller.resolved_scroll_height;
+        let auto_virtualization_enabled = controller.auto_virtualization_enabled;
+        let row_extent = controller.row_extent;
+        let scroll_y = controller.scroll_y;
+        let max_scroll_y = controller.max_scroll_y;
+        let window_start = controller.window_start;
+        let rows = controller.slice_rows(rows_with_meta);
 
         let mut root = Stack::vertical()
             .id(table_id.clone())
@@ -738,18 +840,8 @@ impl RenderOnce for Table {
 
         let visible_row_count = rows.len();
         let has_rows = visible_row_count > 0;
-        let top_spacer_height = if auto_virtualization_enabled {
-            (window_start as f32 * row_extent).max(0.0)
-        } else {
-            0.0
-        };
-        let remaining_rows =
-            total_rows.saturating_sub(window_start.saturating_add(visible_row_count));
-        let bottom_spacer_height = if auto_virtualization_enabled {
-            (remaining_rows as f32 * row_extent).max(0.0)
-        } else {
-            0.0
-        };
+        let top_spacer_height = controller.top_spacer_height();
+        let bottom_spacer_height = controller.bottom_spacer_height(total_rows, visible_row_count);
         let mut rows_root = Stack::vertical().id(table_id.slot("rows")).w_full().gap_0();
         if top_spacer_height > 0.0 {
             rows_root = rows_root.child(
@@ -809,20 +901,17 @@ impl RenderOnce for Table {
                     canvas(
                         move |bounds, window, _cx| {
                             let measured = f32::from(bounds.size.height).max(1.0);
-                            let previous = control::text_state(
+                            let previous = control::f32_state(
                                 &table_id_for_height,
                                 "virtual-row-height",
                                 None,
-                                "0".to_string(),
-                            )
-                            .parse::<f32>()
-                            .ok()
-                            .unwrap_or(0.0);
+                                0.0,
+                            );
                             if (measured - previous).abs() > 0.5 {
-                                control::set_text_state(
+                                control::set_f32_state(
                                     &table_id_for_height,
                                     "virtual-row-height",
-                                    measured.to_string(),
+                                    measured,
                                 );
                                 window.refresh();
                             }
@@ -943,16 +1032,12 @@ impl RenderOnce for Table {
                         let focus_ring = resolve_hsla(&self.theme, &self.theme.semantic.focus_ring);
                         let click_handler: PressHandler =
                             Rc::new(move |_: &ClickEvent, window: &mut gpui::Window, cx| {
-                                control::set_text_state(
+                                control::set_usize_state(
                                     &table_id_for_page_size,
                                     "page-size",
-                                    option.to_string(),
+                                    option,
                                 );
-                                control::set_text_state(
-                                    &table_id_for_page_size,
-                                    "page",
-                                    "1".to_string(),
-                                );
+                                control::set_usize_state(&table_id_for_page_size, "page", 1);
                                 window.refresh();
                                 if let Some(handler) = on_page_size_change.as_ref() {
                                     (handler)(option, window, cx);
@@ -990,11 +1075,7 @@ impl RenderOnce for Table {
                     .boundaries(self.pagination_boundaries)
                     .on_change(move |next_page: usize, window: &mut gpui::Window, cx| {
                         if !page_controlled {
-                            control::set_text_state(
-                                &table_id_for_page,
-                                "page",
-                                next_page.to_string(),
-                            );
+                            control::set_usize_state(&table_id_for_page, "page", next_page);
                             window.refresh();
                         }
                         if let Some(handler) = on_page_change.as_ref() {
@@ -1079,40 +1160,34 @@ impl RenderOnce for Table {
                                 move |_bounds, window, _cx| {
                                     let next_y = (-f32::from(handle_for_monitor.offset().y))
                                         .clamp(0.0, max_scroll_for_monitor);
-                                    let current_y = control::text_state(
+                                    let current_y = control::f32_state(
                                         &table_id_for_scroll,
                                         "virtual-scroll-y",
                                         None,
-                                        "0".to_string(),
-                                    )
-                                    .parse::<f32>()
-                                    .ok()
-                                    .unwrap_or(0.0);
+                                        0.0,
+                                    );
                                     if (next_y - current_y).abs() > 0.5 {
-                                        control::set_text_state(
+                                        control::set_f32_state(
                                             &table_id_for_scroll,
                                             "virtual-scroll-y",
-                                            next_y.to_string(),
+                                            next_y,
                                         );
                                     }
 
                                     let next_start = ((next_y / row_extent_for_monitor).floor()
                                         as usize)
                                         .saturating_sub(overscan_rows);
-                                    let prev_start = control::text_state(
+                                    let prev_start = control::usize_state(
                                         &table_id_for_scroll,
                                         "virtual-window-start",
                                         None,
-                                        "0".to_string(),
-                                    )
-                                    .parse::<usize>()
-                                    .ok()
-                                    .unwrap_or(0);
+                                        0,
+                                    );
                                     if next_start != prev_start {
-                                        control::set_text_state(
+                                        control::set_usize_state(
                                             &table_id_for_scroll,
                                             "virtual-window-start",
-                                            next_start.to_string(),
+                                            next_start,
                                         );
                                         window.refresh();
                                     }

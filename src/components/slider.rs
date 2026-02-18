@@ -12,6 +12,7 @@ use crate::style::{Radius, Size, Variant};
 
 use super::Stack;
 use super::control;
+use super::slider_axis::{self, SliderAxis};
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
 
@@ -154,33 +155,17 @@ impl Slider {
     }
 
     fn normalize(&self, raw: f32) -> f32 {
-        Self::normalize_with(self.min, self.max, self.step, raw)
-    }
-
-    fn normalize_with(min: f32, max: f32, step: f32, raw: f32) -> f32 {
-        let (min, max) = if min <= max { (min, max) } else { (max, min) };
-        let clamped = raw.clamp(min, max);
-        let step = step.max(0.001);
-        let snapped = ((clamped - min) / step).round() * step + min;
-        snapped.clamp(min, max)
+        slider_axis::normalize(self.min, self.max, self.step, raw)
     }
 
     fn resolved_value(&self) -> f32 {
-        let controlled = self
-            .value_controlled
-            .then_some(self.normalize(self.value).to_string());
-        let default = self.normalize(self.default_value).to_string();
-        let stored = control::text_state(&self.id, "value", controlled, default);
-        stored
-            .parse::<f32>()
-            .ok()
-            .map(|value| self.normalize(value))
-            .unwrap_or_else(|| self.normalize(self.default_value))
+        let controlled = self.value_controlled.then_some(self.normalize(self.value));
+        let default = self.normalize(self.default_value);
+        self.normalize(control::f32_state(&self.id, "value", controlled, default))
     }
 
     fn ratio(&self, value: f32) -> f32 {
-        let span = (self.max - self.min).max(0.001);
-        ((value - self.min) / span).clamp(0.0, 1.0)
+        slider_axis::ratio(self.min, self.max, value)
     }
 
     fn segments(&self) -> usize {
@@ -260,7 +245,8 @@ impl RenderOnce for Slider {
         let track_height = self.track_height_px();
         let thumb_size = self.thumb_size_px();
         let track_top = ((thumb_size - track_height) * 0.5).max(0.0);
-        let thumb_left = ((self.width_px - thumb_size) * ratio).max(0.0);
+        let thumb_left =
+            slider_axis::thumb_offset(SliderAxis::Horizontal, self.width_px, thumb_size, ratio);
         let segment_count = self.segments();
         let display_precision = if self.step < 1.0 { 2 } else { 0 };
         let is_controlled = self.value_controlled;
@@ -270,7 +256,8 @@ impl RenderOnce for Slider {
 
         if orientation == SliderOrientation::Vertical {
             let track_left = ((thumb_size - track_height) * 0.5).max(0.0);
-            let thumb_top = ((track_len - thumb_size) * (1.0 - ratio)).max(0.0);
+            let thumb_top =
+                slider_axis::thumb_offset(SliderAxis::Vertical, track_len, thumb_size, ratio);
 
             let mut track = div()
                 .id(self.id.slot("track"))
@@ -342,11 +329,16 @@ impl RenderOnce for Slider {
                     .cursor_pointer()
                     .on_click(move |event: &ClickEvent, window, cx| {
                         let local_y = f32::from(event.position().y).clamp(0.0, track_len);
-                        let ratio = 1.0 - (local_y / track_len.max(1.0));
-                        let raw = min + ((max - min).max(0.001) * ratio);
-                        let next = Self::normalize_with(min, max, step, raw);
+                        let raw = slider_axis::value_from_local(
+                            SliderAxis::Vertical,
+                            local_y,
+                            track_len,
+                            min,
+                            max,
+                        );
+                        let next = slider_axis::normalize(min, max, step, raw);
                         if !is_controlled {
-                            control::set_text_state(&id, "value", next.to_string());
+                            control::set_f32_state(&id, "value", next);
                             window.refresh();
                         }
                         if let Some(handler) = on_change.as_ref() {
@@ -364,12 +356,17 @@ impl RenderOnce for Slider {
                         let local_y = (f32::from(event.event.position.y)
                             - f32::from(bounds.origin.y))
                         .clamp(0.0, height);
-                        let ratio = 1.0 - (local_y / height);
-                        let raw = drag.min + ((drag.max - drag.min).max(0.001) * ratio);
-                        let next = Self::normalize_with(drag.min, drag.max, drag.step, raw);
+                        let raw = slider_axis::value_from_local(
+                            SliderAxis::Vertical,
+                            local_y,
+                            height,
+                            drag.min,
+                            drag.max,
+                        );
+                        let next = slider_axis::normalize(drag.min, drag.max, drag.step, raw);
 
                         if !drag.controlled {
-                            control::set_text_state(&slider_id, "value", next.to_string());
+                            control::set_f32_state(&slider_id, "value", next);
                             window.refresh();
                         }
                         if let Some(handler) = on_change_for_drag.as_ref() {
@@ -434,7 +431,7 @@ impl RenderOnce for Slider {
                     .cursor_pointer()
                     .on_click(move |_: &ClickEvent, window, cx| {
                         if !is_controlled {
-                            control::set_text_state(&id, "value", target.to_string());
+                            control::set_f32_state(&id, "value", target);
                             window.refresh();
                         }
                         if let Some(handler) = on_change.as_ref() {
@@ -494,12 +491,17 @@ impl RenderOnce for Slider {
                     let width = f32::from(bounds.size.width).max(1.0);
                     let local_x = (f32::from(event.event.position.x) - f32::from(bounds.origin.x))
                         .clamp(0.0, width);
-                    let ratio = local_x / width;
-                    let raw = drag.min + ((drag.max - drag.min).max(0.001) * ratio);
-                    let next = Self::normalize_with(drag.min, drag.max, drag.step, raw);
+                    let raw = slider_axis::value_from_local(
+                        SliderAxis::Horizontal,
+                        local_x,
+                        width,
+                        drag.min,
+                        drag.max,
+                    );
+                    let next = slider_axis::normalize(drag.min, drag.max, drag.step, raw);
 
                     if !drag.controlled {
-                        control::set_text_state(&slider_id, "value", next.to_string());
+                        control::set_f32_state(&slider_id, "value", next);
                         window.refresh();
                     }
                     if let Some(handler) = on_change_for_drag.as_ref() {

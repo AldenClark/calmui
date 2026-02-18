@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, Corner, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
-    StatefulInteractiveElement, Styled, Window, anchored, canvas, deferred, div, point, px,
+    AnyElement, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
+    StatefulInteractiveElement, Styled, Window, canvas, div, px,
 };
 
 use crate::contracts::MotionAware;
@@ -11,6 +11,7 @@ use crate::motion::MotionConfig;
 
 use super::Stack;
 use super::control;
+use super::popup::{PopupPlacement, PopupState, anchored_host};
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
 
@@ -18,11 +19,8 @@ type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 type OpenChangeHandler = std::rc::Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
 
 fn panel_width_px(id: &str, fallback: f32) -> f32 {
-    control::text_state(id, "trigger-width-px", None, fallback.to_string())
-        .parse::<f32>()
-        .ok()
-        .filter(|width| *width >= 1.0)
-        .unwrap_or(fallback)
+    let width = control::f32_state(id, "trigger-width-px", None, fallback);
+    if width >= 1.0 { width } else { fallback }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -134,7 +132,7 @@ impl HoverCard {
     }
 
     fn resolved_opened(&self) -> bool {
-        let base = control::bool_state(&self.id, "opened", self.opened, self.default_opened);
+        let base = PopupState::resolve(&self.id, self.opened, self.default_opened).opened;
         if self.opened.is_some() {
             base
         } else {
@@ -243,12 +241,13 @@ impl MotionAware for HoverCard {
 impl RenderOnce for HoverCard {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
+        let popup_state = PopupState::resolve(&self.id, self.opened, self.default_opened);
         let opened = if self.disabled {
             false
         } else {
             self.resolved_opened()
         };
-        let is_controlled = self.opened.is_some();
+        let is_controlled = popup_state.controlled;
         let trigger_content = self
             .trigger
             .take()
@@ -324,51 +323,20 @@ impl RenderOnce for HoverCard {
 
         if opened {
             let card = self.render_card(is_controlled, window);
-            let floating = card;
-            let anchor_corner = match self.placement {
-                HoverCardPlacement::Top => Corner::BottomLeft,
-                HoverCardPlacement::Bottom => Corner::TopLeft,
+            let placement = match self.placement {
+                HoverCardPlacement::Top => PopupPlacement::Top,
+                HoverCardPlacement::Bottom => PopupPlacement::Bottom,
             };
-            let offset = match self.placement {
-                HoverCardPlacement::Top => point(px(0.0), px(-self.offset_px)),
-                HoverCardPlacement::Bottom => point(px(0.0), px(self.offset_px)),
-            };
-
-            let anchor_host = match self.placement {
-                HoverCardPlacement::Top => div()
-                    .id(self.id.slot("anchor-host"))
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .w(px(0.0))
-                    .h(px(0.0))
-                    .child(
-                        deferred(
-                            anchored()
-                                .anchor(anchor_corner)
-                                .offset(offset)
-                                .child(floating),
-                        )
-                        .priority(26),
-                    ),
-                HoverCardPlacement::Bottom => div()
-                    .id(self.id.slot("anchor-host"))
-                    .absolute()
-                    .bottom_0()
-                    .left_0()
-                    .w(px(0.0))
-                    .h(px(0.0))
-                    .child(
-                        deferred(
-                            anchored()
-                                .anchor(anchor_corner)
-                                .offset(offset)
-                                .snap_to_window_with_margin(px(8.0))
-                                .child(floating),
-                        )
-                        .priority(26),
-                    ),
-            };
+            let anchor_host = anchored_host(
+                &self.id,
+                "anchor-host",
+                placement,
+                self.offset_px,
+                card,
+                26,
+                matches!(self.placement, HoverCardPlacement::Bottom),
+                false,
+            );
 
             trigger = trigger.child(anchor_host);
         }

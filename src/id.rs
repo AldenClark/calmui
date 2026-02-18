@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use gpui::{ElementId, SharedString};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -7,6 +9,16 @@ pub struct ComponentId {
 }
 
 impl ComponentId {
+    pub fn stable(prefix: &str) -> Self {
+        Self::new(stable_auto_id(prefix))
+    }
+
+    pub fn unique(prefix: &str) -> Self {
+        static AUTO_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
+        let next = AUTO_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+        Self::new(format!("{prefix}-{next:016x}"))
+    }
+
     pub fn new(root: impl Into<ElementId>) -> Self {
         let root = root.into();
         let key = root.to_string();
@@ -28,12 +40,22 @@ impl ComponentId {
     pub fn slot_index(&self, slot: &str, key: impl Into<String>) -> ElementId {
         (self.slot(slot.to_owned()), key.into()).into()
     }
+
+    pub fn scoped(&self, name: impl Into<String>) -> Self {
+        Self::new(self.slot(name))
+    }
+
+    pub fn scoped_index(&self, slot: &str, key: impl Into<String>) -> Self {
+        Self::new(self.slot_index(slot, key))
+    }
 }
 
 impl Default for ComponentId {
     #[track_caller]
     fn default() -> Self {
-        Self::new(stable_auto_id("component"))
+        // Keep callsite-stable default for uncontrolled-state continuity.
+        // For repeated dynamic instances, prefer explicit with_id(...) or ComponentId::unique(...).
+        Self::stable("component")
     }
 }
 

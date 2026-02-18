@@ -1,6 +1,6 @@
 use gpui::{
-    AnyElement, Corner, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
-    StatefulInteractiveElement, Styled, Window, anchored, deferred, div, point, px,
+    AnyElement, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
+    StatefulInteractiveElement, Styled, Window, div, px,
 };
 
 use crate::contracts::MotionAware;
@@ -8,6 +8,7 @@ use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 
 use super::control;
+use super::popup::{PopupPlacement, PopupState, anchored_host};
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
 
@@ -100,10 +101,6 @@ impl Tooltip {
         self
     }
 
-    fn resolved_opened(&self) -> bool {
-        control::bool_state(&self.id, "opened", self.opened, self.default_opened)
-    }
-
     fn render_bubble(&self, window: &gpui::Window) -> AnyElement {
         let tokens = &self.theme.components.tooltip;
         div()
@@ -139,12 +136,9 @@ impl MotionAware for Tooltip {
 impl RenderOnce for Tooltip {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let opened = if self.disabled {
-            false
-        } else {
-            self.resolved_opened()
-        };
-        let is_controlled = self.opened.is_some();
+        let popup_state = PopupState::resolve(&self.id, self.opened, self.default_opened);
+        let opened = !self.disabled && popup_state.opened;
+        let is_controlled = popup_state.controlled;
         let trigger_content = self
             .trigger
             .take()
@@ -202,51 +196,20 @@ impl RenderOnce for Tooltip {
 
         if opened {
             let bubble = self.render_bubble(window);
-            let floating = bubble;
-            let anchor_corner = match self.placement {
-                TooltipPlacement::Top => Corner::BottomLeft,
-                TooltipPlacement::Bottom => Corner::TopLeft,
+            let placement = match self.placement {
+                TooltipPlacement::Top => PopupPlacement::Top,
+                TooltipPlacement::Bottom => PopupPlacement::Bottom,
             };
-            let offset = match self.placement {
-                TooltipPlacement::Top => point(px(0.0), px(-self.offset_px)),
-                TooltipPlacement::Bottom => point(px(0.0), px(self.offset_px)),
-            };
-
-            let anchor_host = match self.placement {
-                TooltipPlacement::Top => div()
-                    .id(self.id.slot("anchor-host"))
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .w(px(0.0))
-                    .h(px(0.0))
-                    .child(
-                        deferred(
-                            anchored()
-                                .anchor(anchor_corner)
-                                .offset(offset)
-                                .child(floating),
-                        )
-                        .priority(24),
-                    ),
-                TooltipPlacement::Bottom => div()
-                    .id(self.id.slot("anchor-host"))
-                    .absolute()
-                    .bottom_0()
-                    .left_0()
-                    .w(px(0.0))
-                    .h(px(0.0))
-                    .child(
-                        deferred(
-                            anchored()
-                                .anchor(anchor_corner)
-                                .offset(offset)
-                                .snap_to_window_with_margin(px(8.0))
-                                .child(floating),
-                        )
-                        .priority(24),
-                    ),
-            };
+            let anchor_host = anchored_host(
+                &self.id,
+                "anchor-host",
+                placement,
+                self.offset_px,
+                bubble,
+                24,
+                matches!(self.placement, TooltipPlacement::Bottom),
+                false,
+            );
 
             trigger = trigger.child(anchor_host);
         }

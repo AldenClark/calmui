@@ -133,18 +133,11 @@ impl Stepper {
 
     fn resolved_active(&self) -> usize {
         let max_index = self.steps.len().saturating_sub(1);
-        let controlled = self.active_controlled.then_some(
-            self.active
-                .unwrap_or(self.default_active)
-                .min(max_index)
-                .to_string(),
-        );
-        let default = self.default_active.min(max_index).to_string();
-        control::text_state(&self.id, "active", controlled, default)
-            .parse::<usize>()
-            .ok()
-            .unwrap_or(0)
-            .min(max_index)
+        let controlled = self
+            .active_controlled
+            .then_some(self.active.unwrap_or(self.default_active).min(max_index));
+        let default = self.default_active.min(max_index);
+        control::usize_state(&self.id, "active", controlled, default).min(max_index)
     }
 
     fn indicator_size_px(&self) -> f32 {

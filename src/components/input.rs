@@ -104,12 +104,10 @@ impl TextInputImeHandler {
     }
 
     fn marked_range_chars(&self, len: usize) -> Option<(usize, usize)> {
-        let start = control::optional_text_state(&self.id, "marked-start", None, None)
-            .and_then(|value| value.parse::<usize>().ok())
+        let start = control::optional_usize_state(&self.id, "marked-start", None, None)
             .unwrap_or(usize::MAX);
-        let end = control::optional_text_state(&self.id, "marked-end", None, None)
-            .and_then(|value| value.parse::<usize>().ok())
-            .unwrap_or(usize::MAX);
+        let end =
+            control::optional_usize_state(&self.id, "marked-end", None, None).unwrap_or(usize::MAX);
         if start == usize::MAX || end == usize::MAX {
             return None;
         }
@@ -120,11 +118,11 @@ impl TextInputImeHandler {
 
     fn set_marked_range_chars(&self, marked: Option<(usize, usize)>) {
         if let Some((start, end)) = marked {
-            control::set_optional_text_state(&self.id, "marked-start", Some(start.to_string()));
-            control::set_optional_text_state(&self.id, "marked-end", Some(end.to_string()));
+            control::set_optional_usize_state(&self.id, "marked-start", Some(start));
+            control::set_optional_usize_state(&self.id, "marked-end", Some(end));
         } else {
-            control::set_optional_text_state(&self.id, "marked-start", None);
-            control::set_optional_text_state(&self.id, "marked-end", None);
+            control::set_optional_usize_state(&self.id, "marked-start", None);
+            control::set_optional_usize_state(&self.id, "marked-end", None);
         }
     }
 
@@ -144,11 +142,7 @@ impl TextInputImeHandler {
         if let Some((start, end)) = TextInput::selection_bounds_for(&self.id, len) {
             return (start, end);
         }
-        let caret = control::text_state(&self.id, "caret-index", None, len.to_string())
-            .parse::<usize>()
-            .ok()
-            .unwrap_or(len)
-            .min(len);
+        let caret = control::usize_state(&self.id, "caret-index", None, len).min(len);
         (caret, caret)
     }
 
@@ -208,13 +202,13 @@ impl TextInputImeHandler {
         if changed && !self.value_controlled {
             control::set_text_state(&self.id, "value", next.clone());
         }
-        control::set_text_state(&self.id, "caret-index", caret.to_string());
+        control::set_usize_state(&self.id, "caret-index", caret);
         if let Some((start, end)) = selection {
             TextInput::set_selection_for(&self.id, start, end);
         } else {
             TextInput::clear_selection_for(&self.id, caret);
         }
-        control::set_text_state(&self.id, "selection-anchor", caret.to_string());
+        control::set_usize_state(&self.id, "selection-anchor", caret);
         self.set_marked_range_chars(marked);
 
         if changed && let Some(handler) = self.on_change.as_ref() {
@@ -234,11 +228,7 @@ impl InputHandler for TextInputImeHandler {
     ) -> Option<UTF16Selection> {
         let value = self.current_value();
         let len = value.chars().count();
-        let caret = control::text_state(&self.id, "caret-index", None, len.to_string())
-            .parse::<usize>()
-            .ok()
-            .unwrap_or(len)
-            .min(len);
+        let caret = control::usize_state(&self.id, "caret-index", None, len).min(len);
         let range = if let Some((start, end)) = TextInput::selection_bounds_for(&self.id, len) {
             start..end
         } else {
@@ -350,10 +340,7 @@ impl InputHandler for TextInputImeHandler {
         let value = self.current_value();
         let range = Self::char_range_from_utf16(&value, range_utf16);
         let (origin_x, origin_y, _width, height) = TextInput::content_geometry(&self.id);
-        let scroll_x = control::text_state(&self.id, "scroll-x", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
+        let scroll_x = control::f32_state(&self.id, "scroll-x", None, 0.0);
         let metric_text = if self.masked {
             "*".repeat(value.chars().count())
         } else {
@@ -386,10 +373,7 @@ impl InputHandler for TextInputImeHandler {
     ) -> Option<usize> {
         let value = self.current_value();
         let (origin_x, _origin_y, _width, _height) = TextInput::content_geometry(&self.id);
-        let scroll_x = control::text_state(&self.id, "scroll-x", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
+        let scroll_x = control::f32_state(&self.id, "scroll-x", None, 0.0);
         let local_x = (f32::from(point.x) - origin_x + scroll_x).max(0.0);
         let metric_text = if self.masked {
             "*".repeat(value.chars().count())
@@ -742,16 +726,8 @@ impl TextInput {
     }
 
     fn selection_bounds_for(id: &str, len: usize) -> Option<(usize, usize)> {
-        let start = control::text_state(id, "selection-start", None, "0".to_string())
-            .parse::<usize>()
-            .ok()
-            .unwrap_or(0)
-            .min(len);
-        let end = control::text_state(id, "selection-end", None, "0".to_string())
-            .parse::<usize>()
-            .ok()
-            .unwrap_or(0)
-            .min(len);
+        let start = control::usize_state(id, "selection-start", None, 0).min(len);
+        let end = control::usize_state(id, "selection-end", None, 0).min(len);
         let (start, end) = if start <= end {
             (start, end)
         } else {
@@ -761,8 +737,8 @@ impl TextInput {
     }
 
     fn set_selection_for(id: &str, start: usize, end: usize) {
-        control::set_text_state(id, "selection-start", start.to_string());
-        control::set_text_state(id, "selection-end", end.to_string());
+        control::set_usize_state(id, "selection-start", start);
+        control::set_usize_state(id, "selection-end", end);
     }
 
     fn clear_selection_for(id: &str, caret: usize) {
@@ -771,28 +747,20 @@ impl TextInput {
 
     fn editor_state_for(id: &str, current_value: &str) -> InputState {
         let len = current_value.chars().count();
-        let caret = control::text_state(id, "caret-index", None, len.to_string())
-            .parse::<usize>()
-            .ok()
-            .unwrap_or(len)
-            .min(len);
-        let anchor = control::text_state(id, "selection-anchor", None, caret.to_string())
-            .parse::<usize>()
-            .ok()
-            .unwrap_or(caret)
-            .min(len);
+        let caret = control::usize_state(id, "caret-index", None, len).min(len);
+        let anchor = control::usize_state(id, "selection-anchor", None, caret).min(len);
         let selection = Self::selection_bounds_for(id, len);
         InputState::new(current_value.to_string(), caret, anchor, selection)
     }
 
     fn persist_editor_state(id: &str, state: &InputState) {
-        control::set_text_state(id, "caret-index", state.caret.to_string());
+        control::set_usize_state(id, "caret-index", state.caret);
         if let Some((start, end)) = state.selection {
             Self::set_selection_for(id, start, end);
         } else {
             Self::clear_selection_for(id, state.caret);
         }
-        control::set_text_state(id, "selection-anchor", state.anchor.to_string());
+        control::set_usize_state(id, "selection-anchor", state.anchor);
     }
 
     fn apply_editor_state(
@@ -855,22 +823,10 @@ impl TextInput {
     }
 
     fn content_geometry(id: &str) -> (f32, f32, f32, f32) {
-        let x = control::text_state(id, "content-origin-x", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
-        let y = control::text_state(id, "content-origin-y", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
-        let width = control::text_state(id, "content-width", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
-        let height = control::text_state(id, "content-height", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
+        let x = control::f32_state(id, "content-origin-x", None, 0.0);
+        let y = control::f32_state(id, "content-origin-y", None, 0.0);
+        let width = control::f32_state(id, "content-width", None, 0.0);
+        let height = control::f32_state(id, "content-height", None, 0.0);
         (x, y, width, height)
     }
 
@@ -882,10 +838,7 @@ impl TextInput {
         font_size: f32,
     ) -> usize {
         let (origin_x, _origin_y, _width, _height) = Self::content_geometry(id);
-        let scroll_x = control::text_state(id, "scroll-x", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
+        let scroll_x = control::f32_state(id, "scroll-x", None, 0.0);
         let local_x = (f32::from(position.x) - origin_x + scroll_x).max(0.0);
         Self::char_from_x(window, font_size, value, local_x).min(value.chars().count())
     }
@@ -901,11 +854,7 @@ impl TextInput {
         let is_focused = handle_focused || tracked_focus;
         let current_len = current_value.chars().count();
         let current_caret =
-            control::text_state(&self.id, "caret-index", None, current_len.to_string())
-                .parse::<usize>()
-                .ok()
-                .map(|value| value.min(current_len))
-                .unwrap_or(current_len);
+            control::usize_state(&self.id, "caret-index", None, current_len).min(current_len);
         let selection = Self::selection_bounds_for(&self.id, current_len);
         let font_size = self.font_size_px();
         let char_width = self.char_width_px(window);
@@ -980,16 +929,8 @@ impl TextInput {
                         font_size_for_mouse,
                     );
                     let len = current_value.chars().count();
-                    let current_caret = control::text_state(
-                        &id_for_mouse_down,
-                        "caret-index",
-                        None,
-                        len.to_string(),
-                    )
-                    .parse::<usize>()
-                    .ok()
-                    .map(|value| value.min(len))
-                    .unwrap_or(len);
+                    let current_caret =
+                        control::usize_state(&id_for_mouse_down, "caret-index", None, len).min(len);
 
                     if event.modifiers.shift {
                         let existing_selection =
@@ -1000,24 +941,16 @@ impl TextInput {
                             current_caret
                         };
                         Self::set_selection_for(&id_for_mouse_down, anchor, click_caret);
-                        control::set_text_state(
-                            &id_for_mouse_down,
-                            "selection-anchor",
-                            anchor.to_string(),
-                        );
+                        control::set_usize_state(&id_for_mouse_down, "selection-anchor", anchor);
                     } else {
                         Self::clear_selection_for(&id_for_mouse_down, click_caret);
-                        control::set_text_state(
+                        control::set_usize_state(
                             &id_for_mouse_down,
                             "selection-anchor",
-                            click_caret.to_string(),
+                            click_caret,
                         );
                     }
-                    control::set_text_state(
-                        &id_for_mouse_down,
-                        "caret-index",
-                        click_caret.to_string(),
-                    );
+                    control::set_usize_state(&id_for_mouse_down, "caret-index", click_caret);
                     control::set_bool_state(&id_for_mouse_down, "mouse-selecting", true);
                     window.refresh();
                 })
@@ -1039,16 +972,9 @@ impl TextInput {
                         window,
                         font_size_for_mouse,
                     );
-                    let anchor = control::text_state(
-                        &id_for_mouse_move,
-                        "selection-anchor",
-                        None,
-                        caret.to_string(),
-                    )
-                    .parse::<usize>()
-                    .ok()
-                    .unwrap_or(caret);
-                    control::set_text_state(&id_for_mouse_move, "caret-index", caret.to_string());
+                    let anchor =
+                        control::usize_state(&id_for_mouse_move, "selection-anchor", None, caret);
+                    control::set_usize_state(&id_for_mouse_move, "caret-index", caret);
                     Self::set_selection_for(&id_for_mouse_move, anchor, caret);
                     window.refresh();
                 })
@@ -1496,11 +1422,8 @@ impl TextInput {
         let (_, _, content_width, _) = Self::content_geometry(&self.id);
         let value_width = Self::x_for_char(window, font_size, &value, value.chars().count());
         let max_scroll = (value_width - content_width.max(0.0)).max(0.0);
-        let mut scroll_x = control::text_state(&self.id, "scroll-x", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0)
-            .clamp(0.0, max_scroll);
+        let mut scroll_x =
+            control::f32_state(&self.id, "scroll-x", None, 0.0).clamp(0.0, max_scroll);
         if content_width <= 0.0 {
             scroll_x = 0.0;
         } else if !self.disabled && !self.read_only && is_focused {
@@ -1516,7 +1439,7 @@ impl TextInput {
         } else if !is_focused {
             scroll_x = 0.0;
         }
-        control::set_text_state(&self.id, "scroll-x", format!("{scroll_x:.3}"));
+        control::set_f32_state(&self.id, "scroll-x", scroll_x);
         let mut value_container = div()
             .id(self.id.slot("content"))
             .relative()
@@ -2079,11 +2002,7 @@ impl PinInput {
     ) -> InputState {
         let current_value = Self::current_value_for(id, rendered_value, value_controlled);
         let len = current_value.chars().count().min(length);
-        let caret = control::text_state(id, "caret-index", None, len.to_string())
-            .parse::<usize>()
-            .ok()
-            .unwrap_or(len)
-            .min(len);
+        let caret = control::usize_state(id, "caret-index", None, len).min(len);
         InputState::new(current_value, caret, caret, None)
     }
 
@@ -2108,7 +2027,7 @@ impl PinInput {
         if changed && !value_controlled {
             control::set_text_state(id, "value", next_state.value.clone());
         }
-        control::set_text_state(id, "caret-index", next_state.caret.to_string());
+        control::set_usize_state(id, "caret-index", next_state.caret);
         window.refresh();
 
         if changed && let Some(handler) = on_change {
@@ -2158,11 +2077,7 @@ impl RenderOnce for PinInput {
         let value_chars = normalized_value.chars().collect::<Vec<_>>();
         let current_len = value_chars.len();
         let current_caret =
-            control::text_state(&self.id, "caret-index", None, current_len.to_string())
-                .parse::<usize>()
-                .ok()
-                .unwrap_or(current_len)
-                .min(current_len);
+            control::usize_state(&self.id, "caret-index", None, current_len).min(current_len);
         let active_index = current_caret.min(self.length.saturating_sub(1));
         let tracked_focus = control::focused_state(&self.id, None, false);
         let is_focused = self

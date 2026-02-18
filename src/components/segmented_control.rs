@@ -221,8 +221,7 @@ impl RenderOnce for SegmentedControl {
                 .iter()
                 .position(|item| item.value.as_ref() == value.as_ref())
         });
-        let previous_index = control::optional_text_state(&self.id, "prev-index", None, None)
-            .and_then(|value| value.parse::<usize>().ok());
+        let previous_index = control::optional_usize_state(&self.id, "prev-index", None, None);
         let divider_height = match size {
             Size::Xs => 12.0,
             Size::Sm => 14.0,
@@ -330,7 +329,7 @@ impl RenderOnce for SegmentedControl {
                     let on_change = on_change.clone();
                     let value = item.value.clone();
                     let id = control_id.clone();
-                    let previous = selected_index.map(|value| value.to_string());
+                    let previous = selected_index;
                     let hover_bg = resolve_hsla(&theme, &tokens.item_hover_bg);
                     let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
                     let focus_bg = if is_active {
@@ -339,7 +338,7 @@ impl RenderOnce for SegmentedControl {
                         hover_bg
                     };
                     let click_handler: PressHandler = Rc::new(move |_: &ClickEvent, window, cx| {
-                        control::set_optional_text_state(&id, "prev-index", previous.clone());
+                        control::set_optional_usize_state(&id, "prev-index", previous);
                         if !controlled {
                             control::set_optional_text_state(&id, "value", Some(value.to_string()));
                             window.refresh();

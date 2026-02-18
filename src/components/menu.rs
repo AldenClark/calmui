@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Corner, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, Styled, Window, anchored, canvas, deferred, div, point, px,
+    AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    SharedString, Styled, Window, canvas, div, px,
 };
 
 use crate::contracts::MotionAware;
@@ -12,6 +12,7 @@ use crate::motion::MotionConfig;
 use super::Stack;
 use super::control;
 use super::icon::Icon;
+use super::popup::{PopupPlacement, PopupState, anchored_host};
 use super::transition::TransitionExt;
 use super::utils::{
     InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles,
@@ -151,17 +152,13 @@ impl Menu {
         self
     }
 
-    fn resolved_opened(&self) -> bool {
-        control::bool_state(&self.id, "opened", self.opened, self.default_opened)
-    }
-
     fn dropdown_width_px(id: &str) -> f32 {
-        control::text_state(id, "dropdown-width-px", None, String::new())
-            .parse::<f32>()
-            .ok()
-            .filter(|width| *width >= 1.0)
-            .map(|width| width.max(180.0))
-            .unwrap_or(220.0)
+        let width = control::f32_state(id, "dropdown-width-px", None, 0.0);
+        if width >= 1.0 {
+            width.max(180.0)
+        } else {
+            220.0
+        }
     }
 
     fn render_dropdown(&self, is_controlled: bool, window: &gpui::Window) -> AnyElement {
@@ -302,12 +299,13 @@ impl MotionAware for Menu {
 impl RenderOnce for Menu {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
+        let popup_state = PopupState::resolve(&self.id, self.opened, self.default_opened);
         let opened = if self.disabled {
             false
         } else {
-            self.resolved_opened()
+            popup_state.opened
         };
-        let is_controlled = self.opened.is_some();
+        let is_controlled = popup_state.controlled;
 
         let mut trigger = div()
             .id(self.id.slot("trigger"))
@@ -376,23 +374,16 @@ impl RenderOnce for Menu {
 
         if opened {
             let dropdown = self.render_dropdown(is_controlled, window);
-            let anchor_host = div()
-                .id(self.id.slot("anchor-host"))
-                .absolute()
-                .bottom_0()
-                .left_0()
-                .w(px(0.0))
-                .h(px(0.0))
-                .child(
-                    deferred(
-                        anchored()
-                            .anchor(Corner::TopLeft)
-                            .offset(point(px(0.0), px(self.offset_px)))
-                            .snap_to_window_with_margin(px(8.0))
-                            .child(dropdown),
-                    )
-                    .priority(22),
-                );
+            let anchor_host = anchored_host(
+                &self.id,
+                "anchor-host",
+                PopupPlacement::Bottom,
+                self.offset_px,
+                dropdown,
+                22,
+                true,
+                false,
+            );
             trigger = trigger.child(anchor_host);
         }
 

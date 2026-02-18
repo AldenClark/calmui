@@ -35,8 +35,10 @@ pub struct Overlay {
     visible: bool,
     absolute: bool,
     cover_parent: bool,
-    _coverage: OverlayCoverage,
-    _material_mode: OverlayMaterialMode,
+    coverage: OverlayCoverage,
+    material_mode: OverlayMaterialMode,
+    restore_window_background: bool,
+    frosted: bool,
     color: Option<Hsla>,
     opacity: f32,
     blur_strength: f32,
@@ -56,8 +58,10 @@ impl Overlay {
             visible: true,
             absolute: true,
             cover_parent: true,
-            _coverage: OverlayCoverage::Parent,
-            _material_mode: OverlayMaterialMode::Auto,
+            coverage: OverlayCoverage::Parent,
+            material_mode: OverlayMaterialMode::Auto,
+            restore_window_background: false,
+            frosted: true,
             color: None,
             opacity: 1.0,
             blur_strength: 1.45,
@@ -86,16 +90,17 @@ impl Overlay {
     }
 
     pub fn coverage(mut self, value: OverlayCoverage) -> Self {
-        self._coverage = value;
+        self.coverage = value;
         self
     }
 
     pub fn material_mode(mut self, value: OverlayMaterialMode) -> Self {
-        self._material_mode = value;
+        self.material_mode = value;
         self
     }
 
-    pub fn restore_window_background(self, _value: bool) -> Self {
+    pub fn restore_window_background(mut self, value: bool) -> Self {
+        self.restore_window_background = value;
         self
     }
 
@@ -109,7 +114,8 @@ impl Overlay {
         self
     }
 
-    pub fn frosted(self, _value: bool) -> Self {
+    pub fn frosted(mut self, value: bool) -> Self {
+        self.frosted = value;
         self
     }
 
@@ -163,6 +169,20 @@ impl RenderOnce for Overlay {
             .color
             .unwrap_or_else(|| self.theme.components.overlay.bg.clone());
         let raw_bg = resolve_hsla(&self.theme, &token);
+        let resolved_material = match self.material_mode {
+            OverlayMaterialMode::Auto | OverlayMaterialMode::SystemPreferred => {
+                if self.frosted {
+                    OverlayMaterialMode::RendererBlur
+                } else {
+                    OverlayMaterialMode::TintOnly
+                }
+            }
+            value => value,
+        };
+        let use_backdrop_blur = matches!(
+            resolved_material,
+            OverlayMaterialMode::RendererBlur | OverlayMaterialMode::SystemPreferred
+        ) && self.frosted;
 
         let opacity = self.opacity.clamp(0.0, 1.0);
         let blur_strength = self.blur_strength.clamp(0.0, 2.0);
@@ -175,7 +195,11 @@ impl RenderOnce for Overlay {
         // Keep overlay component lightweight: it only tunes blur/tint parameters for renderer pass.
         let base_scrim_alpha =
             ((0.07 + (0.15 * readability)) * (0.34 + (0.66 * opacity))).clamp(0.06, 0.24);
-        let fallback_scrim = neutral_target.opacity(base_scrim_alpha);
+        let fallback_scrim = if self.restore_window_background {
+            raw_bg.opacity(base_scrim_alpha)
+        } else {
+            neutral_target.opacity(base_scrim_alpha)
+        };
 
         let blur_radius =
             px((22.0 + (70.0 * blur_strength) + (16.0 * readability)).clamp(22.0, 128.0));
@@ -186,15 +210,19 @@ impl RenderOnce for Overlay {
 
         let veil_alpha =
             ((0.10 + (0.18 * readability)) * (0.36 + (0.64 * opacity))).clamp(0.08, 0.30);
-        let neutral_veil = neutral_target.opacity(veil_alpha);
+        let neutral_veil = if use_backdrop_blur {
+            neutral_target.opacity(veil_alpha)
+        } else {
+            raw_bg.opacity((veil_alpha * 0.8).clamp(0.04, 0.26))
+        };
 
         let mut root = div().id(self.id.clone()).relative().bg(fallback_scrim);
 
-        if self.cover_parent {
+        if self.cover_parent || matches!(self.coverage, OverlayCoverage::Window) {
             root = root.size_full();
         }
 
-        if self.absolute {
+        if self.absolute || matches!(self.coverage, OverlayCoverage::Window) {
             root = root.absolute().top_0().left_0();
         }
 
@@ -204,23 +232,25 @@ impl RenderOnce for Overlay {
             });
         }
 
-        root = root.child(
-            canvas(
-                move |bounds, _, _| bounds,
-                move |bounds, _, window, _cx| {
-                    window.paint_backdrop(backdrop(
-                        bounds,
-                        gpui::Corners::default(),
-                        blur_radius,
-                        backdrop_tint,
-                    ));
-                },
-            )
-            .absolute()
-            .top_0()
-            .left_0()
-            .size_full(),
-        );
+        if use_backdrop_blur {
+            root = root.child(
+                canvas(
+                    move |bounds, _, _| bounds,
+                    move |bounds, _, window, _cx| {
+                        window.paint_backdrop(backdrop(
+                            bounds,
+                            gpui::Corners::default(),
+                            blur_radius,
+                            backdrop_tint,
+                        ));
+                    },
+                )
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full(),
+            );
+        }
         root = root.child(
             div()
                 .absolute()

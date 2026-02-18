@@ -245,6 +245,30 @@ impl Tree {
             Variant::Ghost => base.alpha(0.64),
         }
     }
+
+    fn collect_visible_nodes(
+        nodes: &[TreeNode],
+        expanded: &BTreeSet<String>,
+        parent: Option<&str>,
+        output: &mut Vec<TreeVisibleNode>,
+    ) {
+        for node in nodes {
+            let value = node.value.to_string();
+            let is_expanded = expanded.contains(value.as_str());
+            let first_child = node.children.first().map(|child| child.value.to_string());
+            output.push(TreeVisibleNode {
+                value: value.clone(),
+                parent: parent.map(ToOwned::to_owned),
+                disabled: node.disabled,
+                has_children: !node.children.is_empty(),
+                expanded: is_expanded,
+                first_child,
+            });
+            if is_expanded && !node.children.is_empty() {
+                Self::collect_visible_nodes(&node.children, expanded, Some(value.as_str()), output);
+            }
+        }
+    }
 }
 
 impl Tree {
@@ -282,6 +306,16 @@ impl MotionAware for Tree {
 pub enum TreeTogglePosition {
     Left,
     Right,
+}
+
+#[derive(Clone, Debug)]
+struct TreeVisibleNode {
+    value: String,
+    parent: Option<String>,
+    disabled: bool,
+    has_children: bool,
+    expanded: bool,
+    first_child: Option<String>,
 }
 
 #[derive(Clone)]
@@ -506,17 +540,21 @@ impl TreeRenderCtx {
 impl RenderOnce for Tree {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
+        let selected = self.resolved_value();
         let expanded_values = self
             .resolved_expanded()
             .into_iter()
             .map(|value| value.to_string())
             .collect::<Vec<_>>();
+        let expanded_set = expanded_values.iter().cloned().collect::<BTreeSet<_>>();
+        let mut visible_nodes = Vec::new();
+        Self::collect_visible_nodes(&self.nodes, &expanded_set, None, &mut visible_nodes);
         let ctx = TreeRenderCtx {
             tree_id: self.id.clone(),
             theme: self.theme.clone(),
             tokens: self.theme.components.tree.clone(),
-            selected: self.resolved_value(),
-            expanded: expanded_values.iter().cloned().collect(),
+            selected: selected.clone(),
+            expanded: expanded_set,
             expanded_values,
             selected_controlled: self.value_controlled,
             expanded_controlled: self.expanded_controlled,
@@ -529,7 +567,183 @@ impl RenderOnce for Tree {
             on_expanded_change: self.on_expanded_change.clone(),
         };
 
-        let mut root = Stack::vertical().id(self.id.clone()).w_full().gap_0p5();
+        let tree_id = self.id.clone();
+        let selected_snapshot = selected.as_ref().map(|value| value.to_string());
+        let expanded_snapshot = ctx.expanded_values.clone();
+        let visible_snapshot = visible_nodes.clone();
+        let selected_controlled = self.value_controlled;
+        let expanded_controlled = self.expanded_controlled;
+        let on_select = self.on_select.clone();
+        let on_expanded_change = self.on_expanded_change.clone();
+
+        let mut root = Stack::vertical()
+            .id(self.id.clone())
+            .w_full()
+            .gap_0p5()
+            .focusable()
+            .on_key_down(move |event, window, cx| {
+                let key = event.keystroke.key.as_str();
+                if visible_snapshot.is_empty() {
+                    return;
+                }
+
+                let current_selected = control::optional_text_state(
+                    &tree_id,
+                    "value",
+                    selected_controlled.then_some(selected_snapshot.clone()),
+                    selected_snapshot.clone(),
+                );
+                let enabled_values = visible_snapshot
+                    .iter()
+                    .filter(|node| !node.disabled)
+                    .map(|node| node.value.as_str())
+                    .collect::<Vec<_>>();
+                if enabled_values.is_empty() {
+                    return;
+                }
+
+                let current_index = current_selected.as_ref().and_then(|selected| {
+                    enabled_values
+                        .iter()
+                        .position(|value| *value == selected.as_str())
+                });
+                let mut next_selected = None::<String>;
+                let mut next_expanded = None::<Vec<String>>;
+
+                match key {
+                    "up" => {
+                        if let Some(index) = current_index {
+                            if index > 0 {
+                                next_selected = Some(enabled_values[index - 1].to_string());
+                            } else {
+                                next_selected = Some(enabled_values[0].to_string());
+                            }
+                        } else {
+                            next_selected = Some(enabled_values[0].to_string());
+                        }
+                    }
+                    "down" => {
+                        if let Some(index) = current_index {
+                            let next_index =
+                                (index + 1).min(enabled_values.len().saturating_sub(1));
+                            next_selected = Some(enabled_values[next_index].to_string());
+                        } else {
+                            next_selected = Some(enabled_values[0].to_string());
+                        }
+                    }
+                    "home" => {
+                        next_selected = Some(enabled_values[0].to_string());
+                    }
+                    "end" => {
+                        if let Some(last) = enabled_values.last() {
+                            next_selected = Some((*last).to_string());
+                        }
+                    }
+                    "right" => {
+                        if let Some(selected_value) = current_selected.as_ref()
+                            && let Some(node) = visible_snapshot
+                                .iter()
+                                .find(|node| node.value == *selected_value)
+                        {
+                            if node.has_children && !node.expanded {
+                                let current = if expanded_controlled {
+                                    expanded_snapshot.clone()
+                                } else {
+                                    control::list_state(
+                                        &tree_id,
+                                        "expanded",
+                                        None,
+                                        expanded_snapshot.clone(),
+                                    )
+                                };
+                                let mut set = current.into_iter().collect::<BTreeSet<_>>();
+                                set.insert(node.value.clone());
+                                next_expanded = Some(set.into_iter().collect());
+                            } else if node.has_children
+                                && node.expanded
+                                && let Some(first_child) = node.first_child.as_ref()
+                            {
+                                next_selected = Some(first_child.clone());
+                            }
+                        }
+                    }
+                    "left" => {
+                        if let Some(selected_value) = current_selected.as_ref()
+                            && let Some(node) = visible_snapshot
+                                .iter()
+                                .find(|node| node.value == *selected_value)
+                        {
+                            if node.has_children && node.expanded {
+                                let current = if expanded_controlled {
+                                    expanded_snapshot.clone()
+                                } else {
+                                    control::list_state(
+                                        &tree_id,
+                                        "expanded",
+                                        None,
+                                        expanded_snapshot.clone(),
+                                    )
+                                };
+                                let mut set = current.into_iter().collect::<BTreeSet<_>>();
+                                set.remove(node.value.as_str());
+                                next_expanded = Some(set.into_iter().collect());
+                            } else if let Some(parent) = node.parent.as_ref() {
+                                next_selected = Some(parent.clone());
+                            }
+                        }
+                    }
+                    "enter" | "space" => {
+                        if current_selected.is_none() {
+                            next_selected = Some(enabled_values[0].to_string());
+                        } else if key == "space"
+                            && let Some(selected_value) = current_selected.as_ref()
+                            && let Some(node) = visible_snapshot
+                                .iter()
+                                .find(|node| node.value == *selected_value)
+                            && node.has_children
+                        {
+                            let current = if expanded_controlled {
+                                expanded_snapshot.clone()
+                            } else {
+                                control::list_state(
+                                    &tree_id,
+                                    "expanded",
+                                    None,
+                                    expanded_snapshot.clone(),
+                                )
+                            };
+                            let next = TreeRenderCtx::toggled_values(current, node.value.as_str());
+                            next_expanded = Some(next);
+                        }
+                    }
+                    _ => {}
+                }
+
+                if let Some(next) = next_selected {
+                    if !selected_controlled {
+                        control::set_optional_text_state(&tree_id, "value", Some(next.clone()));
+                        window.refresh();
+                    }
+                    if let Some(handler) = on_select.as_ref() {
+                        (handler)(Some(SharedString::from(next)), window, cx);
+                    }
+                }
+
+                if let Some(next) = next_expanded {
+                    if !expanded_controlled {
+                        control::set_list_state(&tree_id, "expanded", next.clone());
+                        window.refresh();
+                    }
+                    if let Some(handler) = on_expanded_change.as_ref() {
+                        (handler)(
+                            next.into_iter().map(SharedString::from).collect(),
+                            window,
+                            cx,
+                        );
+                    }
+                }
+            });
+
         for (index, node) in self.nodes.into_iter().enumerate() {
             root = root.child(ctx.render_node(window, node, 0, index.to_string()));
         }

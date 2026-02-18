@@ -108,18 +108,11 @@ impl Pagination {
 
     fn resolved_page(&self) -> usize {
         let total = self.total.max(1);
-        let controlled = self.value_controlled.then_some(
-            self.value
-                .unwrap_or(self.default_value)
-                .clamp(1, total)
-                .to_string(),
-        );
-        let default = self.default_value.clamp(1, total).to_string();
-        control::text_state(&self.id, "page", controlled, default)
-            .parse::<usize>()
-            .ok()
-            .unwrap_or(1)
-            .clamp(1, total)
+        let controlled = self
+            .value_controlled
+            .then_some(self.value.unwrap_or(self.default_value).clamp(1, total));
+        let default = self.default_value.clamp(1, total);
+        control::usize_state(&self.id, "page", controlled, default).clamp(1, total)
     }
 
     fn apply_item_size<T: Styled>(size: Size, node: T) -> T {

@@ -12,6 +12,7 @@ use crate::style::{Radius, Size, Variant};
 
 use super::Stack;
 use super::control;
+use super::toggle::{ToggleConfig, wire_toggle_handlers};
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
 
@@ -237,83 +238,17 @@ impl RenderOnce for Switch {
 
         if self.disabled {
             row = row.cursor_default().opacity(0.55);
-        } else if let Some(handler) = self.on_change.clone() {
-            let handler_for_click = handler.clone();
-            let handler_for_key = handler.clone();
-            let id = self.id.clone();
-            let id_for_key = self.id.clone();
-            let id_for_blur = self.id.clone();
-            row = row
-                .on_click(move |_, window, cx| {
-                    control::set_focused_state(&id, true);
-                    window.refresh();
-                    let next = !checked;
-                    if !is_controlled {
-                        control::set_bool_state(&id, "checked", next);
-                        window.refresh();
-                    }
-                    (handler_for_click)(next, window, cx);
-                })
-                .on_key_down(move |event, window, cx| {
-                    let key = event.keystroke.key.as_str();
-                    if control::is_activation_key(key) {
-                        control::set_focused_state(&id_for_key, true);
-                        window.refresh();
-                        let next = !checked;
-                        if !is_controlled {
-                            control::set_bool_state(&id_for_key, "checked", next);
-                            window.refresh();
-                        }
-                        (handler_for_key)(next, window, cx);
-                    }
-                })
-                .on_mouse_down_out(move |_, window, _cx| {
-                    control::set_focused_state(&id_for_blur, false);
-                    window.refresh();
-                });
-        } else if !is_controlled {
-            let id = self.id.clone();
-            let id_for_key = self.id.clone();
-            let id_for_blur = self.id.clone();
-            row = row
-                .on_click(move |_, window, _cx| {
-                    control::set_focused_state(&id, true);
-                    window.refresh();
-                    control::set_bool_state(&id, "checked", !checked);
-                    window.refresh();
-                })
-                .on_key_down(move |event, window, _cx| {
-                    let key = event.keystroke.key.as_str();
-                    if control::is_activation_key(key) {
-                        control::set_focused_state(&id_for_key, true);
-                        control::set_bool_state(&id_for_key, "checked", !checked);
-                        window.refresh();
-                    }
-                })
-                .on_mouse_down_out(move |_, window, _cx| {
-                    control::set_focused_state(&id_for_blur, false);
-                    window.refresh();
-                });
         } else {
-            let id = self.id.clone();
-            let id_for_key = self.id.clone();
-            let id_for_blur = self.id.clone();
-            row = row
-                .on_click(move |_, window, _cx| {
-                    control::set_focused_state(&id, true);
-                    window.refresh();
-                })
-                .on_key_down(move |event, window, _cx| {
-                    let key = event.keystroke.key.as_str();
-                    if control::is_activation_key(key) {
-                        control::set_focused_state(&id_for_key, true);
-                        window.refresh();
-                    }
-                })
-                .on_mouse_down_out(move |_, window, _cx| {
-                    control::set_focused_state(&id_for_blur, false);
-                    window.refresh();
-                });
+            row = wire_toggle_handlers(
+                row,
+                ToggleConfig {
+                    id: self.id.clone(),
+                    checked,
+                    controlled: is_controlled,
+                    allow_uncheck: true,
+                    on_change: self.on_change.clone(),
+                },
+            );
         }
 
         row.with_enter_transition(self.id.slot("enter"), self.motion)

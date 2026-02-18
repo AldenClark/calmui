@@ -107,19 +107,11 @@ impl Rating {
 
     fn resolved_value(&self) -> f32 {
         let max = self.max as f32;
-        let controlled = self.value_controlled.then_some(
-            self.value
-                .unwrap_or(self.default_value)
-                .clamp(0.0, max)
-                .to_string(),
-        );
-        let default = self.default_value.clamp(0.0, max).to_string();
-
-        control::text_state(&self.id, "value", controlled, default)
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0)
-            .clamp(0.0, max)
+        let controlled = self
+            .value_controlled
+            .then_some(self.value.unwrap_or(self.default_value).clamp(0.0, max));
+        let default = self.default_value.clamp(0.0, max);
+        control::f32_state(&self.id, "value", controlled, default).clamp(0.0, max)
     }
 
     fn icon_size_px(&self) -> f32 {

@@ -103,12 +103,10 @@ impl TextareaImeHandler {
     }
 
     fn marked_range_chars(&self, len: usize) -> Option<(usize, usize)> {
-        let start = control::optional_text_state(&self.id, "marked-start", None, None)
-            .and_then(|value| value.parse::<usize>().ok())
+        let start = control::optional_usize_state(&self.id, "marked-start", None, None)
             .unwrap_or(usize::MAX);
-        let end = control::optional_text_state(&self.id, "marked-end", None, None)
-            .and_then(|value| value.parse::<usize>().ok())
-            .unwrap_or(usize::MAX);
+        let end =
+            control::optional_usize_state(&self.id, "marked-end", None, None).unwrap_or(usize::MAX);
         if start == usize::MAX || end == usize::MAX {
             return None;
         }
@@ -119,11 +117,11 @@ impl TextareaImeHandler {
 
     fn set_marked_range_chars(&self, marked: Option<(usize, usize)>) {
         if let Some((start, end)) = marked {
-            control::set_optional_text_state(&self.id, "marked-start", Some(start.to_string()));
-            control::set_optional_text_state(&self.id, "marked-end", Some(end.to_string()));
+            control::set_optional_usize_state(&self.id, "marked-start", Some(start));
+            control::set_optional_usize_state(&self.id, "marked-end", Some(end));
         } else {
-            control::set_optional_text_state(&self.id, "marked-start", None);
-            control::set_optional_text_state(&self.id, "marked-end", None);
+            control::set_optional_usize_state(&self.id, "marked-start", None);
+            control::set_optional_usize_state(&self.id, "marked-end", None);
         }
     }
 
@@ -143,11 +141,7 @@ impl TextareaImeHandler {
         if let Some((start, end)) = Textarea::selection_bounds_for(&self.id, len) {
             return (start, end);
         }
-        let caret = control::text_state(&self.id, "caret-index", None, len.to_string())
-            .parse::<usize>()
-            .ok()
-            .unwrap_or(len)
-            .min(len);
+        let caret = control::usize_state(&self.id, "caret-index", None, len).min(len);
         (caret, caret)
     }
 
@@ -201,13 +195,13 @@ impl TextareaImeHandler {
         if changed && !self.value_controlled {
             control::set_text_state(&self.id, "value", next.clone());
         }
-        control::set_text_state(&self.id, "caret-index", caret.to_string());
+        control::set_usize_state(&self.id, "caret-index", caret);
         if let Some((start, end)) = selection {
             Textarea::set_selection_for(&self.id, start, end);
         } else {
             Textarea::clear_selection_for(&self.id, caret);
         }
-        control::set_text_state(&self.id, "selection-anchor", caret.to_string());
+        control::set_usize_state(&self.id, "selection-anchor", caret);
         self.set_marked_range_chars(marked);
 
         if changed && let Some(handler) = self.on_change.as_ref() {
@@ -227,11 +221,7 @@ impl InputHandler for TextareaImeHandler {
     ) -> Option<UTF16Selection> {
         let value = self.current_value();
         let len = value.chars().count();
-        let caret = control::text_state(&self.id, "caret-index", None, len.to_string())
-            .parse::<usize>()
-            .ok()
-            .unwrap_or(len)
-            .min(len);
+        let caret = control::usize_state(&self.id, "caret-index", None, len).min(len);
         let range = if let Some((start, end)) = Textarea::selection_bounds_for(&self.id, len) {
             start..end
         } else {
@@ -691,16 +681,8 @@ impl Textarea {
     }
 
     fn selection_bounds_for(id: &str, len: usize) -> Option<(usize, usize)> {
-        let start = control::text_state(id, "selection-start", None, "0".to_string())
-            .parse::<usize>()
-            .ok()
-            .unwrap_or(0)
-            .min(len);
-        let end = control::text_state(id, "selection-end", None, "0".to_string())
-            .parse::<usize>()
-            .ok()
-            .unwrap_or(0)
-            .min(len);
+        let start = control::usize_state(id, "selection-start", None, 0).min(len);
+        let end = control::usize_state(id, "selection-end", None, 0).min(len);
         let (start, end) = if start <= end {
             (start, end)
         } else {
@@ -710,8 +692,8 @@ impl Textarea {
     }
 
     fn set_selection_for(id: &str, start: usize, end: usize) {
-        control::set_text_state(id, "selection-start", start.to_string());
-        control::set_text_state(id, "selection-end", end.to_string());
+        control::set_usize_state(id, "selection-start", start);
+        control::set_usize_state(id, "selection-end", end);
     }
 
     fn clear_selection_for(id: &str, caret: usize) {
@@ -720,28 +702,20 @@ impl Textarea {
 
     fn editor_state_for(id: &str, current_value: &str) -> InputState {
         let len = current_value.chars().count();
-        let caret = control::text_state(id, "caret-index", None, len.to_string())
-            .parse::<usize>()
-            .ok()
-            .unwrap_or(len)
-            .min(len);
-        let anchor = control::text_state(id, "selection-anchor", None, caret.to_string())
-            .parse::<usize>()
-            .ok()
-            .unwrap_or(caret)
-            .min(len);
+        let caret = control::usize_state(id, "caret-index", None, len).min(len);
+        let anchor = control::usize_state(id, "selection-anchor", None, caret).min(len);
         let selection = Self::selection_bounds_for(id, len);
         InputState::new(current_value.to_string(), caret, anchor, selection)
     }
 
     fn persist_editor_state(id: &str, state: &InputState) {
-        control::set_text_state(id, "caret-index", state.caret.to_string());
+        control::set_usize_state(id, "caret-index", state.caret);
         if let Some((start, end)) = state.selection {
             Self::set_selection_for(id, start, end);
         } else {
             Self::clear_selection_for(id, state.caret);
         }
-        control::set_text_state(id, "selection-anchor", state.anchor.to_string());
+        control::set_usize_state(id, "selection-anchor", state.anchor);
     }
 
     fn apply_editor_state(
@@ -777,42 +751,18 @@ impl Textarea {
     }
 
     fn box_geometry(id: &str) -> (f32, f32, f32, f32) {
-        let x = control::text_state(id, "box-origin-x", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
-        let y = control::text_state(id, "box-origin-y", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
-        let width = control::text_state(id, "box-width", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
-        let height = control::text_state(id, "box-height", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
+        let x = control::f32_state(id, "box-origin-x", None, 0.0);
+        let y = control::f32_state(id, "box-origin-y", None, 0.0);
+        let width = control::f32_state(id, "box-width", None, 0.0);
+        let height = control::f32_state(id, "box-height", None, 0.0);
         (x, y, width, height)
     }
 
     fn content_geometry(id: &str) -> (f32, f32, f32, f32) {
-        let x = control::text_state(id, "content-origin-x", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
-        let y = control::text_state(id, "content-origin-y", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
-        let width = control::text_state(id, "content-width", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
-        let height = control::text_state(id, "content-height", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
+        let x = control::f32_state(id, "content-origin-x", None, 0.0);
+        let y = control::f32_state(id, "content-origin-y", None, 0.0);
+        let width = control::f32_state(id, "content-width", None, 0.0);
+        let height = control::f32_state(id, "content-height", None, 0.0);
         (x, y, width, height)
     }
 
@@ -832,10 +782,7 @@ impl Textarea {
         let border = f32::from(super::utils::quantized_stroke_px(window, 1.0));
         let viewport_origin_x = box_origin_x + horizontal_padding + border;
         let viewport_origin_y = box_origin_y + vertical_padding + border;
-        let scroll_y = control::text_state(id, "scroll-y", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
+        let scroll_y = control::f32_state(id, "scroll-y", None, 0.0);
         let has_content_metrics = content_width > 0.0;
         let content_width = if has_content_metrics {
             content_width.max(1.0)
@@ -986,10 +933,7 @@ impl Textarea {
     }
 
     fn content_width_for_box(id: &str, horizontal_padding: f32) -> f32 {
-        let measured_width = control::text_state(id, "content-width", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
+        let measured_width = control::f32_state(id, "content-width", None, 0.0);
         if measured_width > 0.0 {
             return measured_width.max(1.0);
         }
@@ -1195,16 +1139,9 @@ impl Textarea {
         let tracked_focus = control::focused_state(&self.id, None, false);
         let handle_focused = focus_handle.is_focused(window);
         let is_focused = handle_focused || tracked_focus;
-        let current_caret = control::text_state(
-            &self.id,
-            "caret-index",
-            None,
-            current_value.chars().count().to_string(),
-        )
-        .parse::<usize>()
-        .ok()
-        .map(|value| value.min(current_value.chars().count()))
-        .unwrap_or_else(|| current_value.chars().count());
+        let current_caret =
+            control::usize_state(&self.id, "caret-index", None, current_value.chars().count())
+                .min(current_value.chars().count());
         let selection = Self::selection_bounds_for(&self.id, current_value.chars().count());
 
         let line_height = self.line_height_px();
@@ -1219,11 +1156,8 @@ impl Textarea {
         let viewport_height = (rows as f32 * line_height).max(line_height);
         let content_height = (wrapped_lines.len() as f32 * line_height).max(viewport_height);
         let max_scroll_y = (content_height - viewport_height).max(0.0);
-        let mut scroll_y = control::text_state(&self.id, "scroll-y", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0)
-            .clamp(0.0, max_scroll_y);
+        let mut scroll_y =
+            control::f32_state(&self.id, "scroll-y", None, 0.0).clamp(0.0, max_scroll_y);
         if !should_scroll {
             scroll_y = 0.0;
         } else if is_focused {
@@ -1236,7 +1170,7 @@ impl Textarea {
             }
             scroll_y = scroll_y.clamp(0.0, max_scroll_y);
         }
-        control::set_text_state(&self.id, "scroll-y", format!("{scroll_y:.3}"));
+        control::set_f32_state(&self.id, "scroll-y", scroll_y);
         let scroll_handle = ScrollHandle::new();
         scroll_handle.set_offset(point(px(0.0), px(-scroll_y)));
         let box_height = (rows as f32 * line_height) + (vertical_padding * 2.0) + 2.0;
@@ -1284,25 +1218,25 @@ impl Textarea {
             let id_for_metrics = self.id.clone();
             canvas(
                 move |bounds, _, _cx| {
-                    control::set_text_state(
+                    control::set_f32_state(
                         &id_for_metrics,
                         "box-origin-x",
-                        f32::from(bounds.origin.x).to_string(),
+                        f32::from(bounds.origin.x),
                     );
-                    control::set_text_state(
+                    control::set_f32_state(
                         &id_for_metrics,
                         "box-origin-y",
-                        f32::from(bounds.origin.y).to_string(),
+                        f32::from(bounds.origin.y),
                     );
-                    control::set_text_state(
+                    control::set_f32_state(
                         &id_for_metrics,
                         "box-width",
-                        f32::from(bounds.size.width).to_string(),
+                        f32::from(bounds.size.width),
                     );
-                    control::set_text_state(
+                    control::set_f32_state(
                         &id_for_metrics,
                         "box-height",
-                        f32::from(bounds.size.height).to_string(),
+                        f32::from(bounds.size.height),
                     );
                 },
                 |_, _, _, _| {},
@@ -1319,13 +1253,9 @@ impl Textarea {
                     move |_bounds, _, _cx| {
                         let next_y = (-f32::from(handle_for_scroll.offset().y))
                             .clamp(0.0, max_scroll_for_monitor);
-                        let current_y =
-                            control::text_state(&id_for_scroll, "scroll-y", None, "0".to_string())
-                                .parse::<f32>()
-                                .ok()
-                                .unwrap_or(0.0);
+                        let current_y = control::f32_state(&id_for_scroll, "scroll-y", None, 0.0);
                         if (next_y - current_y).abs() > 0.5 {
-                            control::set_text_state(&id_for_scroll, "scroll-y", next_y.to_string());
+                            control::set_f32_state(&id_for_scroll, "scroll-y", next_y);
                         }
                     },
                     |_, _, _, _| {},
@@ -1373,13 +1303,9 @@ impl Textarea {
                 );
                 let len = current_value_for_click.chars().count();
                 let current_caret =
-                    control::text_state(&id_for_focus, "caret-index", None, len.to_string())
-                        .parse::<usize>()
-                        .ok()
-                        .map(|value| value.min(len))
-                        .unwrap_or(len);
+                    control::usize_state(&id_for_focus, "caret-index", None, len).min(len);
                 let existing_selection = Self::selection_bounds_for(&id_for_focus, len);
-                control::set_text_state(&id_for_focus, "caret-index", click_caret.to_string());
+                control::set_usize_state(&id_for_focus, "caret-index", click_caret);
                 if event.modifiers.shift {
                     let anchor = if let Some((start, end)) = existing_selection {
                         if current_caret == start { end } else { start }
@@ -1387,16 +1313,12 @@ impl Textarea {
                         current_caret
                     };
                     Self::set_selection_for(&id_for_focus, anchor, click_caret);
-                    control::set_text_state(&id_for_focus, "selection-anchor", anchor.to_string());
+                    control::set_usize_state(&id_for_focus, "selection-anchor", anchor);
                 } else {
                     Self::clear_selection_for(&id_for_focus, click_caret);
-                    control::set_text_state(
-                        &id_for_focus,
-                        "selection-anchor",
-                        click_caret.to_string(),
-                    );
+                    control::set_usize_state(&id_for_focus, "selection-anchor", click_caret);
                 }
-                control::set_optional_text_state(&id_for_focus, "preferred-x", None);
+                control::set_optional_f32_state(&id_for_focus, "preferred-x", None);
                 control::set_bool_state(&id_for_focus, "mouse-selecting", true);
                 window.focus(&handle_for_click, cx);
                 window.refresh();
@@ -1422,16 +1344,8 @@ impl Textarea {
                 vertical_padding_for_mouse_move,
                 horizontal_padding_for_mouse_move,
             );
-            let anchor = control::text_state(
-                &id_for_mouse_move,
-                "selection-anchor",
-                None,
-                caret.to_string(),
-            )
-            .parse::<usize>()
-            .ok()
-            .unwrap_or(caret);
-            control::set_text_state(&id_for_mouse_move, "caret-index", caret.to_string());
+            let anchor = control::usize_state(&id_for_mouse_move, "selection-anchor", None, caret);
+            control::set_usize_state(&id_for_mouse_move, "caret-index", caret);
             Self::set_selection_for(&id_for_mouse_move, anchor, caret);
             window.refresh();
         });
@@ -1458,7 +1372,7 @@ impl Textarea {
             let on_change = self.on_change.clone();
             input = input
                 .on_action(move |_: &MoveLeft, window, cx| {
-                    control::set_optional_text_state(&input_id, "preferred-x", None);
+                    control::set_optional_f32_state(&input_id, "preferred-x", None);
                     let current_value = control::text_state(
                         &input_id,
                         "value",
@@ -1482,7 +1396,7 @@ impl Textarea {
                     let rendered_value = current_value.clone();
                     let on_change = self.on_change.clone();
                     move |_: &MoveRight, window, cx| {
-                        control::set_optional_text_state(&input_id, "preferred-x", None);
+                        control::set_optional_f32_state(&input_id, "preferred-x", None);
                         let current_value = control::text_state(
                             &input_id,
                             "value",
@@ -1507,7 +1421,7 @@ impl Textarea {
                     let rendered_value = current_value.clone();
                     let on_change = self.on_change.clone();
                     move |_: &MoveHome, window, cx| {
-                        control::set_optional_text_state(&input_id, "preferred-x", None);
+                        control::set_optional_f32_state(&input_id, "preferred-x", None);
                         let current_value = control::text_state(
                             &input_id,
                             "value",
@@ -1534,7 +1448,7 @@ impl Textarea {
                     let rendered_value = current_value.clone();
                     let on_change = self.on_change.clone();
                     move |_: &MoveEnd, window, cx| {
-                        control::set_optional_text_state(&input_id, "preferred-x", None);
+                        control::set_optional_f32_state(&input_id, "preferred-x", None);
                         let current_value = control::text_state(
                             &input_id,
                             "value",
@@ -1566,7 +1480,7 @@ impl Textarea {
                     let rendered_value = current_value.clone();
                     let on_change = self.on_change.clone();
                     move |_: &SelectLeft, window, cx| {
-                        control::set_optional_text_state(&input_id, "preferred-x", None);
+                        control::set_optional_f32_state(&input_id, "preferred-x", None);
                         let current_value = control::text_state(
                             &input_id,
                             "value",
@@ -1591,7 +1505,7 @@ impl Textarea {
                     let rendered_value = current_value.clone();
                     let on_change = self.on_change.clone();
                     move |_: &SelectRight, window, cx| {
-                        control::set_optional_text_state(&input_id, "preferred-x", None);
+                        control::set_optional_f32_state(&input_id, "preferred-x", None);
                         let current_value = control::text_state(
                             &input_id,
                             "value",
@@ -1616,7 +1530,7 @@ impl Textarea {
                     let rendered_value = current_value.clone();
                     let on_change = self.on_change.clone();
                     move |_: &SelectHome, window, cx| {
-                        control::set_optional_text_state(&input_id, "preferred-x", None);
+                        control::set_optional_f32_state(&input_id, "preferred-x", None);
                         let current_value = control::text_state(
                             &input_id,
                             "value",
@@ -1643,7 +1557,7 @@ impl Textarea {
                     let rendered_value = current_value.clone();
                     let on_change = self.on_change.clone();
                     move |_: &SelectEnd, window, cx| {
-                        control::set_optional_text_state(&input_id, "preferred-x", None);
+                        control::set_optional_f32_state(&input_id, "preferred-x", None);
                         let current_value = control::text_state(
                             &input_id,
                             "value",
@@ -1675,7 +1589,7 @@ impl Textarea {
                     let rendered_value = current_value.clone();
                     let on_change = self.on_change.clone();
                     move |_: &SelectAll, window, cx| {
-                        control::set_optional_text_state(&input_id, "preferred-x", None);
+                        control::set_optional_f32_state(&input_id, "preferred-x", None);
                         let current_value = control::text_state(
                             &input_id,
                             "value",
@@ -1735,8 +1649,7 @@ impl Textarea {
                             font_size,
                         );
                         let preferred_x =
-                            control::optional_text_state(&input_id, "preferred-x", None, None)
-                                .and_then(|value| value.parse::<f32>().ok());
+                            control::optional_f32_state(&input_id, "preferred-x", None, None);
                         let (next_caret, next_preferred_x) = Self::vertical_caret_move(
                             &wrapped_lines,
                             state.caret,
@@ -1746,10 +1659,10 @@ impl Textarea {
                             font_size,
                         );
                         state.move_to(next_caret, false);
-                        control::set_optional_text_state(
+                        control::set_optional_f32_state(
                             &input_id,
                             "preferred-x",
-                            Some(format!("{next_preferred_x:.3}")),
+                            Some(next_preferred_x),
                         );
                         Self::apply_editor_state(
                             &input_id,
@@ -1784,8 +1697,7 @@ impl Textarea {
                             font_size,
                         );
                         let preferred_x =
-                            control::optional_text_state(&input_id, "preferred-x", None, None)
-                                .and_then(|value| value.parse::<f32>().ok());
+                            control::optional_f32_state(&input_id, "preferred-x", None, None);
                         let (next_caret, next_preferred_x) = Self::vertical_caret_move(
                             &wrapped_lines,
                             state.caret,
@@ -1795,10 +1707,10 @@ impl Textarea {
                             font_size,
                         );
                         state.move_to(next_caret, false);
-                        control::set_optional_text_state(
+                        control::set_optional_f32_state(
                             &input_id,
                             "preferred-x",
-                            Some(format!("{next_preferred_x:.3}")),
+                            Some(next_preferred_x),
                         );
                         Self::apply_editor_state(
                             &input_id,
@@ -1832,8 +1744,7 @@ impl Textarea {
                             font_size,
                         );
                         let preferred_x =
-                            control::optional_text_state(&input_id, "preferred-x", None, None)
-                                .and_then(|value| value.parse::<f32>().ok());
+                            control::optional_f32_state(&input_id, "preferred-x", None, None);
                         let (next_caret, next_preferred_x) = Self::vertical_caret_move(
                             &wrapped_lines,
                             state.caret,
@@ -1843,10 +1754,10 @@ impl Textarea {
                             font_size,
                         );
                         state.move_to(next_caret, true);
-                        control::set_optional_text_state(
+                        control::set_optional_f32_state(
                             &input_id,
                             "preferred-x",
-                            Some(format!("{next_preferred_x:.3}")),
+                            Some(next_preferred_x),
                         );
                         Self::apply_editor_state(
                             &input_id,
@@ -1880,8 +1791,7 @@ impl Textarea {
                             font_size,
                         );
                         let preferred_x =
-                            control::optional_text_state(&input_id, "preferred-x", None, None)
-                                .and_then(|value| value.parse::<f32>().ok());
+                            control::optional_f32_state(&input_id, "preferred-x", None, None);
                         let (next_caret, next_preferred_x) = Self::vertical_caret_move(
                             &wrapped_lines,
                             state.caret,
@@ -1891,10 +1801,10 @@ impl Textarea {
                             font_size,
                         );
                         state.move_to(next_caret, true);
-                        control::set_optional_text_state(
+                        control::set_optional_f32_state(
                             &input_id,
                             "preferred-x",
-                            Some(format!("{next_preferred_x:.3}")),
+                            Some(next_preferred_x),
                         );
                         Self::apply_editor_state(
                             &input_id,
@@ -1915,7 +1825,7 @@ impl Textarea {
                         let rendered_value = current_value.clone();
                         let on_change = self.on_change.clone();
                         move |_: &DeleteBackward, window, cx| {
-                            control::set_optional_text_state(&input_id, "preferred-x", None);
+                            control::set_optional_f32_state(&input_id, "preferred-x", None);
                             let current_value = control::text_state(
                                 &input_id,
                                 "value",
@@ -1942,7 +1852,7 @@ impl Textarea {
                         let rendered_value = current_value.clone();
                         let on_change = self.on_change.clone();
                         move |_: &DeleteForward, window, cx| {
-                            control::set_optional_text_state(&input_id, "preferred-x", None);
+                            control::set_optional_f32_state(&input_id, "preferred-x", None);
                             let current_value = control::text_state(
                                 &input_id,
                                 "value",
@@ -1969,7 +1879,7 @@ impl Textarea {
                         let rendered_value = current_value.clone();
                         let on_change = self.on_change.clone();
                         move |_: &InsertNewline, window, cx| {
-                            control::set_optional_text_state(&input_id, "preferred-x", None);
+                            control::set_optional_f32_state(&input_id, "preferred-x", None);
                             let current_value = control::text_state(
                                 &input_id,
                                 "value",
@@ -1996,7 +1906,7 @@ impl Textarea {
                         let rendered_value = current_value.clone();
                         let on_change = self.on_change.clone();
                         move |_: &CutSelection, window, cx| {
-                            control::set_optional_text_state(&input_id, "preferred-x", None);
+                            control::set_optional_f32_state(&input_id, "preferred-x", None);
                             let current_value = control::text_state(
                                 &input_id,
                                 "value",
@@ -2028,7 +1938,7 @@ impl Textarea {
                         let rendered_value = current_value.clone();
                         let on_change = self.on_change.clone();
                         move |_: &PasteClipboard, window, cx| {
-                            control::set_optional_text_state(&input_id, "preferred-x", None);
+                            control::set_optional_f32_state(&input_id, "preferred-x", None);
                             let Some(item) = cx.read_from_clipboard() else {
                                 return;
                             };

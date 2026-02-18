@@ -12,6 +12,7 @@ use crate::style::{Radius, Size, Variant};
 
 use super::Stack;
 use super::control;
+use super::slider_axis::{self, RailGeometry, SliderAxis};
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
 
@@ -153,68 +154,48 @@ impl RangeSlider {
     }
 
     fn normalize_with(min: f32, max: f32, step: f32, raw: f32) -> f32 {
-        let (min, max) = if min <= max { (min, max) } else { (max, min) };
-        let step = step.max(0.001);
-        let clamped = raw.clamp(min, max);
-        let snapped = ((clamped - min) / step).round() * step + min;
-        snapped.clamp(min, max)
+        slider_axis::normalize(min, max, step, raw)
     }
 
     fn normalize_pair_with(min: f32, max: f32, step: f32, left: f32, right: f32) -> (f32, f32) {
-        let mut left = Self::normalize_with(min, max, step, left);
-        let mut right = Self::normalize_with(min, max, step, right);
-        if left > right {
-            std::mem::swap(&mut left, &mut right);
-        }
-        (left, right)
+        slider_axis::normalize_pair(min, max, step, left, right)
     }
 
     fn resolved_values(&self) -> (f32, f32) {
-        let controlled = if self.values_controlled {
+        let controlled_left = self.values_controlled.then_some(
             self.values
-                .map(|(start, end)| vec![start.to_string(), end.to_string()])
-        } else {
-            None
-        };
-        let default = vec![
-            self.default_values.0.to_string(),
-            self.default_values.1.to_string(),
-        ];
-        let stored = control::list_state(&self.id, "values", controlled, default);
-
-        let left = stored
-            .first()
-            .and_then(|value| value.parse::<f32>().ok())
-            .unwrap_or(self.default_values.0);
-        let right = stored
-            .get(1)
-            .and_then(|value| value.parse::<f32>().ok())
-            .unwrap_or(self.default_values.1);
+                .map(|(start, _)| start)
+                .unwrap_or(self.default_values.0),
+        );
+        let controlled_right = self.values_controlled.then_some(
+            self.values
+                .map(|(_, end)| end)
+                .unwrap_or(self.default_values.1),
+        );
+        let left = control::f32_state(
+            &self.id,
+            "value-left",
+            controlled_left,
+            self.default_values.0,
+        );
+        let right = control::f32_state(
+            &self.id,
+            "value-right",
+            controlled_right,
+            self.default_values.1,
+        );
 
         Self::normalize_pair_with(self.min, self.max, self.step, left, right)
     }
 
     fn state_values(id: &str, fallback: (f32, f32), min: f32, max: f32, step: f32) -> (f32, f32) {
-        let stored = control::list_state(
-            id,
-            "values",
-            None,
-            vec![fallback.0.to_string(), fallback.1.to_string()],
-        );
-        let left = stored
-            .first()
-            .and_then(|value| value.parse::<f32>().ok())
-            .unwrap_or(fallback.0);
-        let right = stored
-            .get(1)
-            .and_then(|value| value.parse::<f32>().ok())
-            .unwrap_or(fallback.1);
+        let left = control::f32_state(id, "value-left", None, fallback.0);
+        let right = control::f32_state(id, "value-right", None, fallback.1);
         Self::normalize_pair_with(min, max, step, left, right)
     }
 
     fn ratio(&self, value: f32) -> f32 {
-        let span = (self.max - self.min).max(0.001);
-        ((value - self.min) / span).clamp(0.0, 1.0)
+        slider_axis::ratio(self.min, self.max, value)
     }
 
     fn track_height_px(&self) -> f32 {
@@ -237,34 +218,13 @@ impl RangeSlider {
         }
     }
 
-    fn rail_geometry(id: &str, fallback_width: f32, fallback_height: f32) -> (f32, f32, f32, f32) {
-        let origin_x = control::text_state(id, "rail-origin-x", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
-        let origin_y = control::text_state(id, "rail-origin-y", None, "0".to_string())
-            .parse::<f32>()
-            .ok()
-            .unwrap_or(0.0);
-        let width = control::text_state(id, "rail-width", None, fallback_width.to_string())
-            .parse::<f32>()
-            .ok()
-            .filter(|width| *width > 1.0)
-            .unwrap_or(fallback_width);
-        let height = control::text_state(id, "rail-height", None, fallback_height.to_string())
-            .parse::<f32>()
-            .ok()
-            .filter(|height| *height > 1.0)
-            .unwrap_or(fallback_height);
-        (origin_x, width, origin_y, height)
+    fn rail_geometry(id: &str, fallback_width: f32, fallback_height: f32) -> RailGeometry {
+        RailGeometry::from_state(id, fallback_width, fallback_height)
     }
 
     fn set_values_state(id: &str, values: (f32, f32)) {
-        control::set_list_state(
-            id,
-            "values",
-            vec![values.0.to_string(), values.1.to_string()],
-        );
+        control::set_f32_state(id, "value-left", values.0);
+        control::set_f32_state(id, "value-right", values.1);
     }
 }
 
@@ -399,12 +359,23 @@ impl RenderOnce for RangeSlider {
                             return;
                         }
 
-                        let (_x, _w, origin_y, height) =
-                            Self::rail_geometry(&drag.slider_id, 260.0, 260.0);
-                        let local_y = (f32::from(event.event.position.y) - origin_y)
-                            .clamp(0.0, height.max(1.0));
-                        let ratio = 1.0 - (local_y / height.max(1.0));
-                        let raw = drag.min + ((drag.max - drag.min).max(0.001) * ratio);
+                        let geometry = Self::rail_geometry(&drag.slider_id, 260.0, 260.0);
+                        let axis = SliderAxis::Vertical;
+                        let local_y = axis
+                            .local(
+                                f32::from(event.event.position.x),
+                                f32::from(event.event.position.y),
+                                geometry.origin_x,
+                                geometry.origin_y,
+                            )
+                            .clamp(0.0, axis.length(geometry.width, geometry.height));
+                        let raw = slider_axis::value_from_local(
+                            axis,
+                            local_y,
+                            axis.length(geometry.width, geometry.height),
+                            drag.min,
+                            drag.max,
+                        );
                         let target = Self::normalize_with(drag.min, drag.max, drag.step, raw);
                         let fallback = (drag.fallback_left, drag.fallback_right);
                         let (_left, right) = Self::state_values(
@@ -435,12 +406,23 @@ impl RenderOnce for RangeSlider {
                             return;
                         }
 
-                        let (_x, _w, origin_y, height) =
-                            Self::rail_geometry(&drag.slider_id, 260.0, 260.0);
-                        let local_y = (f32::from(event.event.position.y) - origin_y)
-                            .clamp(0.0, height.max(1.0));
-                        let ratio = 1.0 - (local_y / height.max(1.0));
-                        let raw = drag.min + ((drag.max - drag.min).max(0.001) * ratio);
+                        let geometry = Self::rail_geometry(&drag.slider_id, 260.0, 260.0);
+                        let axis = SliderAxis::Vertical;
+                        let local_y = axis
+                            .local(
+                                f32::from(event.event.position.x),
+                                f32::from(event.event.position.y),
+                                geometry.origin_x,
+                                geometry.origin_y,
+                            )
+                            .clamp(0.0, axis.length(geometry.width, geometry.height));
+                        let raw = slider_axis::value_from_local(
+                            axis,
+                            local_y,
+                            axis.length(geometry.width, geometry.height),
+                            drag.min,
+                            drag.max,
+                        );
                         let target = Self::normalize_with(drag.min, drag.max, drag.step, raw);
                         let fallback = (drag.fallback_left, drag.fallback_right);
                         let (left, _right) = Self::state_values(
@@ -474,25 +456,12 @@ impl RenderOnce for RangeSlider {
                         {
                             let id = self.id.clone();
                             move |bounds, _, _cx| {
-                                control::set_text_state(
+                                RailGeometry::store(
                                     &id,
-                                    "rail-origin-x",
-                                    f32::from(bounds.origin.x).to_string(),
-                                );
-                                control::set_text_state(
-                                    &id,
-                                    "rail-width",
-                                    f32::from(bounds.size.width).to_string(),
-                                );
-                                control::set_text_state(
-                                    &id,
-                                    "rail-origin-y",
-                                    f32::from(bounds.origin.y).to_string(),
-                                );
-                                control::set_text_state(
-                                    &id,
-                                    "rail-height",
-                                    f32::from(bounds.size.height).to_string(),
+                                    f32::from(bounds.origin.x),
+                                    f32::from(bounds.origin.y),
+                                    f32::from(bounds.size.width),
+                                    f32::from(bounds.size.height),
                                 );
                             }
                         },
@@ -516,11 +485,23 @@ impl RenderOnce for RangeSlider {
                 rail = rail
                     .cursor_pointer()
                     .on_click(move |event: &ClickEvent, window, cx| {
-                        let (_origin_x, _width, origin_y, height) =
-                            Self::rail_geometry(&id, 260.0, 260.0);
-                        let local_y = (f32::from(event.position().y) - origin_y).clamp(0.0, height);
-                        let ratio = 1.0 - (local_y / height.max(1.0));
-                        let raw = min + ((max - min).max(0.001) * ratio);
+                        let geometry = Self::rail_geometry(&id, 260.0, 260.0);
+                        let axis = SliderAxis::Vertical;
+                        let local_y = axis
+                            .local(
+                                f32::from(event.position().x),
+                                f32::from(event.position().y),
+                                geometry.origin_x,
+                                geometry.origin_y,
+                            )
+                            .clamp(0.0, axis.length(geometry.width, geometry.height));
+                        let raw = slider_axis::value_from_local(
+                            axis,
+                            local_y,
+                            axis.length(geometry.width, geometry.height),
+                            min,
+                            max,
+                        );
                         let target = Self::normalize_with(min, max, step, raw);
 
                         let (left, right) = Self::state_values(&id, fallback, min, max, step);
@@ -644,12 +625,23 @@ impl RenderOnce for RangeSlider {
                         return;
                     }
 
-                    let (origin_x, width, _origin_y, _height) =
-                        Self::rail_geometry(&drag.slider_id, 260.0, 260.0);
-                    let local_x =
-                        (f32::from(event.event.position.x) - origin_x).clamp(0.0, width.max(1.0));
-                    let ratio = local_x / width.max(1.0);
-                    let raw = drag.min + ((drag.max - drag.min).max(0.001) * ratio);
+                    let geometry = Self::rail_geometry(&drag.slider_id, 260.0, 260.0);
+                    let axis = SliderAxis::Horizontal;
+                    let local_x = axis
+                        .local(
+                            f32::from(event.event.position.x),
+                            f32::from(event.event.position.y),
+                            geometry.origin_x,
+                            geometry.origin_y,
+                        )
+                        .clamp(0.0, axis.length(geometry.width, geometry.height));
+                    let raw = slider_axis::value_from_local(
+                        axis,
+                        local_x,
+                        axis.length(geometry.width, geometry.height),
+                        drag.min,
+                        drag.max,
+                    );
                     let target = Self::normalize_with(drag.min, drag.max, drag.step, raw);
 
                     let fallback = (drag.fallback_left, drag.fallback_right);
@@ -685,12 +677,23 @@ impl RenderOnce for RangeSlider {
                         return;
                     }
 
-                    let (origin_x, width, _origin_y, _height) =
-                        Self::rail_geometry(&drag.slider_id, 260.0, 260.0);
-                    let local_x =
-                        (f32::from(event.event.position.x) - origin_x).clamp(0.0, width.max(1.0));
-                    let ratio = local_x / width.max(1.0);
-                    let raw = drag.min + ((drag.max - drag.min).max(0.001) * ratio);
+                    let geometry = Self::rail_geometry(&drag.slider_id, 260.0, 260.0);
+                    let axis = SliderAxis::Horizontal;
+                    let local_x = axis
+                        .local(
+                            f32::from(event.event.position.x),
+                            f32::from(event.event.position.y),
+                            geometry.origin_x,
+                            geometry.origin_y,
+                        )
+                        .clamp(0.0, axis.length(geometry.width, geometry.height));
+                    let raw = slider_axis::value_from_local(
+                        axis,
+                        local_x,
+                        axis.length(geometry.width, geometry.height),
+                        drag.min,
+                        drag.max,
+                    );
                     let target = Self::normalize_with(drag.min, drag.max, drag.step, raw);
 
                     let fallback = (drag.fallback_left, drag.fallback_right);
@@ -729,25 +732,12 @@ impl RenderOnce for RangeSlider {
                     {
                         let id = self.id.clone();
                         move |bounds, _, _cx| {
-                            control::set_text_state(
+                            RailGeometry::store(
                                 &id,
-                                "rail-origin-x",
-                                f32::from(bounds.origin.x).to_string(),
-                            );
-                            control::set_text_state(
-                                &id,
-                                "rail-width",
-                                f32::from(bounds.size.width).to_string(),
-                            );
-                            control::set_text_state(
-                                &id,
-                                "rail-origin-y",
-                                f32::from(bounds.origin.y).to_string(),
-                            );
-                            control::set_text_state(
-                                &id,
-                                "rail-height",
-                                f32::from(bounds.size.height).to_string(),
+                                f32::from(bounds.origin.x),
+                                f32::from(bounds.origin.y),
+                                f32::from(bounds.size.width),
+                                f32::from(bounds.size.height),
                             );
                         }
                     },
@@ -772,11 +762,23 @@ impl RenderOnce for RangeSlider {
             rail = rail
                 .cursor_pointer()
                 .on_click(move |event: &ClickEvent, window, cx| {
-                    let (origin_x, width, _origin_y, _height) =
-                        Self::rail_geometry(&id, 260.0, 260.0);
-                    let local_x = (f32::from(event.position().x) - origin_x).clamp(0.0, width);
-                    let ratio = local_x / width.max(1.0);
-                    let raw = min + ((max - min).max(0.001) * ratio);
+                    let geometry = Self::rail_geometry(&id, 260.0, 260.0);
+                    let axis = SliderAxis::Horizontal;
+                    let local_x = axis
+                        .local(
+                            f32::from(event.position().x),
+                            f32::from(event.position().y),
+                            geometry.origin_x,
+                            geometry.origin_y,
+                        )
+                        .clamp(0.0, axis.length(geometry.width, geometry.height));
+                    let raw = slider_axis::value_from_local(
+                        axis,
+                        local_x,
+                        axis.length(geometry.width, geometry.height),
+                        min,
+                        max,
+                    );
                     let target = Self::normalize_with(min, max, step, raw);
 
                     let (left, right) = Self::state_values(&id, fallback, min, max, step);

@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Corner, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    StatefulInteractiveElement, Styled, Window, anchored, deferred, div, point, px,
+    AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    StatefulInteractiveElement, Styled, Window, div,
 };
 
 use crate::contracts::MotionAware;
@@ -10,7 +10,7 @@ use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 
 use super::Stack;
-use super::control;
+use super::popup::{PopupPlacement, PopupState, anchored_host};
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
 
@@ -108,10 +108,6 @@ impl Popover {
         self
     }
 
-    fn resolved_opened(&self) -> bool {
-        control::bool_state(&self.id, "opened", self.opened, self.default_opened)
-    }
-
     fn render_panel(&mut self, is_controlled: bool, window: &gpui::Window) -> AnyElement {
         let tokens = &self.theme.components.popover;
         let mut panel = Stack::vertical()
@@ -129,7 +125,7 @@ impl Popover {
                 let id = self.id.clone();
                 panel = panel.on_mouse_down_out(move |_, window, cx| {
                     if !is_controlled {
-                        control::set_bool_state(&id, "opened", false);
+                        super::control::set_bool_state(&id, "opened", false);
                         window.refresh();
                     }
                     (handler)(false, window, cx);
@@ -137,7 +133,7 @@ impl Popover {
             } else if !is_controlled {
                 let id = self.id.clone();
                 panel = panel.on_mouse_down_out(move |_, window, _cx| {
-                    control::set_bool_state(&id, "opened", false);
+                    super::control::set_bool_state(&id, "opened", false);
                     window.refresh();
                 });
             }
@@ -170,12 +166,9 @@ impl MotionAware for Popover {
 impl RenderOnce for Popover {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let opened = if self.disabled {
-            false
-        } else {
-            self.resolved_opened()
-        };
-        let is_controlled = self.opened.is_some();
+        let popup_state = PopupState::resolve(&self.id, self.opened, self.default_opened);
+        let opened = !self.disabled && popup_state.opened;
+        let is_controlled = popup_state.controlled;
 
         let mut trigger = div().id(self.id.slot("trigger")).relative().child(
             self.trigger
@@ -193,7 +186,7 @@ impl RenderOnce for Popover {
             trigger = trigger.on_click(
                 move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
                     if !is_controlled {
-                        control::set_bool_state(&id, "opened", next);
+                        super::control::set_bool_state(&id, "opened", next);
                         window.refresh();
                     }
                     (handler)(next, window, cx);
@@ -205,7 +198,7 @@ impl RenderOnce for Popover {
             trigger = trigger.cursor_pointer();
             trigger = trigger.on_click(
                 move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
-                    control::set_bool_state(&id, "opened", next);
+                    super::control::set_bool_state(&id, "opened", next);
                     window.refresh();
                 },
             );
@@ -215,52 +208,20 @@ impl RenderOnce for Popover {
 
         if opened {
             let panel = self.render_panel(is_controlled, window);
-            let floating = panel;
-
-            let anchor_corner = match self.placement {
-                PopoverPlacement::Top => Corner::BottomLeft,
-                PopoverPlacement::Bottom => Corner::TopLeft,
+            let placement = match self.placement {
+                PopoverPlacement::Top => PopupPlacement::Top,
+                PopoverPlacement::Bottom => PopupPlacement::Bottom,
             };
-            let offset = match self.placement {
-                PopoverPlacement::Top => point(px(0.0), px(-self.offset_px)),
-                PopoverPlacement::Bottom => point(px(0.0), px(self.offset_px)),
-            };
-
-            let anchor_host = match self.placement {
-                PopoverPlacement::Top => div()
-                    .id(self.id.slot("anchor-host"))
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .w(px(0.0))
-                    .h(px(0.0))
-                    .child(
-                        deferred(
-                            anchored()
-                                .anchor(anchor_corner)
-                                .offset(offset)
-                                .child(floating),
-                        )
-                        .priority(20),
-                    ),
-                PopoverPlacement::Bottom => div()
-                    .id(self.id.slot("anchor-host"))
-                    .absolute()
-                    .bottom_0()
-                    .left_0()
-                    .w(px(0.0))
-                    .h(px(0.0))
-                    .child(
-                        deferred(
-                            anchored()
-                                .anchor(anchor_corner)
-                                .offset(offset)
-                                .snap_to_window_with_margin(px(8.0))
-                                .child(floating),
-                        )
-                        .priority(20),
-                    ),
-            };
+            let anchor_host = anchored_host(
+                &self.id,
+                "anchor-host",
+                placement,
+                self.offset_px,
+                panel,
+                20,
+                matches!(self.placement, PopoverPlacement::Bottom),
+                false,
+            );
 
             trigger = trigger.child(anchor_host);
         }

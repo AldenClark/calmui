@@ -1,9 +1,8 @@
 use std::{collections::BTreeSet, rc::Rc};
 
 use gpui::{
-    AnyElement, ClickEvent, Corner, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window, anchored, canvas, deferred, div,
-    point, px,
+    AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    SharedString, StatefulInteractiveElement, Styled, Window, canvas, div, px,
 };
 
 use crate::contracts::{FieldLike, MotionAware, VariantConfigurable};
@@ -15,6 +14,7 @@ use crate::theme::{SelectTokens, Theme};
 use super::Stack;
 use super::control;
 use super::icon::Icon;
+use super::popup::{PopupPlacement, PopupState, anchored_host};
 use super::transition::TransitionExt;
 use super::utils::{
     InteractionStyles, PressHandler, PressableBehavior, apply_input_size, apply_interaction_styles,
@@ -46,20 +46,17 @@ impl SelectRuntime {
             Self::should_open_dropdown_upward(event, window),
         );
         if let ClickEvent::Keyboard(keyboard) = event {
-            control::set_text_state(
+            control::set_f32_state(
                 id,
                 "dropdown-width-px",
-                format!("{:.2}", f32::from(keyboard.bounds.size.width)),
+                f32::from(keyboard.bounds.size.width),
             );
         }
     }
 
     fn dropdown_width_px(id: &str) -> f32 {
-        control::text_state(id, "dropdown-width-px", None, String::new())
-            .parse::<f32>()
-            .ok()
-            .filter(|width| *width >= 1.0)
-            .unwrap_or(220.0)
+        let width = control::f32_state(id, "dropdown-width-px", None, 0.0);
+        if width >= 1.0 { width } else { 220.0 }
     }
 
     fn control_bg_for_variant(
@@ -303,13 +300,13 @@ impl Select {
     }
 
     fn resolved_opened(&self) -> bool {
-        control::bool_state(
+        PopupState::resolve(
             &self.id,
-            "opened",
             self.opened_controlled
                 .then_some(self.opened.unwrap_or(false)),
             self.default_opened,
         )
+        .opened
     }
 
     fn selected_label(&self) -> Option<SharedString> {
@@ -736,7 +733,13 @@ impl MotionAware for Select {
 impl RenderOnce for Select {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let opened = self.resolved_opened();
+        let popup_state = PopupState::resolve(
+            &self.id,
+            self.opened_controlled
+                .then_some(self.opened.unwrap_or(false)),
+            self.default_opened,
+        );
+        let opened = popup_state.opened;
         let dropdown_upward = control::bool_state(&self.id, "dropdown-upward", None, false);
         let mut container = Stack::vertical()
             .id(self.id.clone())
@@ -758,41 +761,27 @@ impl RenderOnce for Select {
         if opened {
             let floating = self.render_dropdown(window);
             let anchor_host = if dropdown_upward {
-                div()
-                    .id(self.id.slot("anchor-host"))
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .w_full()
-                    .h(px(0.0))
-                    .child(
-                        deferred(
-                            anchored()
-                                .anchor(Corner::BottomLeft)
-                                .offset(point(px(0.0), px(-2.0)))
-                                .snap_to_window_with_margin(px(8.0))
-                                .child(floating),
-                        )
-                        .priority(24),
-                    )
+                anchored_host(
+                    &self.id,
+                    "anchor-host",
+                    PopupPlacement::Top,
+                    2.0,
+                    floating,
+                    24,
+                    true,
+                    true,
+                )
             } else {
-                div()
-                    .id(self.id.slot("anchor-host"))
-                    .absolute()
-                    .bottom_0()
-                    .left_0()
-                    .w_full()
-                    .h(px(0.0))
-                    .child(
-                        deferred(
-                            anchored()
-                                .anchor(Corner::TopLeft)
-                                .offset(point(px(0.0), px(2.0)))
-                                .snap_to_window_with_margin(px(8.0))
-                                .child(floating),
-                        )
-                        .priority(24),
-                    )
+                anchored_host(
+                    &self.id,
+                    "anchor-host",
+                    PopupPlacement::Bottom,
+                    2.0,
+                    floating,
+                    24,
+                    true,
+                    true,
+                )
             };
             trigger = trigger.child(anchor_host);
         }
@@ -1018,13 +1007,13 @@ impl MultiSelect {
     }
 
     fn resolved_opened(&self) -> bool {
-        control::bool_state(
+        PopupState::resolve(
             &self.id,
-            "opened",
             self.opened_controlled
                 .then_some(self.opened.unwrap_or(false)),
             self.default_opened,
         )
+        .opened
     }
 
     fn render_label_block(&self) -> AnyElement {
@@ -1451,7 +1440,13 @@ impl MotionAware for MultiSelect {
 impl RenderOnce for MultiSelect {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let opened = self.resolved_opened();
+        let popup_state = PopupState::resolve(
+            &self.id,
+            self.opened_controlled
+                .then_some(self.opened.unwrap_or(false)),
+            self.default_opened,
+        );
+        let opened = popup_state.opened;
         let dropdown_upward = control::bool_state(&self.id, "dropdown-upward", None, false);
         let mut container = Stack::vertical()
             .id(self.id.clone())
@@ -1472,41 +1467,27 @@ impl RenderOnce for MultiSelect {
         if opened {
             let floating = self.render_dropdown(window);
             let anchor_host = if dropdown_upward {
-                div()
-                    .id(self.id.slot("anchor-host"))
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .w_full()
-                    .h(px(0.0))
-                    .child(
-                        deferred(
-                            anchored()
-                                .anchor(Corner::BottomLeft)
-                                .offset(point(px(0.0), px(-2.0)))
-                                .snap_to_window_with_margin(px(8.0))
-                                .child(floating),
-                        )
-                        .priority(24),
-                    )
+                anchored_host(
+                    &self.id,
+                    "anchor-host",
+                    PopupPlacement::Top,
+                    2.0,
+                    floating,
+                    24,
+                    true,
+                    true,
+                )
             } else {
-                div()
-                    .id(self.id.slot("anchor-host"))
-                    .absolute()
-                    .bottom_0()
-                    .left_0()
-                    .w_full()
-                    .h(px(0.0))
-                    .child(
-                        deferred(
-                            anchored()
-                                .anchor(Corner::TopLeft)
-                                .offset(point(px(0.0), px(2.0)))
-                                .snap_to_window_with_margin(px(8.0))
-                                .child(floating),
-                        )
-                        .priority(24),
-                    )
+                anchored_host(
+                    &self.id,
+                    "anchor-host",
+                    PopupPlacement::Bottom,
+                    2.0,
+                    floating,
+                    24,
+                    true,
+                    true,
+                )
             };
             trigger = trigger.child(anchor_host);
         }
