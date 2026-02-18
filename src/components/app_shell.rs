@@ -571,12 +571,24 @@ impl RenderOnce for AppShell {
         let mut title_bar_overlay: Option<AnyElement> = None;
         if let Some(title_bar) = self.title_bar.take() {
             let title_default_bg = resolve_hsla(&self.theme, &title_tokens.bg);
+            let mut title_chrome = self.title_bar_chrome.clone();
+            if self.title_bar_immersive
+                && cfg!(any(
+                    target_os = "windows",
+                    target_os = "linux",
+                    target_os = "freebsd"
+                ))
+            {
+                // Immersive title bar on Win/Linux should stay completely borderless,
+                // matching macOS behavior.
+                title_chrome.bordered = false;
+            }
             let title_region = self
                 .wrap_region(
                     window,
                     self.id.slot("title-bar"),
                     title_bar(),
-                    &self.title_bar_chrome,
+                    &title_chrome,
                     title_default_bg,
                 )
                 .h(px(self.title_bar_height_px.max(0.0)))
