@@ -1,7 +1,7 @@
 use crate::motion::MotionConfig;
 use crate::style::{ComponentState, FieldLayout, Radius, Size, StyleMap, Variant};
 use crate::theme::{ComponentOverrides, LocalTheme};
-use gpui::SharedString;
+use gpui::{ClickEvent, FocusHandle, SharedString, Window};
 
 pub trait StyleRecipe<Props> {
     fn resolve_styles(&self, props: &Props, state: ComponentState) -> StyleMap;
@@ -56,6 +56,15 @@ pub trait Disableable: Sized {
     fn disabled(self, value: bool) -> Self;
 }
 
+pub trait Clickable: Sized {
+    fn on_click(self, handler: impl Fn(&ClickEvent, &mut Window, &mut gpui::App) + 'static)
+    -> Self;
+}
+
+pub trait Focusable: Sized {
+    fn focus_handle(self, value: FocusHandle) -> Self;
+}
+
 pub trait Openable: Sized {
     fn opened(self, value: bool) -> Self;
 }
@@ -74,6 +83,31 @@ macro_rules! impl_disableable {
         impl $crate::contracts::Disableable for $type {
             fn disabled(self, value: bool) -> Self {
                 <$type>::disabled(self, value)
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_clickable {
+    ($type:ty) => {
+        impl $crate::contracts::Clickable for $type {
+            fn on_click(
+                self,
+                handler: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+            ) -> Self {
+                <$type>::on_click(self, handler)
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_focusable {
+    ($type:ty) => {
+        impl $crate::contracts::Focusable for $type {
+            fn focus_handle(self, value: gpui::FocusHandle) -> Self {
+                <$type>::focus_handle(self, value)
             }
         }
     };

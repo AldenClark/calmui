@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    StatefulInteractiveElement, Styled, Window, div, px,
+    AnyElement, ClickEvent, FocusHandle, Hsla, InteractiveElement, IntoElement, ParentElement,
+    RenderOnce, Styled, Window, div, px,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable};
@@ -13,9 +13,11 @@ use crate::style::{Radius, Size, Variant};
 use super::icon::Icon;
 use super::loader::{Loader, LoaderVariant};
 use super::transition::TransitionExt;
-use super::utils::{apply_radius, resolve_hsla};
+use super::utils::{
+    PressHandler, PressableBehavior, apply_interaction_styles, apply_radius,
+    default_pressable_surface_styles, resolve_hsla, wire_pressable,
+};
 
-type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)>;
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 
 #[derive(IntoElement)]
@@ -31,7 +33,8 @@ pub struct ActionIcon {
     style: gpui::StyleRefinement,
     motion: MotionConfig,
     content: Option<SlotRenderer>,
-    on_click: Option<ClickHandler>,
+    on_click: Option<PressHandler>,
+    focus_handle: Option<FocusHandle>,
 }
 
 impl ActionIcon {
@@ -50,6 +53,7 @@ impl ActionIcon {
             motion: MotionConfig::default(),
             content: None,
             on_click: None,
+            focus_handle: None,
         }
     }
 
@@ -78,6 +82,11 @@ impl ActionIcon {
         handler: impl Fn(&ClickEvent, &mut Window, &mut gpui::App) + 'static,
     ) -> Self {
         self.on_click = Some(Rc::new(handler));
+        self
+    }
+
+    pub fn focus_handle(mut self, value: FocusHandle) -> Self {
+        self.focus_handle = Some(value);
         self
     }
 
@@ -208,13 +217,23 @@ impl RenderOnce for ActionIcon {
 
         if self.disabled || self.loading {
             root = root.opacity(0.55).cursor_default();
-        } else {
+        } else if self.on_click.is_some() {
             root = root.cursor_pointer();
-            if let Some(handler) = self.on_click.take() {
-                root = root.on_click(move |event, window, cx| {
-                    (handler)(event, window, cx);
-                });
-            }
+            root = apply_interaction_styles(
+                root,
+                default_pressable_surface_styles(
+                    bg,
+                    resolve_hsla(&self.theme, &self.theme.semantic.focus_ring),
+                ),
+            );
+            root = wire_pressable(
+                root,
+                PressableBehavior::new()
+                    .on_click(self.on_click.clone())
+                    .focus_handle(self.focus_handle.clone()),
+            );
+        } else {
+            root = root.cursor_default();
         }
 
         root.with_enter_transition(self.id.slot("enter"), self.motion)
@@ -228,6 +247,8 @@ impl crate::contracts::ComponentThemeOverridable for ActionIcon {
 }
 
 crate::impl_disableable!(ActionIcon);
+crate::impl_clickable!(ActionIcon);
+crate::impl_focusable!(ActionIcon);
 
 impl gpui::Styled for ActionIcon {
     fn style(&mut self) -> &mut gpui::StyleRefinement {

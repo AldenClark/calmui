@@ -2,8 +2,7 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, ClickEvent, Corner, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window, anchored, canvas, deferred, div,
-    point, px,
+    SharedString, Styled, Window, anchored, canvas, deferred, div, point, px,
 };
 
 use crate::contracts::MotionAware;
@@ -14,7 +13,10 @@ use super::Stack;
 use super::control;
 use super::icon::Icon;
 use super::transition::TransitionExt;
-use super::utils::resolve_hsla;
+use super::utils::{
+    InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles,
+    interaction_style, resolve_hsla, wire_pressable,
+};
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 type ItemClickHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
@@ -183,11 +185,7 @@ impl Menu {
                     .py(px(8.0))
                     .rounded_sm()
                     .text_sm()
-                    .text_color(resolve_hsla(&self.theme, &tokens.item_fg))
-                    .hover({
-                        let hover_bg = resolve_hsla(&self.theme, &tokens.item_hover_bg);
-                        move |style| style.bg(hover_bg)
-                    });
+                    .text_color(resolve_hsla(&self.theme, &tokens.item_fg));
 
                 if let Some(icon) = item.left_icon.clone() {
                     row = row.child(
@@ -215,7 +213,9 @@ impl Menu {
                     let on_item_click = on_item_click.clone();
                     let on_open_change = on_open_change.clone();
                     let menu_id = menu_id.clone();
-                    row = row.cursor_pointer().on_click(
+                    let hover_bg = resolve_hsla(&self.theme, &tokens.item_hover_bg);
+                    let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
+                    let click_handler: PressHandler = Rc::new(
                         move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
                             if let Some(handler) = on_item_click.as_ref() {
                                 (handler)(value.clone(), window, cx);
@@ -232,6 +232,15 @@ impl Menu {
                             }
                         },
                     );
+                    row = apply_interaction_styles(
+                        row.cursor_pointer(),
+                        InteractionStyles::new()
+                            .hover(interaction_style(move |style| style.bg(hover_bg)))
+                            .active(interaction_style(move |style| style.bg(press_bg)))
+                            .focus(interaction_style(move |style| style.bg(hover_bg))),
+                    );
+                    row =
+                        wire_pressable(row, PressableBehavior::new().on_click(Some(click_handler)));
                 }
 
                 row
@@ -328,23 +337,41 @@ impl RenderOnce for Menu {
 
         if self.disabled {
             trigger = trigger.opacity(0.55).cursor_default();
-        } else if let Some(handler) = self.on_open_change.clone() {
-            let id = self.id.clone();
-            let next = !opened;
-            trigger = trigger.on_click(move |_, window, cx| {
-                if !is_controlled {
-                    control::set_bool_state(&id, "opened", next);
-                    window.refresh();
-                }
-                (handler)(next, window, cx);
-            });
-        } else if !is_controlled {
-            let id = self.id.clone();
-            let next = !opened;
-            trigger = trigger.on_click(move |_, window, _cx| {
-                control::set_bool_state(&id, "opened", next);
-                window.refresh();
-            });
+        } else {
+            let click_handler = if let Some(handler) = self.on_open_change.clone() {
+                let id = self.id.clone();
+                let next = !opened;
+                Some(Rc::new(
+                    move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
+                        if !is_controlled {
+                            control::set_bool_state(&id, "opened", next);
+                            window.refresh();
+                        }
+                        (handler)(next, window, cx);
+                    },
+                ) as PressHandler)
+            } else if !is_controlled {
+                let id = self.id.clone();
+                let next = !opened;
+                Some(Rc::new(
+                    move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
+                        control::set_bool_state(&id, "opened", next);
+                        window.refresh();
+                    },
+                ) as PressHandler)
+            } else {
+                None
+            };
+
+            if let Some(click_handler) = click_handler {
+                trigger = trigger.cursor_pointer();
+                trigger = wire_pressable(
+                    trigger,
+                    PressableBehavior::new().on_click(Some(click_handler)),
+                );
+            } else {
+                trigger = trigger.cursor_default();
+            }
         }
 
         if opened {

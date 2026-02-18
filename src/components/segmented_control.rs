@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
-    StatefulInteractiveElement, Styled, Window, div, px,
+    ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
+    Window, div, px,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable};
@@ -12,7 +12,10 @@ use crate::style::{Radius, Size, Variant};
 
 use super::control;
 use super::transition::{TransitionExt, TransitionStage};
-use super::utils::{apply_radius, resolve_hsla};
+use super::utils::{
+    InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles, apply_radius,
+    interaction_style, resolve_hsla, wire_pressable,
+};
 
 type ChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
 
@@ -329,11 +332,13 @@ impl RenderOnce for SegmentedControl {
                     let id = control_id.clone();
                     let previous = selected_index.map(|value| value.to_string());
                     let hover_bg = resolve_hsla(&theme, &tokens.item_hover_bg);
-                    segment = segment.cursor_pointer();
-                    if !is_active {
-                        segment = segment.hover(move |style| style.bg(hover_bg));
-                    }
-                    segment = segment.on_click(move |_: &ClickEvent, window, cx| {
+                    let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
+                    let focus_bg = if is_active {
+                        active_bg.blend(gpui::white().opacity(0.04))
+                    } else {
+                        hover_bg
+                    };
+                    let click_handler: PressHandler = Rc::new(move |_: &ClickEvent, window, cx| {
                         control::set_optional_text_state(&id, "prev-index", previous.clone());
                         if !controlled {
                             control::set_optional_text_state(&id, "value", Some(value.to_string()));
@@ -343,6 +348,20 @@ impl RenderOnce for SegmentedControl {
                             (handler)(value.clone(), window, cx);
                         }
                     });
+
+                    let mut interaction_styles = InteractionStyles::new()
+                        .focus(interaction_style(move |style| style.bg(focus_bg)));
+                    if !is_active {
+                        interaction_styles = interaction_styles
+                            .hover(interaction_style(move |style| style.bg(hover_bg)))
+                            .active(interaction_style(move |style| style.bg(press_bg)));
+                    }
+                    segment =
+                        apply_interaction_styles(segment.cursor_pointer(), interaction_styles);
+                    segment = wire_pressable(
+                        segment,
+                        PressableBehavior::new().on_click(Some(click_handler)),
+                    );
                 } else {
                     segment = segment.opacity(0.5).cursor_default();
                 }

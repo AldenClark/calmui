@@ -16,7 +16,10 @@ use super::Stack;
 use super::control;
 use super::icon::Icon;
 use super::transition::TransitionExt;
-use super::utils::{apply_input_size, apply_radius, resolve_hsla};
+use super::utils::{
+    InteractionStyles, PressHandler, PressableBehavior, apply_input_size, apply_interaction_styles,
+    apply_radius, interaction_style, resolve_hsla, wire_pressable,
+};
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 type SelectChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
@@ -367,6 +370,7 @@ impl Select {
         let tokens = &self.theme.components.select;
         let opened = self.resolved_opened();
         let value = self.resolved_value();
+        let control_bg = SelectRuntime::control_bg_for_variant(&self.theme, tokens, self.variant);
         let mut control = div()
             .id(self.id.slot("control"))
             .relative()
@@ -374,12 +378,7 @@ impl Select {
             .flex()
             .items_center()
             .gap_2()
-            .cursor_pointer()
-            .bg(SelectRuntime::control_bg_for_variant(
-                &self.theme,
-                tokens,
-                self.variant,
-            ))
+            .bg(control_bg)
             .text_color(resolve_hsla(&self.theme, &tokens.fg))
             .border(super::utils::quantized_stroke_px(window, 1.0));
 
@@ -400,14 +399,12 @@ impl Select {
 
         if self.disabled {
             control = control.cursor_default().opacity(0.55);
-        }
-
-        if !self.disabled {
-            if let Some(handler) = self.on_open_change.clone() {
+        } else {
+            let click_handler = if let Some(handler) = self.on_open_change.clone() {
                 let next = !opened;
                 let id = self.id.clone();
                 let opened_controlled = self.opened_controlled;
-                control = control.on_click(
+                Some(Rc::new(
                     move |event: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
                         if next {
                             SelectRuntime::capture_dropdown_metrics(&id, event, window);
@@ -418,17 +415,46 @@ impl Select {
                         }
                         (handler)(next, window, cx);
                     },
-                );
+                ) as PressHandler)
             } else if !self.opened_controlled {
                 let id = self.id.clone();
                 let next = !opened;
-                control = control.on_click(move |event: &ClickEvent, window: &mut Window, _cx| {
-                    if next {
-                        SelectRuntime::capture_dropdown_metrics(&id, event, window);
-                    }
-                    control::set_bool_state(&id, "opened", next);
-                    window.refresh();
-                });
+                Some(Rc::new(
+                    move |event: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
+                        if next {
+                            SelectRuntime::capture_dropdown_metrics(&id, event, window);
+                        }
+                        control::set_bool_state(&id, "opened", next);
+                        window.refresh();
+                    },
+                ) as PressHandler)
+            } else {
+                None
+            };
+
+            if let Some(click_handler) = click_handler {
+                let hover_bg = control_bg.blend(gpui::white().opacity(0.04));
+                let press_bg = control_bg.blend(gpui::black().opacity(0.08));
+                let focus_border = if self.error.is_some() {
+                    resolve_hsla(&self.theme, &tokens.border_error)
+                } else {
+                    resolve_hsla(&self.theme, &tokens.border_focus)
+                };
+                control = apply_interaction_styles(
+                    control.cursor_pointer(),
+                    InteractionStyles::new()
+                        .hover(interaction_style(move |style| style.bg(hover_bg)))
+                        .active(interaction_style(move |style| style.bg(press_bg)))
+                        .focus(interaction_style(move |style| {
+                            style.border_color(focus_border)
+                        })),
+                );
+                control = wire_pressable(
+                    control,
+                    PressableBehavior::new().on_click(Some(click_handler)),
+                );
+            } else {
+                control = control.cursor_default();
             }
         }
 
@@ -523,7 +549,6 @@ impl Select {
                     .text_sm()
                     .text_color(resolve_hsla(&self.theme, &tokens.option_fg))
                     .bg(row_bg)
-                    .hover(move |style| style.bg(hover_bg))
                     .child(
                         Stack::horizontal()
                             .w_full()
@@ -568,7 +593,8 @@ impl Select {
                     let id = self.id.clone();
                     let value_controlled = self.value_controlled;
                     let opened_controlled = self.opened_controlled;
-                    row = row.cursor_pointer().on_click(
+                    let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
+                    let click_handler: PressHandler = Rc::new(
                         move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
                             if !value_controlled {
                                 control::set_optional_text_state(
@@ -591,6 +617,15 @@ impl Select {
                             }
                         },
                     );
+                    row = apply_interaction_styles(
+                        row.cursor_pointer(),
+                        InteractionStyles::new()
+                            .hover(interaction_style(move |style| style.bg(hover_bg)))
+                            .active(interaction_style(move |style| style.bg(press_bg)))
+                            .focus(interaction_style(move |style| style.bg(hover_bg))),
+                    );
+                    row =
+                        wire_pressable(row, PressableBehavior::new().on_click(Some(click_handler)));
                 }
 
                 row
@@ -614,19 +649,23 @@ impl Select {
             if let Some(on_open_change) = self.on_open_change.clone() {
                 let id = self.id.clone();
                 let opened_controlled = self.opened_controlled;
-                dropdown = dropdown.on_mouse_down_out(move |_, window, cx| {
-                    if !opened_controlled {
-                        control::set_bool_state(&id, "opened", false);
-                        window.refresh();
-                    }
-                    (on_open_change)(false, window, cx);
-                });
+                dropdown = dropdown.on_mouse_down_out(
+                    move |_, window: &mut Window, cx: &mut gpui::App| {
+                        if !opened_controlled {
+                            control::set_bool_state(&id, "opened", false);
+                            window.refresh();
+                        }
+                        (on_open_change)(false, window, cx);
+                    },
+                );
             } else if !self.opened_controlled {
                 let id = self.id.clone();
-                dropdown = dropdown.on_mouse_down_out(move |_, window, _cx| {
-                    control::set_bool_state(&id, "opened", false);
-                    window.refresh();
-                });
+                dropdown = dropdown.on_mouse_down_out(
+                    move |_, window: &mut Window, _cx: &mut gpui::App| {
+                        control::set_bool_state(&id, "opened", false);
+                        window.refresh();
+                    },
+                );
             }
         }
 
@@ -1038,6 +1077,7 @@ impl MultiSelect {
     fn render_control(&mut self, window: &gpui::Window) -> AnyElement {
         let tokens = &self.theme.components.select;
         let opened = self.resolved_opened();
+        let control_bg = SelectRuntime::control_bg_for_variant(&self.theme, tokens, self.variant);
 
         let mut control = div()
             .id(self.id.slot("control"))
@@ -1046,12 +1086,7 @@ impl MultiSelect {
             .flex()
             .items_center()
             .gap_2()
-            .cursor_pointer()
-            .bg(SelectRuntime::control_bg_for_variant(
-                &self.theme,
-                tokens,
-                self.variant,
-            ))
+            .bg(control_bg)
             .border(super::utils::quantized_stroke_px(window, 1.0));
 
         control = apply_input_size(control, self.size);
@@ -1071,32 +1106,63 @@ impl MultiSelect {
 
         if self.disabled {
             control = control.cursor_default().opacity(0.55);
-        } else if let Some(handler) = self.on_open_change.clone() {
-            let next = !opened;
-            let id = self.id.clone();
-            let opened_controlled = self.opened_controlled;
-            control = control.on_click(
-                move |event: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
-                    if next {
-                        SelectRuntime::capture_dropdown_metrics(&id, event, window);
-                    }
-                    if !opened_controlled {
+        } else {
+            let click_handler = if let Some(handler) = self.on_open_change.clone() {
+                let next = !opened;
+                let id = self.id.clone();
+                let opened_controlled = self.opened_controlled;
+                Some(Rc::new(
+                    move |event: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
+                        if next {
+                            SelectRuntime::capture_dropdown_metrics(&id, event, window);
+                        }
+                        if !opened_controlled {
+                            control::set_bool_state(&id, "opened", next);
+                            window.refresh();
+                        }
+                        (handler)(next, window, cx);
+                    },
+                ) as PressHandler)
+            } else if !self.opened_controlled {
+                let next = !opened;
+                let id = self.id.clone();
+                Some(Rc::new(
+                    move |event: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
+                        if next {
+                            SelectRuntime::capture_dropdown_metrics(&id, event, window);
+                        }
                         control::set_bool_state(&id, "opened", next);
                         window.refresh();
-                    }
-                    (handler)(next, window, cx);
-                },
-            );
-        } else if !self.opened_controlled {
-            let next = !opened;
-            let id = self.id.clone();
-            control = control.on_click(move |event: &ClickEvent, window: &mut Window, _cx| {
-                if next {
-                    SelectRuntime::capture_dropdown_metrics(&id, event, window);
-                }
-                control::set_bool_state(&id, "opened", next);
-                window.refresh();
-            });
+                    },
+                ) as PressHandler)
+            } else {
+                None
+            };
+
+            if let Some(click_handler) = click_handler {
+                let hover_bg = control_bg.blend(gpui::white().opacity(0.04));
+                let press_bg = control_bg.blend(gpui::black().opacity(0.08));
+                let focus_border = if self.error.is_some() {
+                    resolve_hsla(&self.theme, &tokens.border_error)
+                } else {
+                    resolve_hsla(&self.theme, &tokens.border_focus)
+                };
+                control = apply_interaction_styles(
+                    control.cursor_pointer(),
+                    InteractionStyles::new()
+                        .hover(interaction_style(move |style| style.bg(hover_bg)))
+                        .active(interaction_style(move |style| style.bg(press_bg)))
+                        .focus(interaction_style(move |style| {
+                            style.border_color(focus_border)
+                        })),
+                );
+                control = wire_pressable(
+                    control,
+                    PressableBehavior::new().on_click(Some(click_handler)),
+                );
+            } else {
+                control = control.cursor_default();
+            }
         }
 
         if let Some(left_slot) = self.left_slot.take() {
@@ -1206,7 +1272,6 @@ impl MultiSelect {
                     .text_sm()
                     .text_color(resolve_hsla(&self.theme, &tokens.option_fg))
                     .bg(row_bg)
-                    .hover(move |style| style.bg(hover_bg))
                     .child(
                         Stack::horizontal()
                             .w_full()
@@ -1250,7 +1315,8 @@ impl MultiSelect {
                     let selected_values = current_values.clone();
                     let id = self.id.clone();
                     let values_controlled = self.values_controlled;
-                    row = row.cursor_pointer().on_click(
+                    let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
+                    let click_handler: PressHandler = Rc::new(
                         move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
                             let updated = Self::toggled_values(&selected_values, &value);
                             if !values_controlled {
@@ -1266,6 +1332,15 @@ impl MultiSelect {
                             }
                         },
                     );
+                    row = apply_interaction_styles(
+                        row.cursor_pointer(),
+                        InteractionStyles::new()
+                            .hover(interaction_style(move |style| style.bg(hover_bg)))
+                            .active(interaction_style(move |style| style.bg(press_bg)))
+                            .focus(interaction_style(move |style| style.bg(hover_bg))),
+                    );
+                    row =
+                        wire_pressable(row, PressableBehavior::new().on_click(Some(click_handler)));
                 }
 
                 row
@@ -1289,19 +1364,23 @@ impl MultiSelect {
             if let Some(on_open_change) = self.on_open_change.clone() {
                 let id = self.id.clone();
                 let opened_controlled = self.opened_controlled;
-                dropdown = dropdown.on_mouse_down_out(move |_, window, cx| {
-                    if !opened_controlled {
-                        control::set_bool_state(&id, "opened", false);
-                        window.refresh();
-                    }
-                    (on_open_change)(false, window, cx);
-                });
+                dropdown = dropdown.on_mouse_down_out(
+                    move |_, window: &mut Window, cx: &mut gpui::App| {
+                        if !opened_controlled {
+                            control::set_bool_state(&id, "opened", false);
+                            window.refresh();
+                        }
+                        (on_open_change)(false, window, cx);
+                    },
+                );
             } else if !self.opened_controlled {
                 let id = self.id.clone();
-                dropdown = dropdown.on_mouse_down_out(move |_, window, _cx| {
-                    control::set_bool_state(&id, "opened", false);
-                    window.refresh();
-                });
+                dropdown = dropdown.on_mouse_down_out(
+                    move |_, window: &mut Window, _cx: &mut gpui::App| {
+                        control::set_bool_state(&id, "opened", false);
+                        window.refresh();
+                    },
+                );
             }
         }
 

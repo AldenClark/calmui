@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, ClickEvent, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window, div,
+    SharedString, Styled, Window, div,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable};
@@ -14,7 +14,10 @@ use super::Stack;
 use super::control;
 use super::icon::Icon;
 use super::transition::TransitionExt;
-use super::utils::{apply_radius, resolve_hsla};
+use super::utils::{
+    InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles, apply_radius,
+    interaction_style, resolve_hsla, wire_pressable,
+};
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 type ChangeHandler = Rc<dyn Fn(Option<SharedString>, &mut Window, &mut gpui::App)>;
@@ -257,46 +260,77 @@ impl RenderOnce for Accordion {
 
                 if item.meta.disabled {
                     header = header.cursor_default().opacity(0.55);
-                } else if let Some(handler) = self.on_change.clone() {
-                    let accordion_id = self.id.to_string();
-                    let value = item.meta.value.clone();
-                    header = header.on_click(move |_: &ClickEvent, window, cx| {
-                        let current = control::optional_text_state(
-                            &accordion_id,
-                            "value",
-                            None,
-                            None::<String>,
-                        );
-                        let next = if current.as_deref() == Some(value.as_ref()) {
-                            None
-                        } else {
-                            Some(value.to_string())
-                        };
+                } else {
+                    let click_handler = if let Some(handler) = self.on_change.clone() {
+                        let accordion_id = self.id.to_string();
+                        let value = item.meta.value.clone();
+                        Some(Rc::new(
+                            move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
+                                let current = control::optional_text_state(
+                                    &accordion_id,
+                                    "value",
+                                    None,
+                                    None::<String>,
+                                );
+                                let next = if current.as_deref() == Some(value.as_ref()) {
+                                    None
+                                } else {
+                                    Some(value.to_string())
+                                };
 
-                        if !is_controlled {
-                            control::set_optional_text_state(&accordion_id, "value", next.clone());
-                            window.refresh();
-                        }
-                        (handler)(next.map(SharedString::from), window, cx);
-                    });
-                } else if !is_controlled {
-                    let accordion_id = self.id.to_string();
-                    let value = item.meta.value.clone();
-                    header = header.on_click(move |_: &ClickEvent, window, _cx| {
-                        let current = control::optional_text_state(
-                            &accordion_id,
-                            "value",
-                            None,
-                            None::<String>,
+                                if !is_controlled {
+                                    control::set_optional_text_state(
+                                        &accordion_id,
+                                        "value",
+                                        next.clone(),
+                                    );
+                                    window.refresh();
+                                }
+                                (handler)(next.map(SharedString::from), window, cx);
+                            },
+                        ) as PressHandler)
+                    } else if !is_controlled {
+                        let accordion_id = self.id.to_string();
+                        let value = item.meta.value.clone();
+                        Some(Rc::new(
+                            move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
+                                let current = control::optional_text_state(
+                                    &accordion_id,
+                                    "value",
+                                    None,
+                                    None::<String>,
+                                );
+                                let next = if current.as_deref() == Some(value.as_ref()) {
+                                    None
+                                } else {
+                                    Some(value.to_string())
+                                };
+                                control::set_optional_text_state(&accordion_id, "value", next);
+                                window.refresh();
+                            },
+                        ) as PressHandler)
+                    } else {
+                        None
+                    };
+
+                    if let Some(click_handler) = click_handler {
+                        let hover_bg = resolve_hsla(&self.theme, &tokens.item_bg)
+                            .blend(gpui::white().opacity(0.04));
+                        let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
+                        header = apply_interaction_styles(
+                            header.cursor_pointer(),
+                            InteractionStyles::new()
+                                .hover(interaction_style(move |style| style.bg(hover_bg)))
+                                .active(interaction_style(move |style| style.bg(press_bg)))
+                                .focus(interaction_style(move |style| style.bg(hover_bg))),
                         );
-                        let next = if current.as_deref() == Some(value.as_ref()) {
-                            None
-                        } else {
-                            Some(value.to_string())
-                        };
-                        control::set_optional_text_state(&accordion_id, "value", next);
-                        window.refresh();
-                    });
+                        header = wire_pressable(
+                            header,
+                            PressableBehavior::new().on_click(Some(click_handler)),
+                        );
+                    } else {
+                        header = header.cursor_default();
+                    }
                 }
 
                 root = root.child(header);

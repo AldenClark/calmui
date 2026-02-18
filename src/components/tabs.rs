@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window, div,
+    SharedString, Styled, Window, div,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable};
@@ -13,7 +13,10 @@ use crate::style::{Radius, Size, Variant};
 use super::Stack;
 use super::control;
 use super::transition::TransitionExt;
-use super::utils::{apply_radius, resolve_hsla};
+use super::utils::{
+    InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles, apply_radius,
+    interaction_style, resolve_hsla, wire_pressable,
+};
 
 type ChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
@@ -253,16 +256,37 @@ impl RenderOnce for Tabs {
                 let value = item.value.clone();
                 let id = control_id.clone();
                 let hover_bg = resolve_hsla(&theme, &tokens.tab_hover_bg);
-                trigger = trigger.hover(move |style| style.bg(hover_bg)).on_click(
-                    move |_: &ClickEvent, window, cx| {
-                        if !controlled {
-                            control::set_optional_text_state(&id, "value", Some(value.to_string()));
-                            window.refresh();
-                        }
-                        if let Some(handler) = on_change.as_ref() {
-                            (handler)(value.clone(), window, cx);
-                        }
-                    },
+                let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
+                let focus_bg = if is_active {
+                    active_bg.blend(gpui::white().opacity(0.04))
+                } else {
+                    hover_bg
+                };
+                let focus_ring = resolve_hsla(&theme, &theme.semantic.focus_ring);
+                let click_handler: PressHandler = Rc::new(move |_: &ClickEvent, window, cx| {
+                    if !controlled {
+                        control::set_optional_text_state(&id, "value", Some(value.to_string()));
+                        window.refresh();
+                    }
+                    if let Some(handler) = on_change.as_ref() {
+                        (handler)(value.clone(), window, cx);
+                    }
+                });
+
+                let mut interaction_styles =
+                    InteractionStyles::new().focus(interaction_style(move |style| {
+                        style.bg(focus_bg).border_color(focus_ring)
+                    }));
+                if !is_active {
+                    interaction_styles = interaction_styles
+                        .hover(interaction_style(move |style| style.bg(hover_bg)))
+                        .active(interaction_style(move |style| style.bg(press_bg)));
+                }
+
+                trigger = apply_interaction_styles(trigger.cursor_pointer(), interaction_styles);
+                trigger = wire_pressable(
+                    trigger,
+                    PressableBehavior::new().on_click(Some(click_handler)),
                 );
             } else {
                 trigger = trigger.opacity(0.55).cursor_default();

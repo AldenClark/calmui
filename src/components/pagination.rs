@@ -1,8 +1,8 @@
 use std::{collections::BTreeSet, rc::Rc};
 
 use gpui::{
-    ClickEvent, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    StatefulInteractiveElement, Styled, Window, div,
+    ClickEvent, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled,
+    Window, div,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable};
@@ -13,7 +13,10 @@ use crate::style::{Radius, Size, Variant};
 use super::Stack;
 use super::control;
 use super::transition::TransitionExt;
-use super::utils::{apply_radius, resolve_hsla};
+use super::utils::{
+    InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles, apply_radius,
+    interaction_style, resolve_hsla, wire_pressable,
+};
 
 type ChangeHandler = Rc<dyn Fn(usize, &mut Window, &mut gpui::App)>;
 
@@ -262,17 +265,27 @@ impl RenderOnce for Pagination {
                 let id = pagination_id.clone();
                 let on_change = on_change.clone();
                 let hover_bg = resolve_hsla(&theme, &tokens.item_hover_bg);
-                item = item.hover(move |style| style.bg(hover_bg)).on_click(
-                    move |_: &ClickEvent, window, cx| {
-                        if !controlled {
-                            control::set_text_state(&id, "page", target.to_string());
-                            window.refresh();
-                        }
-                        if let Some(handler) = on_change.as_ref() {
-                            (handler)(target, window, cx);
-                        }
-                    },
+                let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
+                let focus_ring = resolve_hsla(&theme, &theme.semantic.focus_ring);
+                let click_handler: PressHandler = Rc::new(move |_: &ClickEvent, window, cx| {
+                    if !controlled {
+                        control::set_text_state(&id, "page", target.to_string());
+                        window.refresh();
+                    }
+                    if let Some(handler) = on_change.as_ref() {
+                        (handler)(target, window, cx);
+                    }
+                });
+                item = apply_interaction_styles(
+                    item.cursor_pointer(),
+                    InteractionStyles::new()
+                        .hover(interaction_style(move |style| style.bg(hover_bg)))
+                        .active(interaction_style(move |style| style.bg(press_bg)))
+                        .focus(interaction_style(move |style| {
+                            style.border_color(focus_ring)
+                        })),
                 );
+                item = wire_pressable(item, PressableBehavior::new().on_click(Some(click_handler)));
             }
 
             item
@@ -324,8 +337,10 @@ impl RenderOnce for Pagination {
                         let id = self.id.clone();
                         let on_change = on_change.clone();
                         let hover_bg = resolve_hsla(&theme, &tokens.item_hover_bg);
-                        page_item = page_item.hover(move |style| style.bg(hover_bg)).on_click(
-                            move |_: &ClickEvent, window, cx| {
+                        let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
+                        let focus_ring = resolve_hsla(&theme, &theme.semantic.focus_ring);
+                        let click_handler: PressHandler =
+                            Rc::new(move |_: &ClickEvent, window, cx| {
                                 if !controlled {
                                     control::set_text_state(&id, "page", page.to_string());
                                     window.refresh();
@@ -333,7 +348,19 @@ impl RenderOnce for Pagination {
                                 if let Some(handler) = on_change.as_ref() {
                                     (handler)(page, window, cx);
                                 }
-                            },
+                            });
+                        page_item = apply_interaction_styles(
+                            page_item.cursor_pointer(),
+                            InteractionStyles::new()
+                                .hover(interaction_style(move |style| style.bg(hover_bg)))
+                                .active(interaction_style(move |style| style.bg(press_bg)))
+                                .focus(interaction_style(move |style| {
+                                    style.border_color(focus_ring)
+                                })),
+                        );
+                        page_item = wire_pressable(
+                            page_item,
+                            PressableBehavior::new().on_click(Some(click_handler)),
                         );
                     }
 

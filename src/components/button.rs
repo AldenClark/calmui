@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, ElementId, Hsla, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div,
+    AnyElement, ClickEvent, ElementId, FocusHandle, Hsla, InteractiveElement, IntoElement,
+    ParentElement, RenderOnce, SharedString, Styled, Window, div,
 };
 
 use crate::contracts::{MotionAware, Radiusable, Sizeable, VariantConfigurable};
@@ -14,9 +14,11 @@ use super::Stack;
 use super::control;
 use super::loader::{Loader, LoaderElement, LoaderVariant};
 use super::transition::TransitionExt;
-use super::utils::{apply_button_size, apply_radius, resolve_hsla, variant_text_weight};
+use super::utils::{
+    PressHandler, PressableBehavior, apply_button_size, apply_interaction_styles, apply_radius,
+    default_pressable_surface_styles, resolve_hsla, variant_text_weight, wire_pressable,
+};
 
-type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)>;
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 type LoaderRenderer = Box<dyn FnOnce(Size, Hsla, ElementId) -> AnyElement>;
 
@@ -36,7 +38,8 @@ pub struct Button {
     theme: crate::theme::LocalTheme,
     style: gpui::StyleRefinement,
     motion: MotionConfig,
-    on_click: Option<ClickHandler>,
+    on_click: Option<PressHandler>,
+    focus_handle: Option<FocusHandle>,
 }
 
 impl Button {
@@ -58,6 +61,7 @@ impl Button {
             style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
             on_click: None,
+            focus_handle: None,
         }
     }
 
@@ -105,6 +109,11 @@ impl Button {
         handler: impl Fn(&ClickEvent, &mut Window, &mut gpui::App) + 'static,
     ) -> Self {
         self.on_click = Some(Rc::new(handler));
+        self
+    }
+
+    pub fn focus_handle(mut self, value: FocusHandle) -> Self {
+        self.focus_handle = Some(value);
         self
     }
 
@@ -254,16 +263,25 @@ impl RenderOnce for Button {
             root = root.border_color(bg);
         }
 
-        if self.disabled {
+        if self.disabled || self.loading {
             root = root.cursor_default().opacity(0.55);
-        }
-
-        if !self.disabled && !self.loading {
-            if let Some(handler) = self.on_click.clone() {
-                root = root.on_click(move |event, window, cx| {
-                    (handler)(event, window, cx);
-                });
-            }
+        } else if self.on_click.is_some() {
+            root = root.cursor_pointer();
+            root = apply_interaction_styles(
+                root,
+                default_pressable_surface_styles(
+                    bg,
+                    resolve_hsla(&self.theme, &self.theme.semantic.focus_ring),
+                ),
+            );
+            root = wire_pressable(
+                root,
+                PressableBehavior::new()
+                    .on_click(self.on_click.clone())
+                    .focus_handle(self.focus_handle.clone()),
+            );
+        } else {
+            root = root.cursor_default();
         }
 
         root.child(self.render_content())
@@ -511,6 +529,8 @@ impl crate::contracts::ComponentThemeOverridable for ButtonGroup {
 }
 
 crate::impl_disableable!(Button);
+crate::impl_clickable!(Button);
+crate::impl_focusable!(Button);
 crate::impl_disableable!(ButtonGroupItem);
 
 impl gpui::Styled for Button {

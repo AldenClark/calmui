@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
-    StatefulInteractiveElement, Styled, Window, div,
+    ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
+    Window, div,
 };
 
 use crate::contracts::MotionAware;
@@ -12,7 +12,10 @@ use crate::style::Size;
 
 use super::Stack;
 use super::transition::TransitionExt;
-use super::utils::resolve_hsla;
+use super::utils::{
+    InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles,
+    interaction_style, resolve_hsla, wire_pressable,
+};
 
 type ItemClickHandler = Rc<dyn Fn(usize, SharedString, &mut Window, &mut gpui::App)>;
 
@@ -192,14 +195,23 @@ impl RenderOnce for Breadcrumbs {
                         if let Some(handler) = self.on_item_click.clone() {
                             let label = item.label.clone();
                             let hover_bg = resolve_hsla(&self.theme, &tokens.item_hover_bg);
-                            crumb = crumb
-                                .cursor_pointer()
-                                .px_1()
-                                .rounded_sm()
-                                .hover(move |style| style.bg(hover_bg))
-                                .on_click(move |_: &ClickEvent, window, cx| {
+                            let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
+                            let click_handler: PressHandler =
+                                Rc::new(move |_: &ClickEvent, window, cx| {
                                     (handler)(index, label.clone(), window, cx);
                                 });
+                            crumb = crumb.px_1().rounded_sm().cursor_pointer();
+                            crumb = apply_interaction_styles(
+                                crumb,
+                                InteractionStyles::new()
+                                    .hover(interaction_style(move |style| style.bg(hover_bg)))
+                                    .active(interaction_style(move |style| style.bg(press_bg)))
+                                    .focus(interaction_style(move |style| style.bg(hover_bg))),
+                            );
+                            crumb = wire_pressable(
+                                crumb,
+                                PressableBehavior::new().on_click(Some(click_handler)),
+                            );
                         }
                     } else if item.disabled {
                         crumb = crumb.opacity(0.5).cursor_default();

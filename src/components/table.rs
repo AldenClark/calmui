@@ -15,7 +15,10 @@ use super::control;
 use super::pagination::Pagination;
 use super::scroll_area::{ScrollArea, ScrollDirection};
 use super::transition::TransitionExt;
-use super::utils::{apply_radius, hairline_px, resolve_hsla};
+use super::utils::{
+    InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles, apply_radius,
+    hairline_px, interaction_style, resolve_hsla, wire_pressable,
+};
 
 type CellRenderer = Box<dyn FnOnce() -> AnyElement>;
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
@@ -775,17 +778,30 @@ impl RenderOnce for Table {
                 .bg(row_bg)
                 .text_color(resolve_hsla(&self.theme, &tokens.cell_fg));
 
-            if highlight_on_hover {
-                let hover_bg = resolve_hsla(&self.theme, &tokens.row_hover_bg);
-                row_node = row_node.hover(move |style| style.bg(hover_bg));
-            }
             if let Some(handler) = on_row_click.as_ref() {
                 let on_row_click = handler.clone();
-                row_node = row_node.cursor_pointer().on_click(
+                let hover_bg = resolve_hsla(&self.theme, &tokens.row_hover_bg);
+                let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
+                let mut interaction_styles = InteractionStyles::new()
+                    .active(interaction_style(move |style| style.bg(press_bg)))
+                    .focus(interaction_style(move |style| style.bg(hover_bg)));
+                if highlight_on_hover {
+                    interaction_styles = interaction_styles
+                        .hover(interaction_style(move |style| style.bg(hover_bg)));
+                }
+                let click_handler: PressHandler = Rc::new(
                     move |_: &ClickEvent, window: &mut gpui::Window, cx: &mut gpui::App| {
                         (on_row_click)(source_index, window, cx);
                     },
                 );
+                row_node = apply_interaction_styles(row_node.cursor_pointer(), interaction_styles);
+                row_node = wire_pressable(
+                    row_node,
+                    PressableBehavior::new().on_click(Some(click_handler)),
+                );
+            } else if highlight_on_hover {
+                let hover_bg = resolve_hsla(&self.theme, &tokens.row_hover_bg);
+                row_node = row_node.hover(move |style| style.bg(hover_bg));
             }
             if auto_virtualization_enabled && row_index == 0 {
                 let table_id_for_height = table_id.clone();
@@ -922,8 +938,11 @@ impl RenderOnce for Table {
                     if !is_active {
                         let on_page_size_change = on_page_size_change.clone();
                         let table_id_for_page_size = table_id_for_page_size.clone();
-                        item = item.cursor_pointer().on_click(
-                            move |_: &ClickEvent, window: &mut gpui::Window, cx| {
+                        let hover_bg = resolve_hsla(&self.theme, &tokens.row_hover_bg);
+                        let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
+                        let focus_ring = resolve_hsla(&self.theme, &self.theme.semantic.focus_ring);
+                        let click_handler: PressHandler =
+                            Rc::new(move |_: &ClickEvent, window: &mut gpui::Window, cx| {
                                 control::set_text_state(
                                     &table_id_for_page_size,
                                     "page-size",
@@ -938,7 +957,19 @@ impl RenderOnce for Table {
                                 if let Some(handler) = on_page_size_change.as_ref() {
                                     (handler)(option, window, cx);
                                 }
-                            },
+                            });
+                        item = apply_interaction_styles(
+                            item.cursor_pointer(),
+                            InteractionStyles::new()
+                                .hover(interaction_style(move |style| style.bg(hover_bg)))
+                                .active(interaction_style(move |style| style.bg(press_bg)))
+                                .focus(interaction_style(move |style| {
+                                    style.border_color(focus_ring)
+                                })),
+                        );
+                        item = wire_pressable(
+                            item,
+                            PressableBehavior::new().on_click(Some(click_handler)),
                         );
                     } else {
                         item = item.cursor_default();
