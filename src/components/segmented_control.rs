@@ -191,7 +191,7 @@ impl RenderOnce for SegmentedControl {
         let selected = self.resolved_value();
         let active_bg = self.active_bg();
         let size = self.size;
-        let full_width = self.full_width;
+        let _full_width = self.full_width;
         let theme = self.theme.clone();
         let on_change = self.on_change.clone();
         let controlled = self.value_controlled;
@@ -202,7 +202,6 @@ impl RenderOnce for SegmentedControl {
         let divider = resolve_hsla(&theme, &tokens.border).alpha(0.6);
         let divider_width = super::utils::quantized_stroke_px(window, 1.0);
         let transparent = resolve_hsla(&theme, &gpui::transparent_black());
-        let active_border = resolve_hsla(&theme, &tokens.border).alpha(0.85);
         let selected_index = selected.as_ref().and_then(|value| {
             self.items
                 .iter()
@@ -210,6 +209,13 @@ impl RenderOnce for SegmentedControl {
         });
         let previous_index = control::optional_text_state(&self.id, "prev-index", None, None)
             .and_then(|value| value.parse::<usize>().ok());
+        let divider_height = match size {
+            Size::Xs => 12.0,
+            Size::Sm => 14.0,
+            Size::Md => 16.0,
+            Size::Lg => 18.0,
+            Size::Xl => 20.0,
+        };
 
         let items = self
             .items
@@ -232,12 +238,6 @@ impl RenderOnce for SegmentedControl {
                     .items_center()
                     .justify_center()
                     .min_w_0()
-                    .border(divider_width)
-                    .border_color(if is_active {
-                        active_border
-                    } else {
-                        transparent
-                    })
                     .font_weight(if is_active {
                         gpui::FontWeight::SEMIBOLD
                     } else {
@@ -293,18 +293,15 @@ impl RenderOnce for SegmentedControl {
                             .left_0()
                             .top_0()
                             .bottom_0()
-                            .w(divider_width)
-                            .bg(divider),
+                            .flex()
+                            .items_center()
+                            .child(div().w(divider_width).h(gpui::px(divider_height)).bg(divider)),
                     );
                 }
 
                 segment = segment.child(div().relative().truncate().child(item.label.clone()));
 
                 segment = Self::apply_item_size(size, segment);
-
-                if full_width {
-                    segment = segment.flex_1();
-                }
 
                 if is_active {
                     segment = apply_radius(&self.theme, segment, self.radius).shadow_sm();
@@ -345,14 +342,9 @@ impl RenderOnce for SegmentedControl {
             .gap_0()
             .p_0p5()
             .bg(resolve_hsla(&theme, &tokens.bg))
-            .border(super::utils::quantized_stroke_px(window, 1.0))
-            .border_color(resolve_hsla(&theme, &tokens.border))
             .children(items);
 
         root = apply_radius(&self.theme, root, self.radius);
-        if full_width {
-            root = root.w_full();
-        }
 
         root.with_enter_transition(enter_id.slot("enter"), motion)
     }
