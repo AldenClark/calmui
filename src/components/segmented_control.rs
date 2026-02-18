@@ -237,9 +237,8 @@ impl RenderOnce for SegmentedControl {
                     .as_ref()
                     .is_some_and(|value| value.as_ref() == item.value.as_ref());
                 let show_divider = index > 0
-                    && !selected_index.is_some_and(|active| {
-                        active == index || active.saturating_add(1) == index
-                    });
+                    && !selected_index
+                        .is_some_and(|active| active == index || active.saturating_add(1) == index);
 
                 let mut segment = div()
                     .id(self.id.slot_index("item", index.to_string()))
@@ -306,16 +305,22 @@ impl RenderOnce for SegmentedControl {
                             .bottom_0()
                             .flex()
                             .items_center()
-                            .child(div().w(divider_width).h(gpui::px(divider_height)).bg(divider)),
+                            .child(
+                                div()
+                                    .w(divider_width)
+                                    .h(gpui::px(divider_height))
+                                    .bg(divider),
+                            ),
                     );
                 }
 
                 segment = segment.child(div().relative().truncate().child(item.label.clone()));
 
                 segment = Self::apply_item_size(size, segment);
+                segment = apply_radius(&self.theme, segment, self.radius);
 
                 if is_active {
-                    segment = apply_radius(&self.theme, segment, self.radius).shadow_sm();
+                    segment = segment.shadow_sm();
                 }
 
                 if !item.disabled {

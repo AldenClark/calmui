@@ -483,21 +483,37 @@ impl RenderOnce for TitleBar {
                     .id(self.id.slot("win-title"))
                     .h_full()
                     .max_w(px(320.0))
+                    .min_w(px(72.0))
                     .pr(px(12.0))
                     .flex()
                     .items_center()
+                    .window_control_area(WindowControlArea::Drag)
                     .children(title_element);
 
-                let mut middle_slot = div()
+                let mut middle_slot_content = div()
+                    .id(self.id.slot("win-slot-content"))
+                    .h_full()
+                    .flex()
+                    .items_center();
+                if let Some(slot) = self.slot {
+                    middle_slot_content = middle_slot_content.child(slot());
+                }
+
+                let middle_slot = div()
                     .id(self.id.slot("win-slot"))
                     .flex_1()
                     .min_w_0()
                     .h_full()
                     .flex()
-                    .items_center();
-                if let Some(slot) = self.slot {
-                    middle_slot = middle_slot.child(slot());
-                }
+                    .items_center()
+                    .child(middle_slot_content)
+                    .child(
+                        div()
+                            .id(self.id.slot("win-slot-drag"))
+                            .flex_1()
+                            .h_full()
+                            .window_control_area(WindowControlArea::Drag),
+                    );
 
                 row = row.child(left_title).child(middle_slot);
                 if let Some(controls) = controls {
@@ -505,7 +521,12 @@ impl RenderOnce for TitleBar {
                 }
             } else {
                 row = row
-                    .child(div().w(px(controls_width)).h(px(self.height_px)))
+                    .child(
+                        div()
+                            .w(px(controls_width))
+                            .h(px(self.height_px))
+                            .window_control_area(WindowControlArea::Drag),
+                    )
                     .child(
                         div()
                             .id(self.id.slot("win-center"))
@@ -515,6 +536,7 @@ impl RenderOnce for TitleBar {
                             .flex()
                             .items_center()
                             .justify_center()
+                            .window_control_area(WindowControlArea::Drag)
                             .children(title_element),
                     )
                     .child(controls.map_or_else(

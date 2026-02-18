@@ -1,4 +1,4 @@
-use std::any::Any;
+use std::any::{Any, TypeId};
 use std::rc::Rc;
 
 use gpui::{
@@ -303,6 +303,12 @@ pub struct AppShell {
     /// `true` 时标题栏悬浮在主体上方，不为主体留出高度。
     /// `false` 时标题栏占据普通布局高度。
     title_bar_immersive: bool,
+    /// 标识标题栏是否为 calmui 内置 `TitleBar`。
+    ///
+    /// 用于在 Windows 沉浸模式下选择命中策略：
+    /// - 内置 `TitleBar`：由组件自身声明 Drag / Min / Max / Close 的互斥区域；
+    /// - 自定义标题栏：保留 AppShell overlay Drag 作为兼容回退。
+    title_bar_is_calmui: bool,
     /// 左侧区域内容。
     sidebar: Option<SlotRenderer>,
     /// 中央主内容区域（必填）。
@@ -359,6 +365,7 @@ impl AppShell {
             id: ComponentId::default(),
             title_bar: None,
             title_bar_immersive: false,
+            title_bar_is_calmui: false,
             sidebar: None,
             content: Box::new(|| content.into_any_element()),
             inspector: None,
@@ -396,6 +403,7 @@ impl AppShell {
     where
         T: IntoElement + 'static,
     {
+        self.title_bar_is_calmui = TypeId::of::<T>() == TypeId::of::<super::title_bar::TitleBar>();
         // If caller passes calmui::TitleBar, keep its immersive mode aligned with AppShell.
         let value_any: Box<dyn Any> = Box::new(value);
         self.title_bar = Some(Box::new(move |immersive| match value_any
@@ -680,11 +688,13 @@ impl RenderOnce for AppShell {
                     .h(px(self.title_bar_height_px.max(0.0)))
                     .child(title_region);
 
-                if cfg!(any(
-                    target_os = "windows",
-                    target_os = "linux",
-                    target_os = "freebsd"
-                )) {
+                let use_overlay_drag = cfg!(any(target_os = "linux", target_os = "freebsd"))
+                    || (cfg!(target_os = "windows") && !self.title_bar_is_calmui);
+                if use_overlay_drag {
+                    // Windows hit-test prioritizes the first matching window-control region.
+                    // For calmui::TitleBar on Windows, Drag/Min/Max/Close are defined precisely
+                    // inside TitleBar itself to avoid overlap; custom title bars keep this
+                    // overlay Drag as a compatibility fallback.
                     overlay = overlay.window_control_area(WindowControlArea::Drag);
                 }
 
