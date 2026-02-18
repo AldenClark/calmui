@@ -9,6 +9,7 @@ use gpui::{
 use crate::id::ComponentId;
 
 use super::control;
+use super::divider::{Divider, DividerOrientation};
 use super::overlay::{Overlay, OverlayMaterialMode};
 use super::scroll_area::{ScrollArea, ScrollDirection};
 use super::utils::resolve_hsla;
@@ -278,6 +279,8 @@ pub struct AppShell {
     sidebar_mode: PanelMode,
     /// 右侧属性面板展示模式。
     inspector_mode: PanelMode,
+    /// inline 模式下是否在区域间绘制 Divider。
+    inline_dividers: bool,
     /// 左侧 overlay 开关（受控值）。
     sidebar_overlay_opened: Option<bool>,
     /// 左侧 overlay 开关（非受控初始值）。
@@ -322,6 +325,7 @@ impl AppShell {
             bottom_panel_height_px: 180.0,
             sidebar_mode: PanelMode::Inline,
             inspector_mode: PanelMode::Inline,
+            inline_dividers: true,
             sidebar_overlay_opened: None,
             sidebar_overlay_default_opened: false,
             on_sidebar_overlay_open_change: None,
@@ -421,6 +425,12 @@ impl AppShell {
     /// 设置右侧属性面板展示模式。
     pub fn inspector_mode(mut self, value: PanelMode) -> Self {
         self.inspector_mode = value;
+        self
+    }
+
+    /// 控制 inline 模式下区域之间的 Divider 显示。
+    pub fn inline_dividers(mut self, value: bool) -> Self {
+        self.inline_dividers = value;
         self
     }
 
@@ -601,6 +611,9 @@ impl RenderOnce for AppShell {
                 // matching macOS behavior.
                 title_chrome.bordered = false;
             }
+            if !self.title_bar_immersive && self.inline_dividers {
+                title_chrome.bordered = false;
+            }
             let title_region = self
                 .wrap_region(
                     window,
@@ -666,6 +679,13 @@ impl RenderOnce for AppShell {
                 title_bar_overlay = Some(overlay.into_any_element());
             } else {
                 root = root.child(title_region);
+                if self.inline_dividers {
+                    root = root.child(
+                        Divider::new()
+                            .with_id(self.id.slot("divider-title-body"))
+                            .orientation(DividerOrientation::Horizontal),
+                    );
+                }
             }
         }
 
@@ -688,18 +708,29 @@ impl RenderOnce for AppShell {
         if self.sidebar_mode == PanelMode::Inline {
             if let Some(sidebar) = self.sidebar.take() {
                 let sidebar_default_bg = resolve_hsla(&self.theme, &self.theme.semantic.bg_soft);
+                let mut sidebar_chrome = self.sidebar_chrome.clone();
+                if self.inline_dividers {
+                    sidebar_chrome.bordered = false;
+                }
                 let sidebar_region = self
                     .wrap_region(
                         window,
                         self.id.slot("sidebar-inline"),
                         sidebar(),
-                        &self.sidebar_chrome,
+                        &sidebar_chrome,
                         sidebar_default_bg,
                     )
                     .w(px(self.sidebar_width_px))
                     .h_full()
                     .flex_none();
                 row = row.child(sidebar_region);
+                if self.inline_dividers {
+                    row = row.child(
+                        Divider::new()
+                            .with_id(self.id.slot("divider-sidebar-center"))
+                            .orientation(DividerOrientation::Vertical),
+                    );
+                }
             }
         }
 
@@ -727,12 +758,21 @@ impl RenderOnce for AppShell {
 
         if let Some(bottom_panel) = self.bottom_panel.take() {
             let bottom_default_bg = resolve_hsla(&self.theme, &self.theme.semantic.bg_surface);
+            let mut bottom_panel_chrome = self.bottom_panel_chrome.clone();
+            if self.inline_dividers {
+                bottom_panel_chrome.bordered = false;
+                center = center.child(
+                    Divider::new()
+                        .with_id(self.id.slot("divider-content-bottom"))
+                        .orientation(DividerOrientation::Horizontal),
+                );
+            }
             let bottom_region = self
                 .wrap_region(
                     window,
                     self.id.slot("bottom-panel"),
                     bottom_panel(),
-                    &self.bottom_panel_chrome,
+                    &bottom_panel_chrome,
                     bottom_default_bg,
                 )
                 .h(px(self.bottom_panel_height_px))
@@ -746,12 +786,21 @@ impl RenderOnce for AppShell {
         if self.inspector_mode == PanelMode::Inline {
             if let Some(inspector) = self.inspector.take() {
                 let inspector_default_bg = resolve_hsla(&self.theme, &self.theme.semantic.bg_soft);
+                let mut inspector_chrome = self.inspector_chrome.clone();
+                if self.inline_dividers {
+                    inspector_chrome.bordered = false;
+                    row = row.child(
+                        Divider::new()
+                            .with_id(self.id.slot("divider-center-inspector"))
+                            .orientation(DividerOrientation::Vertical),
+                    );
+                }
                 let inspector_region = self
                     .wrap_region(
                         window,
                         self.id.slot("inspector-inline"),
                         inspector(),
-                        &self.inspector_chrome,
+                        &inspector_chrome,
                         inspector_default_bg,
                     )
                     .w(px(self.inspector_width_px))

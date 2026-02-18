@@ -5347,7 +5347,10 @@ mod tests {
             toast.warning_bg,
             resolve_palette_hsla(PaletteKey::Yellow, 4).opacity(0.15)
         );
-        assert_eq!(toast.warning_fg, resolve_palette_hsla(PaletteKey::Yellow, 4));
+        assert_eq!(
+            toast.warning_fg,
+            resolve_palette_hsla(PaletteKey::Yellow, 4)
+        );
 
         assert_eq!(
             toast.error_bg,
