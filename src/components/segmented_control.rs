@@ -115,12 +115,17 @@ impl SegmentedControl {
     }
 
     fn resolved_value(&self) -> Option<SharedString> {
+        let default = self
+            .default_value
+            .clone()
+            .or_else(|| self.items.first().map(|item| item.value.clone()));
+
         control::optional_text_state(
             &self.id,
             "value",
             self.value_controlled
                 .then_some(self.value.as_ref().map(|value| value.to_string())),
-            self.default_value.as_ref().map(|value| value.to_string()),
+            default.map(|value| value.to_string()),
         )
         .map(SharedString::from)
     }
@@ -194,6 +199,9 @@ impl RenderOnce for SegmentedControl {
         let root_id = self.id.clone();
         let enter_id = self.id.clone();
         let motion = self.motion;
+        let divider = resolve_hsla(&theme, &tokens.border).alpha(0.72);
+        let divider_width = super::utils::quantized_stroke_px(window, 1.0);
+        let transparent = resolve_hsla(&theme, &gpui::transparent_black());
 
         let items = self
             .items
@@ -206,9 +214,11 @@ impl RenderOnce for SegmentedControl {
 
                 let mut segment = div()
                     .id(self.id.slot_index("item", index.to_string()))
+                    .relative()
                     .flex()
                     .items_center()
                     .justify_center()
+                    .min_w_0()
                     .text_color(if item.disabled {
                         resolve_hsla(&theme, &tokens.item_disabled_fg)
                     } else if is_active {
@@ -219,9 +229,21 @@ impl RenderOnce for SegmentedControl {
                     .bg(if is_active {
                         active_bg
                     } else {
-                        resolve_hsla(&theme, &gpui::transparent_black())
+                        transparent
                     })
-                    .child(item.label.clone());
+                    .child(div().truncate().child(item.label.clone()));
+
+                if index > 0 {
+                    segment = segment.child(
+                        div()
+                            .absolute()
+                            .left_0()
+                            .top_0()
+                            .bottom_0()
+                            .w(divider_width)
+                            .bg(divider),
+                    );
+                }
 
                 segment = Self::apply_item_size(size, segment);
 
@@ -229,27 +251,28 @@ impl RenderOnce for SegmentedControl {
                     segment = segment.flex_1();
                 }
 
+                if is_active {
+                    segment = apply_radius(&self.theme, segment, self.radius).shadow_sm();
+                }
+
                 if !item.disabled {
                     let on_change = on_change.clone();
                     let value = item.value.clone();
                     let id = control_id.clone();
                     let hover_bg = resolve_hsla(&theme, &tokens.item_hover_bg);
-                    segment = segment
-                        .cursor_pointer()
-                        .hover(move |style| style.bg(hover_bg))
-                        .on_click(move |_: &ClickEvent, window, cx| {
-                            if !controlled {
-                                control::set_optional_text_state(
-                                    &id,
-                                    "value",
-                                    Some(value.to_string()),
-                                );
-                                window.refresh();
-                            }
-                            if let Some(handler) = on_change.as_ref() {
-                                (handler)(value.clone(), window, cx);
-                            }
-                        });
+                    segment = segment.cursor_pointer();
+                    if !is_active {
+                        segment = segment.hover(move |style| style.bg(hover_bg));
+                    }
+                    segment = segment.on_click(move |_: &ClickEvent, window, cx| {
+                        if !controlled {
+                            control::set_optional_text_state(&id, "value", Some(value.to_string()));
+                            window.refresh();
+                        }
+                        if let Some(handler) = on_change.as_ref() {
+                            (handler)(value.clone(), window, cx);
+                        }
+                    });
                 } else {
                     segment = segment.opacity(0.5).cursor_default();
                 }
@@ -262,8 +285,8 @@ impl RenderOnce for SegmentedControl {
             .id(root_id)
             .flex()
             .items_center()
-            .gap_1()
-            .p_1()
+            .gap_0()
+            .p_0p5()
             .bg(resolve_hsla(&theme, &tokens.bg))
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&theme, &tokens.border))
