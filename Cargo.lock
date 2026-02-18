@@ -830,6 +830,8 @@ dependencies = [
  "pulldown-cmark",
  "rust-embed",
  "rust_decimal",
+ "sys-locale",
+ "toml 0.8.23",
 ]
 
 [[package]]

@@ -2,15 +2,21 @@
 name = "calmui"
 version = "0.1.0"
 edition = "2024"
+build = "build.rs"
 
 [features]
 extend-icon = []
+i18n = ["dep:sys-locale"]
 
 [dependencies]
 gpui = { git = "https://github.com/AldenClark/zed.git", package = "gpui" }
 rust-embed = "8.5.0"
 pulldown-cmark = "0.12"
 rust_decimal = "1.36"
+sys-locale = { version = "0.3.2", optional = true }
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
 core-text = "=21.0.0"
+
+[build-dependencies]
+toml = "0.8.20"

@@ -1,0 +1,20 @@
+default_locale = "en-US"
+
+[locales.common.confirm]
+"en-US" = "Confirm"
+"zh-CN" = "确认"
+
+[locales.common.cancel]
+"en-US" = "Cancel"
+"zh-CN" = "取消"
+
+[locales.common.done]
+"en-US" = "Done"
+"zh-CN" = "完成"
+
+[locales.demo.greeting]
+"en-US" = "Hello, {name}"
+"zh-CN" = "你好，{name}"
+
+[locales.demo.only_en]
+"en-US" = "Only English"
