@@ -25,7 +25,7 @@ type LoaderRenderer = Box<dyn FnOnce(Size, Hsla, ElementId) -> AnyElement>;
 #[derive(IntoElement)]
 pub struct Button {
     id: ComponentId,
-    label: SharedString,
+    label: Option<SharedString>,
     variant: Variant,
     size: Size,
     radius: Radius,
@@ -45,9 +45,14 @@ pub struct Button {
 impl Button {
     #[track_caller]
     pub fn new(label: impl Into<SharedString>) -> Self {
+        Self::without_label().label(label)
+    }
+
+    #[track_caller]
+    pub fn without_label() -> Self {
         Self {
             id: ComponentId::default(),
-            label: label.into(),
+            label: None,
             variant: Variant::Filled,
             size: Size::Md,
             radius: Radius::Sm,
@@ -63,6 +68,16 @@ impl Button {
             on_click: None,
             focus_handle: None,
         }
+    }
+
+    pub fn label(mut self, label: impl Into<SharedString>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    pub fn clear_label(mut self) -> Self {
+        self.label = None;
+        self
     }
 
     pub fn left_slot(mut self, content: impl IntoElement + 'static) -> Self {
@@ -158,11 +173,13 @@ impl Button {
             if let Some(left) = self.left_slot.take() {
                 placeholder = placeholder.child(left());
             }
-            placeholder = placeholder.child(
-                div()
-                    .font_weight(variant_text_weight(self.variant))
-                    .child(self.label.clone()),
-            );
+            if let Some(label) = self.label.clone() {
+                placeholder = placeholder.child(
+                    div()
+                        .font_weight(variant_text_weight(self.variant))
+                        .child(label),
+                );
+            }
             if let Some(right) = self.right_slot.take() {
                 placeholder = placeholder.child(right());
             }
@@ -190,11 +207,13 @@ impl Button {
             row = row.child(left());
         }
 
-        row = row.child(
-            div()
-                .font_weight(variant_text_weight(self.variant))
-                .child(self.label.clone()),
-        );
+        if let Some(label) = self.label.clone() {
+            row = row.child(
+                div()
+                    .font_weight(variant_text_weight(self.variant))
+                    .child(label),
+            );
+        }
 
         if let Some(right) = self.right_slot.take() {
             row = row.child(right());
