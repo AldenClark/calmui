@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use toml::{Table, Value};
 
 const GENERATED_FILE_NAME: &str = "calmui_i18n_generated.rs";
-const DEFAULT_I18N_REL_PATH: &str = "calmui/i18n.toml";
+const DEFAULT_I18N_REL_PATH: &str = "locales.toml";
 const DEFAULT_LOCALE: &str = "en-US";
 
 fn main() {
@@ -68,14 +68,15 @@ fn resolve_catalog_path(out_dir: &Path) -> Result<PathBuf, String> {
         })?
     };
 
-    let candidate = app_root.join(DEFAULT_I18N_REL_PATH);
-    if candidate.exists() {
-        return Ok(candidate);
+    let primary = app_root.join(DEFAULT_I18N_REL_PATH);
+    println!("cargo:rerun-if-changed={}", primary.display());
+    if primary.exists() {
+        return Ok(primary);
     }
 
     Err(format!(
-        "i18n feature requires translation file at {} (or set CALMUI_I18N_TOML)",
-        candidate.display()
+        "i18n feature requires translation file at {} or set CALMUI_I18N_TOML",
+        primary.display()
     ))
 }
 
