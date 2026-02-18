@@ -39,7 +39,7 @@ impl Paper {
         self
     }
 
-    pub fn radius(mut self, value: Radius) -> Self {
+    pub fn with_radius(mut self, value: Radius) -> Self {
         self.radius = value;
         self
     }
@@ -125,6 +125,8 @@ impl crate::contracts::ComponentThemeOverridable for Paper {
         &mut self.theme
     }
 }
+
+crate::impl_radiused_via_method!(Paper);
 
 impl gpui::Styled for Paper {
     fn style(&mut self) -> &mut gpui::StyleRefinement {

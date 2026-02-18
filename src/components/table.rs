@@ -392,12 +392,12 @@ impl Table {
         self
     }
 
-    pub fn size(mut self, value: Size) -> Self {
+    pub fn with_size(mut self, value: Size) -> Self {
         self.size = value;
         self
     }
 
-    pub fn radius(mut self, value: Radius) -> Self {
+    pub fn with_radius(mut self, value: Radius) -> Self {
         self.radius = value;
         self
     }
@@ -1169,6 +1169,9 @@ impl crate::contracts::ComponentThemeOverridable for Table {
         &mut self.theme
     }
 }
+
+crate::impl_sized_via_method!(Table);
+crate::impl_radiused_via_method!(Table);
 
 impl gpui::Styled for Table {
     fn style(&mut self) -> &mut gpui::StyleRefinement {

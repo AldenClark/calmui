@@ -246,7 +246,7 @@ impl Space {
         self
     }
 
-    pub fn size(mut self, value: Size) -> Self {
+    pub fn with_size(mut self, value: Size) -> Self {
         let size_px = Self::size_to_px(value);
         self.width_px = Some(size_px);
         self.height_px = Some(size_px);
@@ -300,6 +300,8 @@ impl RenderOnce for Space {
         node
     }
 }
+
+crate::impl_sized_via_method!(Space);
 
 impl crate::contracts::ComponentThemeOverridable for Grid {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {

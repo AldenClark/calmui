@@ -367,7 +367,7 @@ impl RenderOnce for Markdown {
                     if let Some(lang) = lang {
                         content = content.child(
                             Text::new(lang)
-                                .size(Size::Xs)
+                                .with_size(Size::Xs)
                                 .tone(TextTone::Muted)
                                 .truncate(true),
                         );
@@ -383,7 +383,7 @@ impl RenderOnce for Markdown {
                     );
                     Paper::new()
                         .padding(Size::Sm)
-                        .radius(Radius::Sm)
+                        .with_radius(Radius::Sm)
                         .bordered(true)
                         .child(content)
                         .into_any_element()

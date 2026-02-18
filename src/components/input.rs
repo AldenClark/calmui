@@ -558,12 +558,12 @@ impl TextInput {
         self
     }
 
-    pub fn size(mut self, value: Size) -> Self {
+    pub fn with_size(mut self, value: Size) -> Self {
         self.size = value;
         self
     }
 
-    pub fn radius(mut self, value: Radius) -> Self {
+    pub fn with_radius(mut self, value: Radius) -> Self {
         self.radius = value;
         self
     }
@@ -1743,17 +1743,17 @@ impl FieldLike for TextInput {
 }
 
 impl VariantConfigurable for TextInput {
-    fn variant(mut self, value: Variant) -> Self {
+    fn with_variant(mut self, value: Variant) -> Self {
         self.variant = value;
         self
     }
 
-    fn size(mut self, value: Size) -> Self {
+    fn with_size(mut self, value: Size) -> Self {
         self.size = value;
         self
     }
 
-    fn radius(mut self, value: Radius) -> Self {
+    fn with_radius(mut self, value: Radius) -> Self {
         self.radius = value;
         self
     }
@@ -1867,13 +1867,13 @@ impl PasswordInput {
         self
     }
 
-    pub fn size(mut self, value: Size) -> Self {
-        self.inner = self.inner.size(value);
+    pub fn with_size(mut self, value: Size) -> Self {
+        self.inner = self.inner.with_size(value);
         self
     }
 
-    pub fn radius(mut self, value: Radius) -> Self {
-        self.inner = self.inner.radius(value);
+    pub fn with_radius(mut self, value: Radius) -> Self {
+        self.inner = self.inner.with_radius(value);
         self
     }
 
@@ -1934,18 +1934,18 @@ impl FieldLike for PasswordInput {
 }
 
 impl VariantConfigurable for PasswordInput {
-    fn variant(mut self, value: Variant) -> Self {
-        self.inner = self.inner.variant(value);
+    fn with_variant(mut self, value: Variant) -> Self {
+        self.inner = self.inner.with_variant(value);
         self
     }
 
-    fn size(mut self, value: Size) -> Self {
+    fn with_size(mut self, value: Size) -> Self {
         self.inner = Sized::with_size(self.inner, value);
         self
     }
 
-    fn radius(mut self, value: Radius) -> Self {
-        self.inner = self.inner.radius(value);
+    fn with_radius(mut self, value: Radius) -> Self {
+        self.inner = self.inner.with_radius(value);
         self
     }
 }
@@ -2045,12 +2045,12 @@ impl PinInput {
         self
     }
 
-    pub fn size(mut self, value: Size) -> Self {
+    pub fn with_size(mut self, value: Size) -> Self {
         self.size = value;
         self
     }
 
-    pub fn radius(mut self, value: Radius) -> Self {
+    pub fn with_radius(mut self, value: Radius) -> Self {
         self.radius = value;
         self
     }
@@ -2162,16 +2162,16 @@ impl PinInput {
 }
 
 impl VariantConfigurable for PinInput {
-    fn variant(self, _value: Variant) -> Self {
+    fn with_variant(self, _value: Variant) -> Self {
         self
     }
 
-    fn size(mut self, value: Size) -> Self {
+    fn with_size(mut self, value: Size) -> Self {
         self.size = value;
         self
     }
 
-    fn radius(mut self, value: Radius) -> Self {
+    fn with_radius(mut self, value: Radius) -> Self {
         self.radius = value;
         self
     }

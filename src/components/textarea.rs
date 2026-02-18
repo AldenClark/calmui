@@ -539,12 +539,12 @@ impl Textarea {
         self
     }
 
-    pub fn size(mut self, value: Size) -> Self {
+    pub fn with_size(mut self, value: Size) -> Self {
         self.size = value;
         self
     }
 
-    pub fn radius(mut self, value: Radius) -> Self {
+    pub fn with_radius(mut self, value: Radius) -> Self {
         self.radius = value;
         self
     }
@@ -2129,17 +2129,17 @@ impl FieldLike for Textarea {
 }
 
 impl VariantConfigurable for Textarea {
-    fn variant(mut self, value: Variant) -> Self {
+    fn with_variant(mut self, value: Variant) -> Self {
         self.variant = value;
         self
     }
 
-    fn size(mut self, value: Size) -> Self {
+    fn with_size(mut self, value: Size) -> Self {
         self.size = value;
         self
     }
 
-    fn radius(mut self, value: Radius) -> Self {
+    fn with_radius(mut self, value: Radius) -> Self {
         self.radius = value;
         self
     }

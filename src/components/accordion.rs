@@ -165,16 +165,16 @@ impl Accordion {
 }
 
 impl VariantConfigurable for Accordion {
-    fn variant(self, _value: Variant) -> Self {
+    fn with_variant(self, _value: Variant) -> Self {
         self
     }
 
-    fn size(mut self, value: Size) -> Self {
+    fn with_size(mut self, value: Size) -> Self {
         self.size = value;
         self
     }
 
-    fn radius(mut self, value: Radius) -> Self {
+    fn with_radius(mut self, value: Radius) -> Self {
         self.radius = value;
         self
     }

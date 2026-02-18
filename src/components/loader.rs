@@ -24,7 +24,7 @@ pub enum LoaderVariant {
 
 pub trait LoaderElement: IntoElement + Sized + 'static {
     fn with_id(self, id: impl Into<ComponentId>) -> Self;
-    fn size(self, size: Size) -> Self;
+    fn with_size(self, size: Size) -> Self;
     fn color(self, color: impl Into<Hsla>) -> Self;
 }
 
@@ -70,7 +70,7 @@ impl Loader {
         self
     }
 
-    pub fn size(mut self, size: Size) -> Self {
+    pub fn with_size(mut self, size: Size) -> Self {
         self.size = size;
         self
     }
@@ -346,8 +346,8 @@ impl LoaderElement for Loader {
         Loader::with_id(self, id)
     }
 
-    fn size(self, size: Size) -> Self {
-        Loader::size(self, size)
+    fn with_size(self, size: Size) -> Self {
+        Loader::with_size(self, size)
     }
 
     fn color(self, color: impl Into<Hsla>) -> Self {

@@ -147,17 +147,17 @@ impl Chip {
 }
 
 impl VariantConfigurable for Chip {
-    fn variant(mut self, value: Variant) -> Self {
+    fn with_variant(mut self, value: Variant) -> Self {
         self.variant = value;
         self
     }
 
-    fn size(mut self, value: Size) -> Self {
+    fn with_size(mut self, value: Size) -> Self {
         self.size = value;
         self
     }
 
-    fn radius(mut self, value: Radius) -> Self {
+    fn with_radius(mut self, value: Radius) -> Self {
         self.radius = value;
         self
     }
@@ -474,17 +474,17 @@ impl ChipGroup {
 }
 
 impl VariantConfigurable for ChipGroup {
-    fn variant(mut self, value: Variant) -> Self {
+    fn with_variant(mut self, value: Variant) -> Self {
         self.variant = value;
         self
     }
 
-    fn size(mut self, value: Size) -> Self {
+    fn with_size(mut self, value: Size) -> Self {
         self.size = value;
         self
     }
 
-    fn radius(mut self, value: Radius) -> Self {
+    fn with_radius(mut self, value: Radius) -> Self {
         self.radius = value;
         self
     }
@@ -515,7 +515,7 @@ impl RenderOnce for ChipGroup {
                     .value(option.value.clone())
                     .checked(checked)
                     .disabled(option.disabled)
-                    .variant(self.variant);
+                    .with_variant(self.variant);
                 chip = Sized::with_size(chip, self.size);
                 chip = Radiused::with_radius(chip, self.radius);
                 chip = chip.motion(self.motion);

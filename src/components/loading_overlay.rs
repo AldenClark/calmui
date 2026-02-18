@@ -68,7 +68,7 @@ impl LoadingOverlay {
         self
     }
 
-    pub fn size(mut self, value: Size) -> Self {
+    pub fn with_size(mut self, value: Size) -> Self {
         self.size = value;
         self
     }
@@ -100,7 +100,7 @@ impl LoadingOverlay {
         self.loader = Some(Box::new(move |size, color, id| {
             loader
                 .with_id(id)
-                .size(size)
+                .with_size(size)
                 .color(color)
                 .into_any_element()
         }));
@@ -143,7 +143,7 @@ impl RenderOnce for LoadingOverlay {
             Loader::new()
                 .with_id(self.id.slot("loader"))
                 .variant(self.variant)
-                .size(self.size)
+                .with_size(self.size)
                 .color(loader_color)
                 .into_any_element()
         };
@@ -184,6 +184,8 @@ impl crate::contracts::ComponentThemeOverridable for LoadingOverlay {
         &mut self.theme
     }
 }
+
+crate::impl_sized_via_method!(LoadingOverlay);
 
 crate::impl_visible!(LoadingOverlay);
 

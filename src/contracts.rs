@@ -8,9 +8,9 @@ pub trait StyleRecipe<Props> {
 }
 
 pub(crate) trait VariantConfigurable: std::marker::Sized {
-    fn variant(self, value: Variant) -> Self;
-    fn size(self, value: Size) -> Self;
-    fn radius(self, value: Radius) -> Self;
+    fn with_variant(self, value: Variant) -> Self;
+    fn with_size(self, value: Size) -> Self;
+    fn with_radius(self, value: Radius) -> Self;
 }
 
 pub trait Varianted: std::marker::Sized {
@@ -22,7 +22,7 @@ where
     T: VariantConfigurable,
 {
     fn with_variant(self, value: Variant) -> Self {
-        VariantConfigurable::variant(self, value)
+        VariantConfigurable::with_variant(self, value)
     }
 }
 
@@ -35,7 +35,7 @@ where
     T: VariantConfigurable,
 {
     fn with_size(self, value: Size) -> Self {
-        VariantConfigurable::size(self, value)
+        VariantConfigurable::with_size(self, value)
     }
 }
 
@@ -48,7 +48,7 @@ where
     T: VariantConfigurable,
 {
     fn with_radius(self, value: Radius) -> Self {
-        VariantConfigurable::radius(self, value)
+        VariantConfigurable::with_radius(self, value)
     }
 }
 
@@ -150,16 +150,49 @@ macro_rules! impl_placeable {
 macro_rules! impl_variant_size_radius_via_methods {
     ($type:ty) => {
         impl $crate::contracts::VariantConfigurable for $type {
-            fn variant(self, value: $crate::style::Variant) -> Self {
-                <$type>::variant(self, value)
+            fn with_variant(self, value: $crate::style::Variant) -> Self {
+                <$type>::with_variant(self, value)
             }
 
-            fn size(self, value: $crate::style::Size) -> Self {
-                <$type>::size(self, value)
+            fn with_size(self, value: $crate::style::Size) -> Self {
+                <$type>::with_size(self, value)
             }
 
-            fn radius(self, value: $crate::style::Radius) -> Self {
-                <$type>::radius(self, value)
+            fn with_radius(self, value: $crate::style::Radius) -> Self {
+                <$type>::with_radius(self, value)
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_varianted_via_method {
+    ($type:ty) => {
+        impl $crate::contracts::Varianted for $type {
+            fn with_variant(self, value: $crate::style::Variant) -> Self {
+                <$type>::with_variant(self, value)
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_sized_via_method {
+    ($type:ty) => {
+        impl $crate::contracts::Sized for $type {
+            fn with_size(self, value: $crate::style::Size) -> Self {
+                <$type>::with_size(self, value)
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_radiused_via_method {
+    ($type:ty) => {
+        impl $crate::contracts::Radiused for $type {
+            fn with_radius(self, value: $crate::style::Radius) -> Self {
+                <$type>::with_radius(self, value)
             }
         }
     };

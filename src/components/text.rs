@@ -50,7 +50,7 @@ impl Text {
         self
     }
 
-    pub fn size(mut self, value: Size) -> Self {
+    pub fn with_size(mut self, value: Size) -> Self {
         self.size = value;
         self
     }
@@ -145,6 +145,8 @@ impl crate::contracts::ComponentThemeOverridable for Text {
         &mut self.theme
     }
 }
+
+crate::impl_sized_via_method!(Text);
 
 impl gpui::Styled for Text {
     fn style(&mut self) -> &mut gpui::StyleRefinement {

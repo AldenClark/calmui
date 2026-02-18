@@ -107,7 +107,7 @@ impl Button {
         self.loader = Some(Box::new(move |size, color, id| {
             loader
                 .with_id(id)
-                .size(size)
+                .with_size(size)
                 .color(color)
                 .into_any_element()
         }));
@@ -164,7 +164,7 @@ impl Button {
                 Loader::new()
                     .with_id(loader_id)
                     .variant(self.loading_variant)
-                    .size(self.size)
+                    .with_size(self.size)
                     .color(fg_token)
                     .into_any_element()
             };
@@ -232,17 +232,17 @@ impl Button {
 }
 
 impl VariantConfigurable for Button {
-    fn variant(mut self, value: Variant) -> Self {
+    fn with_variant(mut self, value: Variant) -> Self {
         self.variant = value;
         self
     }
 
-    fn size(mut self, value: Size) -> Self {
+    fn with_size(mut self, value: Size) -> Self {
         self.size = value;
         self
     }
 
-    fn radius(mut self, value: Radius) -> Self {
+    fn with_radius(mut self, value: Radius) -> Self {
         self.radius = value;
         self
     }
@@ -441,17 +441,17 @@ impl ButtonGroup {
 }
 
 impl VariantConfigurable for ButtonGroup {
-    fn variant(mut self, value: Variant) -> Self {
+    fn with_variant(mut self, value: Variant) -> Self {
         self.active_variant = value;
         self
     }
 
-    fn size(mut self, value: Size) -> Self {
+    fn with_size(mut self, value: Size) -> Self {
         self.size = value;
         self
     }
 
-    fn radius(mut self, value: Radius) -> Self {
+    fn with_radius(mut self, value: Radius) -> Self {
         self.radius = value;
         self
     }
@@ -485,7 +485,7 @@ impl RenderOnce for ButtonGroup {
 
                 let mut button = Button::new(item.label.clone())
                     .with_id(self.id.slot_index("item", index.to_string()))
-                    .variant(variant);
+                    .with_variant(variant);
                 button = Sized::with_size(button, self.size);
                 button = Radiused::with_radius(button, self.radius);
                 button = button.motion(self.motion);
