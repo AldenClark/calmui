@@ -837,25 +837,6 @@ impl Textarea {
             .ok()
             .unwrap_or(0.0);
         let has_content_metrics = content_width > 0.0;
-        let origin_x = if has_content_metrics {
-            content_origin_x
-        } else {
-            viewport_origin_x
-        };
-        let origin_y = if has_content_metrics {
-            content_origin_y
-        } else {
-            viewport_origin_y
-        };
-        let local_x = (f32::from(position.x) - origin_x).max(0.0);
-        let mut local_y = (f32::from(position.y) - origin_y).max(0.0);
-        if has_content_metrics {
-            if (content_origin_y - viewport_origin_y).abs() <= 0.5 {
-                local_y += scroll_y;
-            }
-        } else {
-            local_y += scroll_y;
-        }
         let content_width = if has_content_metrics {
             content_width.max(1.0)
         } else {
@@ -868,34 +849,73 @@ impl Textarea {
         }
 
         let line_height = line_height.max(1.0);
-        let max_line_index = wrapped_lines.len().saturating_sub(1);
-        let rough_line =
-            ((local_y / line_height).floor() as isize).clamp(0, max_line_index as isize);
-        let start_line = rough_line.saturating_sub(1) as usize;
-        let end_line = ((rough_line + 1) as usize).min(max_line_index);
+        let pick_index_for_local = |local_x: f32, local_y: f32| -> (usize, f32, f32) {
+            let max_line_index = wrapped_lines.len().saturating_sub(1);
+            let rough_line =
+                ((local_y / line_height).floor() as isize).clamp(0, max_line_index as isize);
+            let start_line = rough_line.saturating_sub(1) as usize;
+            let end_line = ((rough_line + 1) as usize).min(max_line_index);
 
-        let mut best_index = 0usize;
-        let mut best_dist2 = f32::INFINITY;
+            let mut best_index = 0usize;
+            let mut best_caret_x = 0.0f32;
+            let mut best_caret_y = 0.0f32;
+            let mut best_dist2 = f32::INFINITY;
+            let eps = 0.001f32;
+            for line_index in start_line..=end_line {
+                let line = &wrapped_lines[line_index];
+                let local_char = Self::char_from_x(window, font_size, &line.text, local_x)
+                    .min(line.end_char.saturating_sub(line.start_char));
+                let caret_x = Self::x_for_char(window, font_size, &line.text, local_char);
+                let caret_y = (line_index as f32 * line_height) + (line_height * 0.5);
+                let dx = caret_x - local_x;
+                let dy = caret_y - local_y;
+                let dist2 = dx * dx + dy * dy;
+                let index = line.start_char + local_char;
+                if dist2 < best_dist2 - eps
+                    || ((dist2 - best_dist2).abs() <= eps && index >= best_index)
+                {
+                    best_dist2 = dist2;
+                    best_index = index;
+                    best_caret_x = caret_x;
+                    best_caret_y = caret_y;
+                }
+            }
+            (best_index, best_caret_x, best_caret_y)
+        };
+
+        let click_x = f32::from(position.x);
+        let click_y = f32::from(position.y);
+        let mut hypotheses = vec![(viewport_origin_x, viewport_origin_y, true)];
+        if has_content_metrics {
+            hypotheses.push((content_origin_x, content_origin_y, false));
+            hypotheses.push((content_origin_x, content_origin_y, true));
+        }
+
+        let mut best_global_index = 0usize;
+        let mut best_global_dist2 = f32::INFINITY;
         let eps = 0.001f32;
-        for line_index in start_line..=end_line {
-            let line = &wrapped_lines[line_index];
-            let local_char = Self::char_from_x(window, font_size, &line.text, local_x)
-                .min(line.end_char.saturating_sub(line.start_char));
-            let caret_x = Self::x_for_char(window, font_size, &line.text, local_char);
-            let caret_y = (line_index as f32 * line_height) + (line_height * 0.5);
-            let dx = caret_x - local_x;
-            let dy = caret_y - local_y;
+        for (origin_x, origin_y, apply_scroll) in hypotheses {
+            let local_x = (click_x - origin_x).max(0.0);
+            let mut local_y = (click_y - origin_y).max(0.0);
+            if apply_scroll {
+                local_y += scroll_y;
+            }
+            let (index, caret_local_x, caret_local_y) = pick_index_for_local(local_x, local_y);
+            let caret_window_x = origin_x + caret_local_x;
+            let caret_window_y =
+                origin_y + caret_local_y - if apply_scroll { scroll_y } else { 0.0 };
+            let dx = caret_window_x - click_x;
+            let dy = caret_window_y - click_y;
             let dist2 = dx * dx + dy * dy;
-            let index = line.start_char + local_char;
-            if dist2 < best_dist2 - eps
-                || ((dist2 - best_dist2).abs() <= eps && index >= best_index)
+            if dist2 < best_global_dist2 - eps
+                || ((dist2 - best_global_dist2).abs() <= eps && index >= best_global_index)
             {
-                best_dist2 = dist2;
-                best_index = index;
+                best_global_dist2 = dist2;
+                best_global_index = index;
             }
         }
 
-        best_index
+        best_global_index
     }
 
     fn line_height_px(&self) -> f32 {
