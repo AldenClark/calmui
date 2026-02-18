@@ -7,7 +7,7 @@ use gpui::{
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 
-use crate::contracts::{FieldLike, MotionAware, VariantConfigurable};
+use crate::contracts::{FieldLike, MotionAware};
 use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
@@ -196,6 +196,11 @@ impl NumberInput {
 
     pub fn max_length(mut self, value: usize) -> Self {
         self.max_length = Some(value.max(1));
+        self
+    }
+
+    pub fn with_variant(mut self, value: Variant) -> Self {
+        self.variant = value;
         self
     }
 
@@ -542,23 +547,6 @@ impl FieldLike for NumberInput {
     }
 }
 
-impl VariantConfigurable for NumberInput {
-    fn with_variant(mut self, value: Variant) -> Self {
-        self.variant = value;
-        self
-    }
-
-    fn with_size(mut self, value: Size) -> Self {
-        self.size = value;
-        self
-    }
-
-    fn with_radius(mut self, value: Radius) -> Self {
-        self.radius = value;
-        self
-    }
-}
-
 impl MotionAware for NumberInput {
     fn motion(mut self, value: MotionConfig) -> Self {
         self.motion = value;
@@ -601,9 +589,9 @@ impl RenderOnce for NumberInput {
             .disabled(self.disabled)
             .read_only(self.read_only);
 
-        input = VariantConfigurable::with_variant(input, self.variant);
-        input = VariantConfigurable::with_size(input, self.size);
-        input = VariantConfigurable::with_radius(input, self.radius);
+        input = input.with_variant(self.variant);
+        input = input.with_size(self.size);
+        input = input.with_radius(self.radius);
         input = MotionAware::motion(input, self.motion).on_change(
             move |next_text: SharedString, window, cx| {
                 let sanitized = Self::sanitize_numeric_text(next_text.as_ref(), max_length);
@@ -723,6 +711,7 @@ impl crate::contracts::ComponentThemeOverridable for NumberInput {
     }
 }
 
+crate::impl_variant_size_radius_via_methods!(NumberInput);
 crate::impl_disableable!(NumberInput);
 
 impl gpui::Styled for NumberInput {

@@ -13,7 +13,7 @@ use gpui::{
     px,
 };
 
-use crate::contracts::{FieldLike, MotionAware, VariantConfigurable};
+use crate::contracts::{FieldLike, MotionAware};
 use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
@@ -418,6 +418,7 @@ pub struct Textarea {
     variant: Variant,
     size: Size,
     radius: Radius,
+    line_gap_px: f32,
     theme: crate::theme::LocalTheme,
     style: gpui::StyleRefinement,
     motion: MotionConfig,
@@ -460,6 +461,7 @@ impl Textarea {
             variant: Variant::Default,
             size: Size::Md,
             radius: Radius::Sm,
+            line_gap_px: 2.0,
             theme: crate::theme::LocalTheme::default(),
             style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
@@ -539,6 +541,11 @@ impl Textarea {
         self
     }
 
+    pub fn with_variant(mut self, value: Variant) -> Self {
+        self.variant = value;
+        self
+    }
+
     pub fn with_size(mut self, value: Size) -> Self {
         self.size = value;
         self
@@ -546,6 +553,11 @@ impl Textarea {
 
     pub fn with_radius(mut self, value: Radius) -> Self {
         self.radius = value;
+        self
+    }
+
+    pub fn line_gap(mut self, value: f32) -> Self {
+        self.line_gap_px = value.max(0.0);
         self
     }
 
@@ -632,14 +644,6 @@ impl Textarea {
         }
     }
 
-    fn char_index_at_byte(value: &str, byte_index: usize) -> usize {
-        let mut byte_index = byte_index.min(value.len());
-        while byte_index > 0 && !value.is_char_boundary(byte_index) {
-            byte_index -= 1;
-        }
-        value[..byte_index].chars().count()
-    }
-
     fn line_layout(window: &Window, font_size: f32, text: &str) -> Arc<gpui::LineLayout> {
         let font_size = px(font_size);
         let mut text_style = window.text_style();
@@ -664,9 +668,25 @@ impl Textarea {
         if text.is_empty() {
             return 0;
         }
+        let target_x = x.max(0.0);
         let layout = Self::line_layout(window, font_size, text);
-        let byte_index = layout.closest_index_for_x(px(x.max(0.0))).min(text.len());
-        Self::char_index_at_byte(text, byte_index).min(text.chars().count())
+        let mut best_char = 0usize;
+        let mut best_dist = target_x.abs();
+
+        for char_index in 1..=text.chars().count() {
+            let byte_index = Self::byte_index_at_char(text, char_index);
+            let caret_x = f32::from(layout.x_for_index(byte_index));
+            let dist = (caret_x - target_x).abs();
+            if dist < best_dist {
+                best_dist = dist;
+                best_char = char_index;
+            }
+            if caret_x > target_x && dist > best_dist {
+                break;
+            }
+        }
+
+        best_char
     }
 
     fn selection_bounds_for(id: &str, len: usize) -> Option<(usize, usize)> {
@@ -806,16 +826,40 @@ impl Textarea {
         horizontal_padding: f32,
     ) -> usize {
         let (box_origin_x, box_origin_y, _width, _height) = Self::box_geometry(id);
-        let border = 1.0f32;
-        let origin_x = box_origin_x + horizontal_padding + border;
-        let origin_y = box_origin_y + vertical_padding + border;
+        let (content_origin_x, content_origin_y, content_width, _content_height) =
+            Self::content_geometry(id);
+        let border = f32::from(super::utils::quantized_stroke_px(window, 1.0));
+        let viewport_origin_x = box_origin_x + horizontal_padding + border;
+        let viewport_origin_y = box_origin_y + vertical_padding + border;
         let scroll_y = control::text_state(id, "scroll-y", None, "0".to_string())
             .parse::<f32>()
             .ok()
             .unwrap_or(0.0);
+        let has_content_metrics = content_width > 0.0;
+        let origin_x = if has_content_metrics {
+            content_origin_x
+        } else {
+            viewport_origin_x
+        };
+        let origin_y = if has_content_metrics {
+            content_origin_y
+        } else {
+            viewport_origin_y
+        };
         let local_x = (f32::from(position.x) - origin_x).max(0.0);
-        let local_y = (f32::from(position.y) - origin_y + scroll_y).max(0.0);
-        let content_width = Self::content_width_for_box(id, horizontal_padding);
+        let mut local_y = (f32::from(position.y) - origin_y).max(0.0);
+        if has_content_metrics {
+            if (content_origin_y - viewport_origin_y).abs() <= 0.5 {
+                local_y += scroll_y;
+            }
+        } else {
+            local_y += scroll_y;
+        }
+        let content_width = if has_content_metrics {
+            content_width.max(1.0)
+        } else {
+            Self::content_width_for_box(id, horizontal_padding)
+        };
         let wrapped_lines = Self::wrapped_lines_for_width(value, content_width, window, font_size);
 
         let target_line = (local_y / line_height.max(1.0)).floor() as usize;
@@ -829,13 +873,14 @@ impl Textarea {
     }
 
     fn line_height_px(&self) -> f32 {
-        match self.size {
+        let base = match self.size {
             Size::Xs => 14.0,
             Size::Sm => 16.0,
             Size::Md => 18.0,
             Size::Lg => 20.0,
             Size::Xl => 22.0,
-        }
+        };
+        base + self.line_gap_px
     }
 
     fn vertical_padding_px(&self) -> f32 {
@@ -891,14 +936,23 @@ impl Textarea {
             return total_chars;
         }
         let layout = Self::line_layout(window, font_size, text);
-        if f32::from(layout.width) <= width.max(1.0) {
+        let width = width.max(1.0);
+        if f32::from(layout.width) <= width {
             return total_chars;
         }
-        let byte_index = layout
-            .closest_index_for_x(px(width.max(0.0)))
-            .min(text.len());
-        let wrapped = Self::char_index_at_byte(text, byte_index);
-        wrapped.clamp(1, total_chars)
+        let mut low = 0usize;
+        let mut high = total_chars;
+        while low < high {
+            let mid = (low + high + 1) / 2;
+            let mid_byte = Self::byte_index_at_char(text, mid);
+            let mid_x = f32::from(layout.x_for_index(mid_byte));
+            if mid_x <= width {
+                low = mid;
+            } else {
+                high = mid.saturating_sub(1);
+            }
+        }
+        low.clamp(1, total_chars)
     }
 
     fn wrapped_lines_for_width(
@@ -1959,6 +2013,7 @@ impl Textarea {
             input = input.child(
                 div()
                     .w_full()
+                    .line_height(px(line_height))
                     .text_color(resolve_hsla(&self.theme, &tokens.placeholder))
                     .child(self.placeholder.clone().unwrap_or_default()),
             );
@@ -1988,6 +2043,7 @@ impl Textarea {
                                 .w_full()
                                 .flex()
                                 .items_center()
+                                .line_height(px(line_height))
                                 .whitespace_nowrap()
                                 .child(if left.is_empty() {
                                     "".to_string()
@@ -2010,10 +2066,15 @@ impl Textarea {
                 }
 
                 if line.text.is_empty() {
-                    content = content.child(div().w_full().child(" "));
+                    content = content.child(div().w_full().line_height(px(line_height)).child(" "));
                 } else {
-                    content =
-                        content.child(div().w_full().whitespace_nowrap().child(line.text.clone()));
+                    content = content.child(
+                        div()
+                            .w_full()
+                            .line_height(px(line_height))
+                            .whitespace_nowrap()
+                            .child(line.text.clone()),
+                    );
                 }
             }
 
@@ -2128,23 +2189,6 @@ impl FieldLike for Textarea {
     }
 }
 
-impl VariantConfigurable for Textarea {
-    fn with_variant(mut self, value: Variant) -> Self {
-        self.variant = value;
-        self
-    }
-
-    fn with_size(mut self, value: Size) -> Self {
-        self.size = value;
-        self
-    }
-
-    fn with_radius(mut self, value: Radius) -> Self {
-        self.radius = value;
-        self
-    }
-}
-
 impl MotionAware for Textarea {
     fn motion(mut self, value: MotionConfig) -> Self {
         self.motion = value;
@@ -2177,6 +2221,7 @@ impl crate::contracts::ComponentThemeOverridable for Textarea {
     }
 }
 
+crate::impl_variant_size_radius_via_methods!(Textarea);
 crate::impl_disableable!(Textarea);
 
 impl gpui::Styled for Textarea {

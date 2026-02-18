@@ -12,7 +12,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, UTF16Selection, Window, canvas, div, point, px,
 };
 
-use crate::contracts::{FieldLike, MotionAware, Sized, VariantConfigurable};
+use crate::contracts::{FieldLike, MotionAware};
 use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
@@ -550,6 +550,11 @@ impl TextInput {
 
     pub fn mask_reveal_ms(mut self, duration_ms: u64) -> Self {
         self.mask_reveal_ms = duration_ms;
+        self
+    }
+
+    pub fn with_variant(mut self, value: Variant) -> Self {
+        self.variant = value;
         self
     }
 
@@ -1742,23 +1747,6 @@ impl FieldLike for TextInput {
     }
 }
 
-impl VariantConfigurable for TextInput {
-    fn with_variant(mut self, value: Variant) -> Self {
-        self.variant = value;
-        self
-    }
-
-    fn with_size(mut self, value: Size) -> Self {
-        self.size = value;
-        self
-    }
-
-    fn with_radius(mut self, value: Radius) -> Self {
-        self.radius = value;
-        self
-    }
-}
-
 impl MotionAware for TextInput {
     fn motion(mut self, value: MotionConfig) -> Self {
         self.motion = value;
@@ -1867,6 +1855,11 @@ impl PasswordInput {
         self
     }
 
+    pub fn with_variant(mut self, value: Variant) -> Self {
+        self.inner = self.inner.with_variant(value);
+        self
+    }
+
     pub fn with_size(mut self, value: Size) -> Self {
         self.inner = self.inner.with_size(value);
         self
@@ -1929,23 +1922,6 @@ impl FieldLike for PasswordInput {
 
     fn layout(mut self, value: FieldLayout) -> Self {
         self.inner = self.inner.layout(value);
-        self
-    }
-}
-
-impl VariantConfigurable for PasswordInput {
-    fn with_variant(mut self, value: Variant) -> Self {
-        self.inner = self.inner.with_variant(value);
-        self
-    }
-
-    fn with_size(mut self, value: Size) -> Self {
-        self.inner = Sized::with_size(self.inner, value);
-        self
-    }
-
-    fn with_radius(mut self, value: Radius) -> Self {
-        self.inner = self.inner.with_radius(value);
         self
     }
 }
@@ -2042,6 +2018,10 @@ impl PinInput {
 
     pub fn focus_handle(mut self, focus_handle: FocusHandle) -> Self {
         self.focus_handle = Some(focus_handle);
+        self
+    }
+
+    pub fn with_variant(self, _value: Variant) -> Self {
         self
     }
 
@@ -2157,22 +2137,6 @@ impl PinInput {
 impl PinInput {
     pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
         self.id = id.into();
-        self
-    }
-}
-
-impl VariantConfigurable for PinInput {
-    fn with_variant(self, _value: Variant) -> Self {
-        self
-    }
-
-    fn with_size(mut self, value: Size) -> Self {
-        self.size = value;
-        self
-    }
-
-    fn with_radius(mut self, value: Radius) -> Self {
-        self.radius = value;
         self
     }
 }
@@ -2548,6 +2512,9 @@ impl crate::contracts::ComponentThemeOverridable for PinInput {
 crate::impl_disableable!(TextInput);
 crate::impl_disableable!(PasswordInput);
 crate::impl_disableable!(PinInput);
+crate::impl_variant_size_radius_via_methods!(TextInput);
+crate::impl_variant_size_radius_via_methods!(PasswordInput);
+crate::impl_variant_size_radius_via_methods!(PinInput);
 
 impl gpui::Styled for PinInput {
     fn style(&mut self) -> &mut gpui::StyleRefinement {
