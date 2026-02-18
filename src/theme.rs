@@ -2636,38 +2636,14 @@ impl ComponentTokens {
                         .unwrap_or_else(|_| black())),
                 },
                 toast: ToastTokens {
-                    info_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Blue)[9 as usize])
-                        .map(Into::into)
-                        .unwrap_or_else(|_| black())),
-                    info_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Blue)[2 as usize])
-                        .map(Into::into)
-                        .unwrap_or_else(|_| black())),
-                    success_bg: (Rgba::try_from(
-                        PaletteCatalog::scale(PaletteKey::Green)[9 as usize],
-                    )
-                    .map(Into::into)
-                    .unwrap_or_else(|_| black())),
-                    success_fg: (Rgba::try_from(
-                        PaletteCatalog::scale(PaletteKey::Green)[2 as usize],
-                    )
-                    .map(Into::into)
-                    .unwrap_or_else(|_| black())),
-                    warning_bg: (Rgba::try_from(
-                        PaletteCatalog::scale(PaletteKey::Yellow)[9 as usize],
-                    )
-                    .map(Into::into)
-                    .unwrap_or_else(|_| black())),
-                    warning_fg: (Rgba::try_from(
-                        PaletteCatalog::scale(PaletteKey::Yellow)[3 as usize],
-                    )
-                    .map(Into::into)
-                    .unwrap_or_else(|_| black())),
-                    error_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[9 as usize])
-                        .map(Into::into)
-                        .unwrap_or_else(|_| black())),
-                    error_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[2 as usize])
-                        .map(Into::into)
-                        .unwrap_or_else(|_| black())),
+                    info_bg: resolve_palette_hsla(PaletteKey::Blue, 4).opacity(0.15),
+                    info_fg: resolve_palette_hsla(PaletteKey::Blue, 4),
+                    success_bg: resolve_palette_hsla(PaletteKey::Green, 4).opacity(0.15),
+                    success_fg: resolve_palette_hsla(PaletteKey::Green, 4),
+                    warning_bg: resolve_palette_hsla(PaletteKey::Yellow, 4).opacity(0.15),
+                    warning_fg: resolve_palette_hsla(PaletteKey::Yellow, 4),
+                    error_bg: resolve_palette_hsla(PaletteKey::Red, 4).opacity(0.15),
+                    error_fg: resolve_palette_hsla(PaletteKey::Red, 4),
                 },
                 divider: DividerTokens {
                     line: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
@@ -5348,5 +5324,35 @@ mod tests {
         assert_ne!(dark_checkbox, light_checkbox);
         assert_ne!(dark_radio, light_radio);
         assert_ne!(dark_switch, light_switch);
+    }
+
+    #[test]
+    fn dark_theme_uses_subtle_alert_surfaces() {
+        let dark = Theme::default().with_color_scheme(ColorScheme::Dark);
+        let toast = dark.components.toast;
+
+        assert_eq!(
+            toast.info_bg,
+            resolve_palette_hsla(PaletteKey::Blue, 4).opacity(0.15)
+        );
+        assert_eq!(toast.info_fg, resolve_palette_hsla(PaletteKey::Blue, 4));
+
+        assert_eq!(
+            toast.success_bg,
+            resolve_palette_hsla(PaletteKey::Green, 4).opacity(0.15)
+        );
+        assert_eq!(toast.success_fg, resolve_palette_hsla(PaletteKey::Green, 4));
+
+        assert_eq!(
+            toast.warning_bg,
+            resolve_palette_hsla(PaletteKey::Yellow, 4).opacity(0.15)
+        );
+        assert_eq!(toast.warning_fg, resolve_palette_hsla(PaletteKey::Yellow, 4));
+
+        assert_eq!(
+            toast.error_bg,
+            resolve_palette_hsla(PaletteKey::Red, 4).opacity(0.15)
+        );
+        assert_eq!(toast.error_fg, resolve_palette_hsla(PaletteKey::Red, 4));
     }
 }
