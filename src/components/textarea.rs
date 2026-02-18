@@ -672,16 +672,17 @@ impl Textarea {
         let layout = Self::line_layout(window, font_size, text);
         let mut best_char = 0usize;
         let mut best_dist = target_x.abs();
+        let eps = 0.001f32;
 
         for char_index in 1..=text.chars().count() {
             let byte_index = Self::byte_index_at_char(text, char_index);
             let caret_x = f32::from(layout.x_for_index(byte_index));
             let dist = (caret_x - target_x).abs();
-            if dist < best_dist {
+            if dist < best_dist - eps || (dist - best_dist).abs() <= eps {
                 best_dist = dist;
                 best_char = char_index;
             }
-            if caret_x > target_x && dist > best_dist {
+            if caret_x > target_x && dist > best_dist + eps {
                 break;
             }
         }
@@ -862,14 +863,39 @@ impl Textarea {
         };
         let wrapped_lines = Self::wrapped_lines_for_width(value, content_width, window, font_size);
 
-        let target_line = (local_y / line_height.max(1.0)).floor() as usize;
         if wrapped_lines.is_empty() {
             return 0;
         }
-        let line_index = target_line.min(wrapped_lines.len().saturating_sub(1));
-        let line = &wrapped_lines[line_index];
-        let local_char = Self::char_from_x(window, font_size, &line.text, local_x);
-        line.start_char + local_char.min(line.end_char.saturating_sub(line.start_char))
+
+        let line_height = line_height.max(1.0);
+        let max_line_index = wrapped_lines.len().saturating_sub(1);
+        let rough_line =
+            ((local_y / line_height).floor() as isize).clamp(0, max_line_index as isize);
+        let start_line = rough_line.saturating_sub(1) as usize;
+        let end_line = ((rough_line + 1) as usize).min(max_line_index);
+
+        let mut best_index = 0usize;
+        let mut best_dist2 = f32::INFINITY;
+        let eps = 0.001f32;
+        for line_index in start_line..=end_line {
+            let line = &wrapped_lines[line_index];
+            let local_char = Self::char_from_x(window, font_size, &line.text, local_x)
+                .min(line.end_char.saturating_sub(line.start_char));
+            let caret_x = Self::x_for_char(window, font_size, &line.text, local_char);
+            let caret_y = (line_index as f32 * line_height) + (line_height * 0.5);
+            let dx = caret_x - local_x;
+            let dy = caret_y - local_y;
+            let dist2 = dx * dx + dy * dy;
+            let index = line.start_char + local_char;
+            if dist2 < best_dist2 - eps
+                || ((dist2 - best_dist2).abs() <= eps && index >= best_index)
+            {
+                best_dist2 = dist2;
+                best_index = index;
+            }
+        }
+
+        best_index
     }
 
     fn line_height_px(&self) -> f32 {
