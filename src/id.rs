@@ -1,8 +1,4 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
-
 use gpui::{ElementId, SharedString};
-
-static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct ComponentId {
@@ -35,10 +31,34 @@ impl ComponentId {
 }
 
 impl Default for ComponentId {
+    #[track_caller]
     fn default() -> Self {
-        let sequence = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-        Self::new(format!("component-{sequence}"))
+        Self::new(stable_auto_id("component"))
     }
+}
+
+#[track_caller]
+pub fn stable_auto_id(prefix: &str) -> String {
+    let location = std::panic::Location::caller();
+    let seed = format!(
+        "{prefix}:{}:{}:{}",
+        location.file(),
+        location.line(),
+        location.column()
+    );
+    format!("{prefix}-{:016x}", fnv1a64(seed.as_bytes()))
+}
+
+fn fnv1a64(bytes: &[u8]) -> u64 {
+    const OFFSET_BASIS: u64 = 0xcbf29ce484222325;
+    const PRIME: u64 = 0x00000100000001b3;
+
+    let mut hash = OFFSET_BASIS;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(PRIME);
+    }
+    hash
 }
 
 impl std::fmt::Display for ComponentId {
@@ -118,5 +138,42 @@ impl From<ComponentId> for SharedString {
 impl From<&ComponentId> for SharedString {
     fn from(value: &ComponentId) -> Self {
         value.key.clone().into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[track_caller]
+    fn call_once() -> String {
+        stable_auto_id("button")
+    }
+
+    #[test]
+    fn id_is_stable_for_same_callsite() {
+        let ids = (0..3).map(|_| call_once()).collect::<Vec<_>>();
+        assert!(ids.windows(2).all(|pair| pair[0] == pair[1]));
+    }
+
+    #[test]
+    fn id_differs_for_different_callsites() {
+        let first = call_once();
+        let second = {
+            // Different callsite by design.
+            stable_auto_id("button")
+        };
+        assert_ne!(first, second);
+    }
+
+    #[track_caller]
+    fn component_id_once() -> String {
+        ComponentId::default().to_string()
+    }
+
+    #[test]
+    fn component_id_default_is_stable_for_same_callsite() {
+        let ids = (0..3).map(|_| component_id_once()).collect::<Vec<_>>();
+        assert!(ids.windows(2).all(|pair| pair[0] == pair[1]));
     }
 }
