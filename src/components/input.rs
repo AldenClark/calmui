@@ -28,6 +28,7 @@ type SubmitHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 const CARET_BLINK_TOGGLE_MS: u64 = 680;
 const CARET_BLINK_CYCLE_MS: u64 = CARET_BLINK_TOGGLE_MS * 2;
+const ENABLE_CUSTOM_CONTEXT_MENU: bool = false;
 
 #[derive(Clone, Copy)]
 struct PasswordRevealState {
@@ -433,7 +434,8 @@ pub struct TextInput {
 
 impl TextInput {
     fn is_enter_key(key: &str) -> bool {
-        key == "enter" || key == "return" || key.ends_with("enter")
+        let key = key.to_ascii_lowercase();
+        key == "enter" || key == "return" || key.contains("enter") || key.contains("return")
     }
 
     fn resolved_focus_handle(&self, cx: &gpui::App) -> FocusHandle {
@@ -876,7 +878,7 @@ impl TextInput {
         let local_y = (f32::from(position.y) - box_y).max(0.0);
         control::set_text_state(id, "context-menu-x", local_x.to_string());
         control::set_text_state(id, "context-menu-y", local_y.to_string());
-        control::set_bool_state(id, "context-open", true);
+        control::set_bool_state(id, "context-open", ENABLE_CUSTOM_CONTEXT_MENU);
         control::set_bool_state(id, "mouse-selecting", false);
     }
 
@@ -1011,6 +1013,9 @@ impl TextInput {
         let tracked_focus = control::focused_state(&self.id, None, false);
         let handle_focused = focus_handle.is_focused(window);
         let is_focused = handle_focused || tracked_focus;
+        if !ENABLE_CUSTOM_CONTEXT_MENU {
+            control::set_bool_state(&self.id, "context-open", false);
+        }
         let current_len = current_value.chars().count();
         let current_caret =
             control::text_state(&self.id, "caret-index", None, current_len.to_string())
@@ -1107,7 +1112,6 @@ impl TextInput {
             let value_for_mouse_move = value_for_mouse.clone();
             let value_for_right_click = value_for_mouse.clone();
             let font_size_for_mouse = font_size;
-            let font_size_for_input = font_size;
             let focus_handle_for_mouse = focus_handle.clone();
             let focus_handle_for_right_click = focus_handle.clone();
             let focus_handle_for_right_up = focus_handle.clone();
@@ -1277,30 +1281,7 @@ impl TextInput {
                 let open_context_menu = event.keystroke.key == "menu"
                     || (event.keystroke.modifiers.shift && event.keystroke.key == "f10");
                 if open_context_menu {
-                    let metric_text = if masked {
-                        "*".repeat(current_value.chars().count())
-                    } else {
-                        current_value.clone()
-                    };
-                    let caret_x =
-                        Self::x_for_char(window, font_size_for_input, &metric_text, current_caret);
-                    let scroll_x =
-                        control::text_state(&input_id, "scroll-x", None, "0".to_string())
-                            .parse::<f32>()
-                            .ok()
-                            .unwrap_or(0.0);
-                    let (box_x, box_y, _box_w, _box_h) = Self::box_geometry(&input_id);
-                    let (content_x, content_y, content_w, content_h) =
-                        Self::content_geometry(&input_id);
-                    let content_left_in_box = (content_x - box_x).max(0.0);
-                    let content_top_in_box = (content_y - box_y).max(0.0);
-                    let local_x = (content_left_in_box + caret_x - scroll_x)
-                        .clamp(0.0, content_left_in_box + content_w);
-                    let local_y = (content_top_in_box + content_h).max(0.0);
-                    control::set_text_state(&input_id, "context-menu-x", local_x.to_string());
-                    control::set_text_state(&input_id, "context-menu-y", local_y.to_string());
-                    control::set_bool_state(&input_id, "context-open", true);
-                    window.refresh();
+                    control::set_bool_state(&input_id, "context-open", false);
                     return;
                 }
 

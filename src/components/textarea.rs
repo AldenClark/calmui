@@ -9,8 +9,8 @@ use std::{
 use gpui::{
     Animation, AnimationExt, AnyElement, Bounds, ClipboardItem, FocusHandle, InputHandler,
     InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, UTF16Selection, Window, canvas, div, point,
-    px,
+    ScrollHandle, SharedString, StatefulInteractiveElement, Styled, UTF16Selection, Window, canvas,
+    div, point, px,
 };
 
 use crate::contracts::{FieldLike, MotionAware, VariantConfigurable};
@@ -27,6 +27,7 @@ type ChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
 
 const CARET_BLINK_TOGGLE_MS: u64 = 680;
 const CARET_BLINK_CYCLE_MS: u64 = CARET_BLINK_TOGGLE_MS * 2;
+const ENABLE_CUSTOM_CONTEXT_MENU: bool = false;
 
 #[derive(Clone)]
 struct WrappedLine {
@@ -342,7 +343,7 @@ impl InputHandler for TextareaImeHandler {
             Textarea::wrapped_lines_for_width(&value, content_width, window, self.font_size);
         let (start_line, start_col) = Textarea::caret_visual_position(&wrapped_lines, range.start);
         let (end_line, end_col) = Textarea::caret_visual_position(&wrapped_lines, range.end);
-        let (origin_x, origin_y, _width, _height) = Textarea::box_geometry(&self.id);
+        let (origin_x, origin_y, _width, _height) = Textarea::content_geometry(&self.id);
         let start_line_text = wrapped_lines
             .get(start_line)
             .map(|line| line.text.as_str())
@@ -351,14 +352,11 @@ impl InputHandler for TextareaImeHandler {
             .get(end_line)
             .map(|line| line.text.as_str())
             .unwrap_or_default();
-        let left = origin_x
-            + self.horizontal_padding
-            + Textarea::x_for_char(window, self.font_size, start_line_text, start_col);
-        let top = origin_y + self.vertical_padding + start_line as f32 * self.line_height.max(1.0);
+        let left =
+            origin_x + Textarea::x_for_char(window, self.font_size, start_line_text, start_col);
+        let top = origin_y + start_line as f32 * self.line_height.max(1.0);
         let right = if start_line == end_line {
-            origin_x
-                + self.horizontal_padding
-                + Textarea::x_for_char(window, self.font_size, end_line_text, end_col)
+            origin_x + Textarea::x_for_char(window, self.font_size, end_line_text, end_col)
         } else {
             left + 1.0
         };
@@ -424,7 +422,8 @@ pub struct Textarea {
 
 impl Textarea {
     fn is_enter_key(key: &str) -> bool {
-        key == "enter" || key == "return" || key.ends_with("enter")
+        let key = key.to_ascii_lowercase();
+        key == "enter" || key == "return" || key.contains("enter") || key.contains("return")
     }
 
     fn resolved_focus_handle(&self, cx: &gpui::App) -> FocusHandle {
@@ -905,6 +904,26 @@ impl Textarea {
         (x, y, width, height)
     }
 
+    fn content_geometry(id: &str) -> (f32, f32, f32, f32) {
+        let x = control::text_state(id, "content-origin-x", None, "0".to_string())
+            .parse::<f32>()
+            .ok()
+            .unwrap_or(0.0);
+        let y = control::text_state(id, "content-origin-y", None, "0".to_string())
+            .parse::<f32>()
+            .ok()
+            .unwrap_or(0.0);
+        let width = control::text_state(id, "content-width", None, "0".to_string())
+            .parse::<f32>()
+            .ok()
+            .unwrap_or(0.0);
+        let height = control::text_state(id, "content-height", None, "0".to_string())
+            .parse::<f32>()
+            .ok()
+            .unwrap_or(0.0);
+        (x, y, width, height)
+    }
+
     fn context_menu_position(id: &str) -> (f32, f32) {
         let x = control::text_state(id, "context-menu-x", None, "0".to_string())
             .parse::<f32>()
@@ -924,12 +943,12 @@ impl Textarea {
         window: &Window,
         font_size: f32,
         line_height: f32,
-        vertical_padding: f32,
+        _vertical_padding: f32,
         horizontal_padding: f32,
     ) -> usize {
-        let (origin_x, origin_y, _width, _height) = Self::box_geometry(id);
-        let local_x = (f32::from(position.x) - origin_x - horizontal_padding).max(0.0);
-        let local_y = (f32::from(position.y) - origin_y - vertical_padding).max(0.0);
+        let (origin_x, origin_y, _width, _height) = Self::content_geometry(id);
+        let local_x = (f32::from(position.x) - origin_x).max(0.0);
+        let local_y = (f32::from(position.y) - origin_y).max(0.0);
         let content_width = Self::content_width_for_box(id, horizontal_padding);
         let wrapped_lines = Self::wrapped_lines_for_width(value, content_width, window, font_size);
 
@@ -1000,7 +1019,9 @@ impl Textarea {
         if f32::from(layout.width) <= width.max(1.0) {
             return total_chars;
         }
-        let byte_index = layout.index_for_x(px(width.max(0.0))).unwrap_or(text.len());
+        let byte_index = layout
+            .closest_index_for_x(px(width.max(0.0)))
+            .min(text.len());
         let wrapped = Self::char_index_at_byte(text, byte_index);
         wrapped.clamp(1, total_chars)
     }
@@ -1077,6 +1098,38 @@ impl Textarea {
         (last_index, last.end_char.saturating_sub(last.start_char))
     }
 
+    fn vertical_caret_move(
+        wrapped_lines: &[WrappedLine],
+        caret_index: usize,
+        move_up: bool,
+        preferred_x: Option<f32>,
+        window: &Window,
+        font_size: f32,
+    ) -> (usize, f32) {
+        if wrapped_lines.is_empty() {
+            return (0, preferred_x.unwrap_or(0.0));
+        }
+        let (line, col) = Self::caret_visual_position(wrapped_lines, caret_index);
+        let line_text = wrapped_lines
+            .get(line)
+            .map(|row| row.text.as_str())
+            .unwrap_or_default();
+        let measured_x = Self::x_for_char(window, font_size, line_text, col);
+        let preferred_x = preferred_x.unwrap_or(measured_x);
+        let target_line = if move_up {
+            line.saturating_sub(1)
+        } else {
+            (line + 1).min(wrapped_lines.len().saturating_sub(1))
+        };
+        if target_line == line {
+            return (caret_index, preferred_x);
+        }
+        let target = &wrapped_lines[target_line];
+        let target_col = Self::char_from_x(window, font_size, &target.text, preferred_x)
+            .min(target.end_char.saturating_sub(target.start_char));
+        (target.start_char + target_col, preferred_x)
+    }
+
     fn resolved_rows(&self, visual_lines: usize) -> (usize, bool) {
         let visual_lines = visual_lines.max(1);
         let max_rows = self.max_rows.unwrap_or(visual_lines.max(self.min_rows));
@@ -1140,6 +1193,9 @@ impl Textarea {
         let tracked_focus = control::focused_state(&self.id, None, false);
         let handle_focused = focus_handle.is_focused(window);
         let is_focused = handle_focused || tracked_focus;
+        if !ENABLE_CUSTOM_CONTEXT_MENU {
+            control::set_bool_state(&self.id, "context-open", false);
+        }
         let current_caret = control::text_state(
             &self.id,
             "caret-index",
@@ -1160,6 +1216,30 @@ impl Textarea {
         let wrapped_lines =
             Self::wrapped_lines_for_width(&current_value, content_width, window, font_size);
         let (rows, should_scroll) = self.resolved_rows(wrapped_lines.len());
+        let (caret_line, _) = Self::caret_visual_position(&wrapped_lines, current_caret);
+        let viewport_height = (rows as f32 * line_height).max(line_height);
+        let content_height = (wrapped_lines.len() as f32 * line_height).max(viewport_height);
+        let max_scroll_y = (content_height - viewport_height).max(0.0);
+        let mut scroll_y = control::text_state(&self.id, "scroll-y", None, "0".to_string())
+            .parse::<f32>()
+            .ok()
+            .unwrap_or(0.0)
+            .clamp(0.0, max_scroll_y);
+        if !should_scroll {
+            scroll_y = 0.0;
+        } else if is_focused {
+            let caret_top = caret_line as f32 * line_height;
+            let caret_bottom = caret_top + line_height;
+            if caret_top < scroll_y {
+                scroll_y = caret_top;
+            } else if caret_bottom > scroll_y + viewport_height {
+                scroll_y = caret_bottom - viewport_height;
+            }
+            scroll_y = scroll_y.clamp(0.0, max_scroll_y);
+        }
+        control::set_text_state(&self.id, "scroll-y", format!("{scroll_y:.3}"));
+        let scroll_handle = ScrollHandle::new();
+        scroll_handle.set_offset(point(px(0.0), px(-scroll_y)));
         let box_height = (rows as f32 * line_height) + (vertical_padding * 2.0) + 2.0;
 
         let mut input = div()
@@ -1190,7 +1270,7 @@ impl Textarea {
         input = input.border_color(border);
 
         if should_scroll {
-            input = input.overflow_y_scroll();
+            input = input.overflow_y_scroll().track_scroll(&scroll_handle);
         }
 
         if self.disabled {
@@ -1230,6 +1310,30 @@ impl Textarea {
             .absolute()
             .size_full()
         });
+        if should_scroll {
+            let id_for_scroll = self.id.clone();
+            let handle_for_scroll = scroll_handle.clone();
+            let max_scroll_for_monitor = max_scroll_y;
+            input = input.child(
+                canvas(
+                    move |_bounds, _, _cx| {
+                        let next_y = (-f32::from(handle_for_scroll.offset().y))
+                            .clamp(0.0, max_scroll_for_monitor);
+                        let current_y =
+                            control::text_state(&id_for_scroll, "scroll-y", None, "0".to_string())
+                                .parse::<f32>()
+                                .ok()
+                                .unwrap_or(0.0);
+                        if (next_y - current_y).abs() > 0.5 {
+                            control::set_text_state(&id_for_scroll, "scroll-y", next_y.to_string());
+                        }
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .size_full(),
+            );
+        }
 
         let handle_for_click = focus_handle.clone();
         let handle_for_right_click = focus_handle.clone();
@@ -1307,6 +1411,7 @@ impl Textarea {
                         click_caret.to_string(),
                     );
                 }
+                control::set_optional_text_state(&id_for_focus, "preferred-x", None);
                 control::set_bool_state(&id_for_focus, "mouse-selecting", true);
                 window.focus(&handle_for_click, cx);
                 window.refresh();
@@ -1385,13 +1490,18 @@ impl Textarea {
                     click_caret.to_string(),
                 );
             }
+            control::set_optional_text_state(&id_for_right_click, "preferred-x", None);
 
             let (origin_x, origin_y, _width, _height) = Self::box_geometry(&id_for_right_click);
             let local_x = (f32::from(event.position.x) - origin_x).max(0.0);
             let local_y = (f32::from(event.position.y) - origin_y).max(0.0);
             control::set_text_state(&id_for_right_click, "context-menu-x", local_x.to_string());
             control::set_text_state(&id_for_right_click, "context-menu-y", local_y.to_string());
-            control::set_bool_state(&id_for_right_click, "context-open", true);
+            control::set_bool_state(
+                &id_for_right_click,
+                "context-open",
+                ENABLE_CUSTOM_CONTEXT_MENU,
+            );
             control::set_bool_state(&id_for_right_click, "mouse-selecting", false);
             window.refresh();
         });
@@ -1428,13 +1538,14 @@ impl Textarea {
                     click_caret.to_string(),
                 );
             }
+            control::set_optional_text_state(&id_for_right_up, "preferred-x", None);
 
             let (origin_x, origin_y, _width, _height) = Self::box_geometry(&id_for_right_up);
             let local_x = (f32::from(event.position.x) - origin_x).max(0.0);
             let local_y = (f32::from(event.position.y) - origin_y).max(0.0);
             control::set_text_state(&id_for_right_up, "context-menu-x", local_x.to_string());
             control::set_text_state(&id_for_right_up, "context-menu-y", local_y.to_string());
-            control::set_bool_state(&id_for_right_up, "context-open", true);
+            control::set_bool_state(&id_for_right_up, "context-open", ENABLE_CUSTOM_CONTEXT_MENU);
             control::set_bool_state(&id_for_right_up, "mouse-selecting", false);
             window.refresh();
         });
@@ -1453,8 +1564,6 @@ impl Textarea {
             let max_length = self.max_length;
             let rendered_value_for_input = current_value.clone();
             let font_size_for_input = font_size;
-            let line_height_for_input = line_height;
-            let vertical_padding_for_input = vertical_padding;
             let horizontal_padding_for_input = horizontal_padding;
             input = input.on_key_down(move |event, window, cx| {
                 control::set_focused_state(&input_id, true);
@@ -1474,10 +1583,21 @@ impl Textarea {
                 let selection = Self::selection_bounds_for(&input_id, len);
                 let modifiers =
                     event.keystroke.modifiers.control || event.keystroke.modifiers.platform;
+                let has_navigation_modifier = modifiers || event.keystroke.modifiers.function;
+                let key = event.keystroke.key.as_str();
+                let is_vertical_nav = matches!(key, "up" | "down");
+                if !is_vertical_nav {
+                    control::set_optional_text_state(&input_id, "preferred-x", None);
+                }
 
                 let open_context_menu = event.keystroke.key == "menu"
                     || (event.keystroke.modifiers.shift && event.keystroke.key == "f10");
                 if open_context_menu {
+                    control::set_bool_state(&input_id, "context-open", false);
+                    return;
+                }
+
+                if is_vertical_nav && !has_navigation_modifier {
                     let content_width =
                         Self::content_width_for_box(&input_id, horizontal_padding_for_input);
                     let wrapped_lines = Self::wrapped_lines_for_width(
@@ -1486,21 +1606,43 @@ impl Textarea {
                         window,
                         font_size_for_input,
                     );
-                    let (caret_line, caret_col) =
-                        Self::caret_visual_position(&wrapped_lines, current_caret_for_input);
-                    let caret_x = wrapped_lines
-                        .get(caret_line)
-                        .map(|line| {
-                            Self::x_for_char(window, font_size_for_input, &line.text, caret_col)
-                        })
-                        .unwrap_or(0.0);
-                    let local_x = (horizontal_padding_for_input + caret_x).max(0.0);
-                    let local_y = (vertical_padding_for_input
-                        + (caret_line as f32 + 1.0) * line_height_for_input)
-                        .max(0.0);
-                    control::set_text_state(&input_id, "context-menu-x", local_x.to_string());
-                    control::set_text_state(&input_id, "context-menu-y", local_y.to_string());
-                    control::set_bool_state(&input_id, "context-open", true);
+                    let preferred_x =
+                        control::optional_text_state(&input_id, "preferred-x", None, None)
+                            .and_then(|value| value.parse::<f32>().ok());
+                    let (next_caret, next_preferred_x) = Self::vertical_caret_move(
+                        &wrapped_lines,
+                        current_caret_for_input,
+                        key == "up",
+                        preferred_x,
+                        window,
+                        font_size_for_input,
+                    );
+                    control::set_optional_text_state(
+                        &input_id,
+                        "preferred-x",
+                        Some(format!("{next_preferred_x:.3}")),
+                    );
+                    if event.keystroke.modifiers.shift {
+                        let anchor = if let Some((start, end)) = selection {
+                            if current_caret_for_input == start {
+                                end
+                            } else {
+                                start
+                            }
+                        } else {
+                            current_caret_for_input
+                        };
+                        Self::set_selection_for(&input_id, anchor, next_caret);
+                        control::set_text_state(&input_id, "selection-anchor", anchor.to_string());
+                    } else {
+                        Self::clear_selection_for(&input_id, next_caret);
+                        control::set_text_state(
+                            &input_id,
+                            "selection-anchor",
+                            next_caret.to_string(),
+                        );
+                    }
+                    control::set_text_state(&input_id, "caret-index", next_caret.to_string());
                     window.refresh();
                     return;
                 }
@@ -1508,7 +1650,7 @@ impl Textarea {
                 if event.keystroke.modifiers.shift
                     && matches!(
                         event.keystroke.key.as_str(),
-                        "left" | "right" | "home" | "end" | "up" | "down"
+                        "left" | "right" | "home" | "end"
                     )
                 {
                     let anchor = if let Some((start, end)) = selection {
@@ -1729,13 +1871,48 @@ impl Textarea {
                 }
             }
 
-            let mut content_host = div().relative().w_full().child(content);
+            let mut content_host = div()
+                .relative()
+                .w_full()
+                .child({
+                    let id_for_content_metrics = self.id.clone();
+                    canvas(
+                        move |bounds, _, _cx| {
+                            control::set_text_state(
+                                &id_for_content_metrics,
+                                "content-origin-x",
+                                f32::from(bounds.origin.x).to_string(),
+                            );
+                            control::set_text_state(
+                                &id_for_content_metrics,
+                                "content-origin-y",
+                                f32::from(bounds.origin.y).to_string(),
+                            );
+                            control::set_text_state(
+                                &id_for_content_metrics,
+                                "content-width",
+                                f32::from(bounds.size.width).to_string(),
+                            );
+                            control::set_text_state(
+                                &id_for_content_metrics,
+                                "content-height",
+                                f32::from(bounds.size.height).to_string(),
+                            );
+                        },
+                        |_, _, _, _| {},
+                    )
+                    .absolute()
+                    .size_full()
+                })
+                .child(content);
             if !self.disabled && !self.read_only && is_focused && selection.is_none() {
                 let caret_left = wrapped_lines
                     .get(caret_line)
                     .map(|line| Self::x_for_char(window, font_size, &line.text, caret_col))
                     .unwrap_or(0.0);
                 let caret_top = caret_line as f32 * line_height;
+                let caret_vertical_offset =
+                    ((line_height - self.caret_height_px()).max(0.0) * 0.5).round();
                 let caret = div()
                     .id(self.id.slot("caret"))
                     .flex_none()
@@ -1757,7 +1934,7 @@ impl Textarea {
                     div()
                         .absolute()
                         .left(px(caret_left.max(0.0)))
-                        .top(px(caret_top.max(0.0)))
+                        .top(px((caret_top + caret_vertical_offset).max(0.0)))
                         .child(caret),
                 );
             }
