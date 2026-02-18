@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use gpui::{
     ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
-    StatefulInteractiveElement, Styled, Window, div,
+    StatefulInteractiveElement, Styled, Window, div, px,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable};
@@ -132,11 +132,21 @@ impl SegmentedControl {
 
     fn apply_item_size<T: Styled>(size: Size, node: T) -> T {
         match size {
-            Size::Xs => node.text_xs().py_0p5().px_1p5(),
-            Size::Sm => node.text_sm().py_0p5().px_2(),
-            Size::Md => node.text_sm().py_1().px_2p5(),
-            Size::Lg => node.text_base().py_1p5().px_3(),
-            Size::Xl => node.text_lg().py_2().px_3p5(),
+            Size::Xs => node.text_xs().py_1().px_2(),
+            Size::Sm => node.text_sm().py_1().px_2p5(),
+            Size::Md => node.text_base().py_1p5().px_3(),
+            Size::Lg => node.text_lg().py_2().px_3p5(),
+            Size::Xl => node.text_xl().py_2p5().px_4(),
+        }
+    }
+
+    fn indicator_inset_px(size: Size) -> f32 {
+        match size {
+            Size::Xs => 0.5,
+            Size::Sm => 1.0,
+            Size::Md => 1.0,
+            Size::Lg => 1.5,
+            Size::Xl => 1.5,
         }
     }
 
@@ -202,6 +212,7 @@ impl RenderOnce for SegmentedControl {
         let divider = resolve_hsla(&theme, &tokens.border).alpha(0.6);
         let divider_width = super::utils::quantized_stroke_px(window, 1.0);
         let transparent = resolve_hsla(&theme, &gpui::transparent_black());
+        let indicator_inset = Self::indicator_inset_px(size);
         let selected_index = selected.as_ref().and_then(|value| {
             self.items
                 .iter()
@@ -256,10 +267,10 @@ impl RenderOnce for SegmentedControl {
                     let indicator = div()
                         .id(self.id.slot_index("indicator", index.to_string()))
                         .absolute()
-                        .left_0()
-                        .top_0()
-                        .right_0()
-                        .bottom_0()
+                        .left(px(indicator_inset))
+                        .top(px(indicator_inset))
+                        .right(px(indicator_inset))
+                        .bottom(px(indicator_inset))
                         .bg(active_bg);
 
                     let mut profile = motion.enter;
@@ -335,8 +346,8 @@ impl RenderOnce for SegmentedControl {
             })
             .collect::<Vec<_>>();
 
-        let mut root = div()
-            .id(root_id)
+        let mut track = div()
+            .id(root_id.slot("track"))
             .flex()
             .items_center()
             .gap_0()
@@ -344,9 +355,15 @@ impl RenderOnce for SegmentedControl {
             .bg(resolve_hsla(&theme, &tokens.bg))
             .children(items);
 
-        root = apply_radius(&self.theme, root, self.radius);
+        track = apply_radius(&self.theme, track, self.radius);
 
-        root.with_enter_transition(enter_id.slot("enter"), motion)
+        div()
+            .id(root_id)
+            .flex()
+            .items_center()
+            .justify_start()
+            .child(track)
+            .with_enter_transition(enter_id.slot("enter"), motion)
     }
 }
 
