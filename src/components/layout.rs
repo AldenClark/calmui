@@ -148,6 +148,7 @@ impl RenderOnce for Grid {
 
 #[derive(IntoElement)]
 pub struct SimpleGrid {
+    id: ComponentId,
     inner: Grid,
     style: gpui::StyleRefinement,
 }
@@ -156,6 +157,7 @@ impl SimpleGrid {
     #[track_caller]
     pub fn new() -> Self {
         Self {
+            id: ComponentId::default(),
             inner: Grid::new(),
             style: gpui::StyleRefinement::default(),
         }
@@ -198,14 +200,14 @@ impl SimpleGrid {
 
 impl SimpleGrid {
     pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
-        self.inner = self.inner.with_id(id);
+        self.id = id.into();
         self
     }
 }
 
 impl RenderOnce for SimpleGrid {
     fn render(self, window: &mut Window, cx: &mut gpui::App) -> impl IntoElement {
-        let mut inner = self.inner;
+        let mut inner = self.inner.with_id(self.id);
         gpui::Refineable::refine(gpui::Styled::style(&mut inner), &self.style);
         inner.render(window, cx)
     }
@@ -219,6 +221,7 @@ impl ParentElement for SimpleGrid {
 
 #[derive(IntoElement)]
 pub struct Space {
+    id: ComponentId,
     width_px: Option<f32>,
     height_px: Option<f32>,
 }
@@ -227,6 +230,7 @@ impl Space {
     #[track_caller]
     pub fn new() -> Self {
         Self {
+            id: ComponentId::default(),
             width_px: None,
             height_px: None,
         }
@@ -277,9 +281,16 @@ impl Space {
     }
 }
 
+impl Space {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
+        self.id = id.into();
+        self
+    }
+}
+
 impl RenderOnce for Space {
     fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
-        let mut node = div();
+        let mut node = div().id(self.id);
         if let Some(width_px) = self.width_px {
             node = node.w(px(width_px));
         }

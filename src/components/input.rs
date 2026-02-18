@@ -617,10 +617,12 @@ impl RenderOnce for TextInput {
         self.theme.sync_from_provider(_cx);
         match self.layout {
             FieldLayout::Vertical => Stack::vertical()
+                .id(self.id.clone())
                 .gap_2()
                 .child(self.render_label_block())
                 .child(self.render_input_box(window)),
             FieldLayout::Horizontal => Stack::horizontal()
+                .id(self.id.clone())
                 .items_start()
                 .gap_3()
                 .child(div().w(gpui::px(168.0)).child(self.render_label_block()))
@@ -631,6 +633,7 @@ impl RenderOnce for TextInput {
 
 #[derive(IntoElement)]
 pub struct PasswordInput {
+    id: ComponentId,
     inner: TextInput,
     style: gpui::StyleRefinement,
 }
@@ -639,6 +642,7 @@ impl PasswordInput {
     #[track_caller]
     pub fn new() -> Self {
         Self {
+            id: ComponentId::default(),
             inner: TextInput::new().masked(true).mask_reveal_ms(700),
             style: gpui::StyleRefinement::default(),
         }
@@ -733,7 +737,7 @@ impl PasswordInput {
 
 impl PasswordInput {
     pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
-        self.inner = self.inner.with_id(id);
+        self.id = id.into();
         self
     }
 }
@@ -791,7 +795,7 @@ impl MotionAware for PasswordInput {
 
 impl RenderOnce for PasswordInput {
     fn render(self, window: &mut gpui::Window, cx: &mut gpui::App) -> impl IntoElement {
-        let mut inner = self.inner;
+        let mut inner = self.inner.with_id(self.id);
         gpui::Refineable::refine(gpui::Styled::style(&mut inner), &self.style);
         inner.render(window, cx)
     }

@@ -151,9 +151,13 @@ impl Accordion {
         self.id.id()
     }
 
-    pub fn set_id(mut self, id: impl Into<ComponentId>) -> Self {
+    pub fn with_id(mut self, id: impl Into<ComponentId>) -> Self {
         self.id = id.into();
         self
+    }
+
+    pub fn set_id(self, id: impl Into<ComponentId>) -> Self {
+        self.with_id(id)
     }
 }
 

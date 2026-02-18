@@ -1085,10 +1085,12 @@ impl RenderOnce for Textarea {
         self.theme.sync_from_provider(_cx);
         match self.layout {
             FieldLayout::Vertical => Stack::vertical()
+                .id(self.id.clone())
                 .gap_2()
                 .child(self.render_label_block())
                 .child(self.render_input_box(window)),
             FieldLayout::Horizontal => Stack::horizontal()
+                .id(self.id.clone())
                 .items_start()
                 .gap_3()
                 .child(div().w(px(168.0)).child(self.render_label_block()))
