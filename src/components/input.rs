@@ -6,9 +6,9 @@ use std::{
 };
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, FocusHandle, InteractiveElement, IntoElement,
-    KeyDownEvent, ParentElement, RenderOnce, SharedString, StatefulInteractiveElement, Styled,
-    Window, div, px,
+    Animation, AnimationExt, AnyElement, ClickEvent, ClipboardItem, FocusHandle,
+    InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, RenderOnce,
+    SharedString, StatefulInteractiveElement, Styled, Window, canvas, div, px,
 };
 
 use crate::contracts::{FieldLike, MotionAware, Sizeable, VariantConfigurable};
@@ -234,6 +234,16 @@ impl TextInput {
         }
     }
 
+    fn char_width_px(&self) -> f32 {
+        match self.size {
+            Size::Xs => 6.8,
+            Size::Sm => 7.2,
+            Size::Md => 7.8,
+            Size::Lg => 8.6,
+            Size::Xl => 9.4,
+        }
+    }
+
     fn set_password_reveal(id: &str, value: &str, duration_ms: u64) {
         if duration_ms == 0 {
             Self::clear_password_reveal(id);
@@ -272,17 +282,156 @@ impl TextInput {
         }
     }
 
+    fn byte_index_at_char(value: &str, char_index: usize) -> usize {
+        value
+            .char_indices()
+            .nth(char_index)
+            .map(|(index, _)| index)
+            .unwrap_or(value.len())
+    }
+
+    fn selection_bounds_for(id: &str, len: usize) -> Option<(usize, usize)> {
+        let start = control::text_state(id, "selection-start", None, "0".to_string())
+            .parse::<usize>()
+            .ok()
+            .unwrap_or(0)
+            .min(len);
+        let end = control::text_state(id, "selection-end", None, "0".to_string())
+            .parse::<usize>()
+            .ok()
+            .unwrap_or(0)
+            .min(len);
+        let (start, end) = if start <= end {
+            (start, end)
+        } else {
+            (end, start)
+        };
+        (start < end).then_some((start, end))
+    }
+
+    fn set_selection_for(id: &str, start: usize, end: usize) {
+        control::set_text_state(id, "selection-start", start.to_string());
+        control::set_text_state(id, "selection-end", end.to_string());
+    }
+
+    fn clear_selection_for(id: &str, caret: usize) {
+        Self::set_selection_for(id, caret, caret);
+    }
+
+    fn replace_char_range(value: &str, start: usize, end: usize, insert: &str) -> (String, usize) {
+        let start = start.min(value.chars().count());
+        let end = end.min(value.chars().count()).max(start);
+        let byte_start = Self::byte_index_at_char(value, start);
+        let byte_end = Self::byte_index_at_char(value, end);
+        let mut next = value.to_string();
+        next.replace_range(byte_start..byte_end, insert);
+        (next, start + insert.chars().count())
+    }
+
+    fn content_geometry(id: &str) -> (f32, f32, f32, f32) {
+        let x = control::text_state(id, "content-origin-x", None, "0".to_string())
+            .parse::<f32>()
+            .ok()
+            .unwrap_or(0.0);
+        let y = control::text_state(id, "content-origin-y", None, "0".to_string())
+            .parse::<f32>()
+            .ok()
+            .unwrap_or(0.0);
+        let width = control::text_state(id, "content-width", None, "0".to_string())
+            .parse::<f32>()
+            .ok()
+            .unwrap_or(0.0);
+        let height = control::text_state(id, "content-height", None, "0".to_string())
+            .parse::<f32>()
+            .ok()
+            .unwrap_or(0.0);
+        (x, y, width, height)
+    }
+
+    fn caret_from_click(
+        id: &str,
+        position: gpui::Point<gpui::Pixels>,
+        value: &str,
+        char_width: f32,
+    ) -> usize {
+        let (origin_x, _origin_y, _width, _height) = Self::content_geometry(id);
+        let local_x = (f32::from(position.x) - origin_x).max(0.0);
+        let target_col = ((local_x / char_width.max(1.0)) + 0.5).floor() as usize;
+        target_col.min(value.chars().count())
+    }
+
     fn with_value_update(
         current: &str,
         event: &KeyDownEvent,
         max_length: Option<usize>,
-    ) -> Option<String> {
+        caret_index: usize,
+        selection: Option<(usize, usize)>,
+    ) -> Option<(String, usize)> {
         let key = event.keystroke.key.as_str();
+        let char_len = current.chars().count();
+        let caret_index = caret_index.min(char_len);
+        let selection = selection.map(|(start, end)| {
+            let start = start.min(char_len);
+            let end = end.min(char_len);
+            if start <= end {
+                (start, end)
+            } else {
+                (end, start)
+            }
+        });
+        let has_selection = selection.is_some_and(|(start, end)| start < end);
 
         if key == "backspace" {
+            if let Some((start, end)) = selection
+                && start < end
+            {
+                return Some(Self::replace_char_range(current, start, end, ""));
+            }
+            if caret_index == 0 {
+                return Some((current.to_string(), 0));
+            }
+            let start = Self::byte_index_at_char(current, caret_index - 1);
+            let end = Self::byte_index_at_char(current, caret_index);
             let mut next = current.to_string();
-            next.pop();
-            return Some(next);
+            next.replace_range(start..end, "");
+            return Some((next, caret_index - 1));
+        }
+
+        if key == "delete" {
+            if let Some((start, end)) = selection
+                && start < end
+            {
+                return Some(Self::replace_char_range(current, start, end, ""));
+            }
+            if caret_index >= char_len {
+                return Some((current.to_string(), caret_index));
+            }
+            let start = Self::byte_index_at_char(current, caret_index);
+            let end = Self::byte_index_at_char(current, caret_index + 1);
+            let mut next = current.to_string();
+            next.replace_range(start..end, "");
+            return Some((next, caret_index));
+        }
+
+        if key == "left" {
+            if has_selection {
+                let (start, _) = selection.unwrap_or((caret_index, caret_index));
+                return Some((current.to_string(), start));
+            }
+            return Some((current.to_string(), caret_index.saturating_sub(1)));
+        }
+        if key == "right" {
+            if has_selection {
+                let (_, end) = selection.unwrap_or((caret_index, caret_index));
+                return Some((current.to_string(), end));
+            }
+            return Some((current.to_string(), (caret_index + 1).min(char_len)));
+        }
+        if key == "home" {
+            return Some((current.to_string(), 0));
+        }
+        if key == "end" {
+            return Some((current.to_string(), char_len));
         }
 
         let has_modifier = event.keystroke.modifiers.control
@@ -296,33 +445,63 @@ impl TextInput {
             .keystroke
             .key_char
             .clone()
-            .filter(|value| !value.is_empty())?;
+            .filter(|value| !value.is_empty())
+            .or_else(|| {
+                if key.chars().count() == 1 {
+                    Some(key.to_string())
+                } else {
+                    None
+                }
+            })?;
 
         if inserted == "\n" || key == "enter" {
             return None;
         }
 
-        let mut next = current.to_string();
-        next.push_str(&inserted);
+        let start = Self::byte_index_at_char(current, caret_index);
+        let (mut next, mut next_caret) = if let Some((selection_start, selection_end)) = selection {
+            if selection_start < selection_end {
+                Self::replace_char_range(current, selection_start, selection_end, &inserted)
+            } else {
+                let mut next = current.to_string();
+                next.insert_str(start, &inserted);
+                (next, caret_index + inserted.chars().count())
+            }
+        } else {
+            let mut next = current.to_string();
+            next.insert_str(start, &inserted);
+            (next, caret_index + inserted.chars().count())
+        };
 
         if let Some(max_length) = max_length {
             if next.chars().count() > max_length {
                 next = next.chars().take(max_length).collect();
+                next_caret = next_caret.min(next.chars().count());
             }
         }
 
-        Some(next)
+        Some((next, next_caret))
     }
 
     fn render_input_box(&mut self, window: &Window) -> AnyElement {
         let tokens = &self.theme.components.input;
         let resolved_value = self.resolved_value();
+        let current_value = resolved_value.to_string();
         let tracked_focus = control::focused_state(&self.id, None, false);
         let handle_focused = self
             .focus_handle
             .as_ref()
             .is_some_and(|focus_handle| focus_handle.is_focused(window));
         let is_focused = handle_focused || tracked_focus;
+        let current_len = current_value.chars().count();
+        let current_caret =
+            control::text_state(&self.id, "caret-index", None, current_len.to_string())
+                .parse::<usize>()
+                .ok()
+                .map(|value| value.min(current_len))
+                .unwrap_or(current_len);
+        let selection = Self::selection_bounds_for(&self.id, current_len);
+        let char_width = self.char_width_px();
 
         let mut input = div()
             .id(self.id.slot("box"))
@@ -355,42 +534,180 @@ impl TextInput {
         }
 
         if let Some(focus_handle) = &self.focus_handle {
-            let handle_for_click = focus_handle.clone();
-            let id_for_focus = self.id.clone();
-            input = input
-                .track_focus(focus_handle)
-                .on_click(move |_, window, cx| {
-                    control::set_focused_state(&id_for_focus, true);
-                    window.focus(&handle_for_click, cx);
-                    window.refresh();
-                });
-        } else {
-            let id_for_focus = self.id.clone();
-            input = input.on_click(move |_, window, _cx| {
-                control::set_focused_state(&id_for_focus, true);
-                window.refresh();
-            });
+            input = input.track_focus(focus_handle);
         }
 
         let id_for_blur = self.id.clone();
         input = input.on_mouse_down_out(move |_, window, _cx| {
             control::set_focused_state(&id_for_blur, false);
+            control::set_bool_state(&id_for_blur, "mouse-selecting", false);
             window.refresh();
         });
 
         if !self.disabled && !self.read_only {
             let on_change = self.on_change.clone();
             let on_submit = self.on_submit.clone();
-            let current_value = resolved_value.to_string();
+            let rendered_value = current_value.clone();
             let max_length = self.max_length;
             let input_id = self.id.clone();
             let focus_state_id = self.id.clone();
             let masked = self.masked;
             let mask_reveal_ms = self.mask_reveal_ms;
             let value_controlled = self.value_controlled;
+            let value_for_mouse_down = current_value.clone();
+            let value_for_mouse_move = current_value.clone();
+            let value_for_right_click = current_value.clone();
+            let char_width_for_click = char_width;
+            let char_width_for_move = char_width;
+            let char_width_for_right_click = char_width;
+            let focus_handle_for_mouse = self.focus_handle.clone();
+            let focus_handle_for_right_click = self.focus_handle.clone();
+            let id_for_mouse_down = self.id.clone();
+            let id_for_mouse_move = self.id.clone();
+            let id_for_mouse_up = self.id.clone();
+            let id_for_mouse_up_out = self.id.clone();
+            let id_for_right_click = self.id.clone();
+
+            input = input
+                .on_mouse_down(MouseButton::Left, move |event, window, cx| {
+                    control::set_focused_state(&id_for_mouse_down, true);
+                    if let Some(handle) = focus_handle_for_mouse.as_ref() {
+                        window.focus(handle, cx);
+                    }
+
+                    let click_caret = Self::caret_from_click(
+                        &id_for_mouse_down,
+                        event.position,
+                        &value_for_mouse_down,
+                        char_width_for_click,
+                    );
+                    let len = value_for_mouse_down.chars().count();
+                    let current_caret = control::text_state(
+                        &id_for_mouse_down,
+                        "caret-index",
+                        None,
+                        len.to_string(),
+                    )
+                    .parse::<usize>()
+                    .ok()
+                    .map(|value| value.min(len))
+                    .unwrap_or(len);
+
+                    if event.modifiers.shift {
+                        let existing_selection =
+                            Self::selection_bounds_for(&id_for_mouse_down, len);
+                        let anchor = if let Some((start, end)) = existing_selection {
+                            if current_caret == start { end } else { start }
+                        } else {
+                            current_caret
+                        };
+                        Self::set_selection_for(&id_for_mouse_down, anchor, click_caret);
+                        control::set_text_state(
+                            &id_for_mouse_down,
+                            "selection-anchor",
+                            anchor.to_string(),
+                        );
+                    } else {
+                        Self::clear_selection_for(&id_for_mouse_down, click_caret);
+                        control::set_text_state(
+                            &id_for_mouse_down,
+                            "selection-anchor",
+                            click_caret.to_string(),
+                        );
+                    }
+                    control::set_text_state(
+                        &id_for_mouse_down,
+                        "caret-index",
+                        click_caret.to_string(),
+                    );
+                    control::set_bool_state(&id_for_mouse_down, "mouse-selecting", true);
+                    window.refresh();
+                })
+                .on_mouse_move(move |event, window, _cx| {
+                    if !control::bool_state(&id_for_mouse_move, "mouse-selecting", None, false) {
+                        return;
+                    }
+
+                    let caret = Self::caret_from_click(
+                        &id_for_mouse_move,
+                        event.position,
+                        &value_for_mouse_move,
+                        char_width_for_move,
+                    );
+                    let anchor = control::text_state(
+                        &id_for_mouse_move,
+                        "selection-anchor",
+                        None,
+                        caret.to_string(),
+                    )
+                    .parse::<usize>()
+                    .ok()
+                    .unwrap_or(caret);
+                    control::set_text_state(&id_for_mouse_move, "caret-index", caret.to_string());
+                    Self::set_selection_for(&id_for_mouse_move, anchor, caret);
+                    window.refresh();
+                })
+                .on_mouse_up(MouseButton::Left, move |_, _, _| {
+                    control::set_bool_state(&id_for_mouse_up, "mouse-selecting", false);
+                })
+                .on_mouse_up_out(MouseButton::Left, move |_, _, _| {
+                    control::set_bool_state(&id_for_mouse_up_out, "mouse-selecting", false);
+                })
+                .on_click(move |event: &ClickEvent, window, cx| {
+                    if !event.is_right_click() {
+                        return;
+                    }
+                    control::set_focused_state(&id_for_right_click, true);
+                    if let Some(handle) = focus_handle_for_right_click.as_ref() {
+                        window.focus(handle, cx);
+                    }
+                    if let Some(position) = event.mouse_position() {
+                        let caret = Self::caret_from_click(
+                            &id_for_right_click,
+                            position,
+                            &value_for_right_click,
+                            char_width_for_right_click,
+                        );
+                        let len = value_for_right_click.chars().count();
+                        let selection = Self::selection_bounds_for(&id_for_right_click, len);
+                        let keep_selection =
+                            selection.is_some_and(|(start, end)| caret >= start && caret <= end);
+                        if !keep_selection {
+                            control::set_text_state(
+                                &id_for_right_click,
+                                "caret-index",
+                                caret.to_string(),
+                            );
+                            Self::clear_selection_for(&id_for_right_click, caret);
+                            control::set_text_state(
+                                &id_for_right_click,
+                                "selection-anchor",
+                                caret.to_string(),
+                            );
+                        }
+                    }
+                    window.refresh();
+                });
 
             input = input.on_key_down(move |event, window, cx| {
                 control::set_focused_state(&focus_state_id, true);
+                let current_value = control::text_state(
+                    &input_id,
+                    "value",
+                    value_controlled.then_some(rendered_value.clone()),
+                    rendered_value.clone(),
+                );
+                let len = current_value.chars().count();
+                let current_caret =
+                    control::text_state(&input_id, "caret-index", None, len.to_string())
+                        .parse::<usize>()
+                        .ok()
+                        .map(|value| value.min(len))
+                        .unwrap_or(len);
+                let selection = Self::selection_bounds_for(&input_id, len);
+                let modifiers =
+                    event.keystroke.modifiers.control || event.keystroke.modifiers.platform;
+
                 if event.keystroke.key == "enter" {
                     if let Some(handler) = &on_submit {
                         (handler)(current_value.clone().into(), window, cx);
@@ -398,8 +715,140 @@ impl TextInput {
                     return;
                 }
 
-                if let Some(next) = Self::with_value_update(&current_value, event, max_length) {
+                if modifiers && event.keystroke.key == "a" {
+                    control::set_text_state(&input_id, "caret-index", len.to_string());
+                    Self::set_selection_for(&input_id, 0, len);
+                    control::set_text_state(&input_id, "selection-anchor", "0".to_string());
+                    window.refresh();
+                    return;
+                }
+
+                if modifiers && event.keystroke.key == "c" {
+                    if let Some((start, end)) = selection {
+                        let selected = current_value
+                            .chars()
+                            .skip(start)
+                            .take(end.saturating_sub(start))
+                            .collect::<String>();
+                        if !selected.is_empty() {
+                            cx.write_to_clipboard(ClipboardItem::new_string(selected));
+                        }
+                    }
+                    return;
+                }
+
+                if modifiers && event.keystroke.key == "x" {
+                    if let Some((start, end)) = selection {
+                        let selected = current_value
+                            .chars()
+                            .skip(start)
+                            .take(end.saturating_sub(start))
+                            .collect::<String>();
+                        if !selected.is_empty() {
+                            cx.write_to_clipboard(ClipboardItem::new_string(selected));
+                            let (next, next_caret) =
+                                Self::replace_char_range(&current_value, start, end, "");
+                            control::set_text_state(
+                                &input_id,
+                                "caret-index",
+                                next_caret.to_string(),
+                            );
+                            Self::clear_selection_for(&input_id, next_caret);
+                            control::set_text_state(
+                                &input_id,
+                                "selection-anchor",
+                                next_caret.to_string(),
+                            );
+                            if !value_controlled {
+                                control::set_text_state(&input_id, "value", next.clone());
+                            }
+                            if let Some(handler) = on_change.as_ref() {
+                                (handler)(next.into(), window, cx);
+                            }
+                            window.refresh();
+                        }
+                    }
+                    return;
+                }
+
+                if modifiers
+                    && event.keystroke.key == "v"
+                    && let Some(item) = cx.read_from_clipboard()
+                    && let Some(pasted) = item.text()
+                {
+                    let sanitized = pasted.replace('\r', " ").replace('\n', " ");
+                    if sanitized.is_empty() {
+                        return;
+                    }
+                    let (mut next, mut next_caret) = if let Some((start, end)) = selection {
+                        Self::replace_char_range(&current_value, start, end, &sanitized)
+                    } else {
+                        let byte_start = Self::byte_index_at_char(&current_value, current_caret);
+                        let mut next = current_value.clone();
+                        next.insert_str(byte_start, &sanitized);
+                        (next, current_caret + sanitized.chars().count())
+                    };
+                    if let Some(limit) = max_length
+                        && next.chars().count() > limit
+                    {
+                        next = next.chars().take(limit).collect();
+                        next_caret = next_caret.min(next.chars().count());
+                    }
                     if masked {
+                        if next.chars().count() > current_value.chars().count() {
+                            Self::set_password_reveal(&input_id, &next, mask_reveal_ms);
+                        } else {
+                            Self::clear_password_reveal(&input_id);
+                        }
+                    }
+                    control::set_text_state(&input_id, "caret-index", next_caret.to_string());
+                    Self::clear_selection_for(&input_id, next_caret);
+                    control::set_text_state(&input_id, "selection-anchor", next_caret.to_string());
+                    if !value_controlled {
+                        control::set_text_state(&input_id, "value", next.clone());
+                    }
+                    if let Some(handler) = on_change.as_ref() {
+                        (handler)(next.into(), window, cx);
+                    }
+                    window.refresh();
+                    return;
+                }
+
+                if event.keystroke.modifiers.shift
+                    && matches!(
+                        event.keystroke.key.as_str(),
+                        "left" | "right" | "home" | "end"
+                    )
+                {
+                    let anchor = if let Some((start, end)) = selection {
+                        if current_caret == start { end } else { start }
+                    } else {
+                        current_caret
+                    };
+                    if let Some((_next, next_caret)) = Self::with_value_update(
+                        &current_value,
+                        event,
+                        max_length,
+                        current_caret,
+                        None,
+                    ) {
+                        control::set_text_state(&input_id, "caret-index", next_caret.to_string());
+                        Self::set_selection_for(&input_id, anchor, next_caret);
+                        control::set_text_state(&input_id, "selection-anchor", anchor.to_string());
+                        window.refresh();
+                    }
+                    return;
+                }
+
+                if let Some((next, next_caret)) = Self::with_value_update(
+                    &current_value,
+                    event,
+                    max_length,
+                    current_caret,
+                    selection,
+                ) {
+                    let value_changed = next != current_value;
+                    if value_changed && masked {
                         let previous_len = current_value.chars().count();
                         let next_len = next.chars().count();
                         if next_len > previous_len {
@@ -423,12 +872,15 @@ impl TextInput {
                         }
                     }
 
-                    if !value_controlled {
+                    if value_changed && !value_controlled {
                         control::set_text_state(&input_id, "value", next.clone());
-                        window.refresh();
                     }
+                    control::set_text_state(&input_id, "caret-index", next_caret.to_string());
+                    Self::clear_selection_for(&input_id, next_caret);
+                    control::set_text_state(&input_id, "selection-anchor", next_caret.to_string());
+                    window.refresh();
 
-                    if let Some(handler) = &on_change {
+                    if value_changed && let Some(handler) = &on_change {
                         (handler)(next.into(), window, cx);
                     }
                 }
@@ -445,7 +897,47 @@ impl TextInput {
         }
 
         let value = self.display_value(&resolved_value);
-        let mut value_container = div().flex_1().min_w_0().flex().items_center().gap_0();
+        let mut value_container = div()
+            .id(self.id.slot("content"))
+            .relative()
+            .flex_1()
+            .min_w_0()
+            .flex()
+            .items_center()
+            .gap_0()
+            .overflow_hidden()
+            .whitespace_nowrap();
+        value_container = value_container.child({
+            let id_for_metrics = self.id.clone();
+            canvas(
+                move |bounds, _, _cx| {
+                    control::set_text_state(
+                        &id_for_metrics,
+                        "content-origin-x",
+                        f32::from(bounds.origin.x).to_string(),
+                    );
+                    control::set_text_state(
+                        &id_for_metrics,
+                        "content-origin-y",
+                        f32::from(bounds.origin.y).to_string(),
+                    );
+                    control::set_text_state(
+                        &id_for_metrics,
+                        "content-width",
+                        f32::from(bounds.size.width).to_string(),
+                    );
+                    control::set_text_state(
+                        &id_for_metrics,
+                        "content-height",
+                        f32::from(bounds.size.height).to_string(),
+                    );
+                },
+                |_, _, _, _| {},
+            )
+            .absolute()
+            .size_full()
+        });
+
         if value.is_empty() && !is_focused {
             value_container = value_container.child(
                 div()
@@ -454,19 +946,47 @@ impl TextInput {
                     .child(self.placeholder.clone().unwrap_or_default()),
             );
         } else {
-            value_container = value_container.child(div().truncate().child(value));
-        }
-
-        let show_caret = is_focused;
-        if !self.disabled && !self.read_only && show_caret {
-            let caret_color = resolve_hsla(&self.theme, &tokens.fg);
-            value_container = value_container.child(
-                div()
+            let show_caret = is_focused;
+            let selection_bg =
+                resolve_hsla(&self.theme, &self.theme.semantic.focus_ring).alpha(0.28);
+            if let Some((selection_start, selection_end)) = selection {
+                let left = value.chars().take(selection_start).collect::<String>();
+                let selected = value
+                    .chars()
+                    .skip(selection_start)
+                    .take(selection_end - selection_start)
+                    .collect::<String>();
+                let right = value.chars().skip(selection_end).collect::<String>();
+                value_container = value_container.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .whitespace_nowrap()
+                        .child(if left.is_empty() {
+                            "".to_string()
+                        } else {
+                            left
+                        })
+                        .child(div().bg(selection_bg).child(if selected.is_empty() {
+                            " ".to_string()
+                        } else {
+                            selected
+                        }))
+                        .child(if right.is_empty() {
+                            "".to_string()
+                        } else {
+                            right
+                        }),
+                );
+            } else if !self.disabled && !self.read_only && show_caret {
+                let left = value.chars().take(current_caret).collect::<String>();
+                let right = value.chars().skip(current_caret).collect::<String>();
+                let caret = div()
                     .id(self.id.slot("caret"))
                     .flex_none()
                     .w(quantized_stroke_px(window, 1.5))
                     .h(px(self.caret_height_px()))
-                    .bg(caret_color)
+                    .bg(resolve_hsla(&self.theme, &tokens.fg))
                     .rounded_sm()
                     .with_animation(
                         self.id.slot("caret-blink"),
@@ -477,8 +997,29 @@ impl TextInput {
                             let visible = ((delta * 2.0).fract()) < 0.5;
                             this.opacity(if visible { 1.0 } else { 0.0 })
                         },
-                    ),
-            );
+                    );
+                value_container = value_container.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .whitespace_nowrap()
+                        .child(if left.is_empty() {
+                            "".to_string()
+                        } else {
+                            left
+                        })
+                        .child(caret)
+                        .child(if right.is_empty() {
+                            "".to_string()
+                        } else {
+                            right
+                        }),
+                );
+            } else if value.is_empty() {
+                value_container = value_container.child("".to_string());
+            } else {
+                value_container = value_container.child(div().child(value));
+            }
         }
         input = input.child(value_container);
 

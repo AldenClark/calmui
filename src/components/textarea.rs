@@ -482,7 +482,7 @@ impl Textarea {
         let wrapped_lines = Self::wrapped_lines(value, wrap_columns.max(1));
 
         let target_line = (local_y / line_height.max(1.0)).floor() as usize;
-        let target_col = (local_x / char_width.max(1.0)).floor() as usize;
+        let target_col = ((local_x / char_width.max(1.0)) + 0.5).floor() as usize;
         if wrapped_lines.is_empty() {
             return 0;
         }
@@ -696,7 +696,7 @@ impl Textarea {
             .flex_col()
             .items_start()
             .justify_start()
-            .gap_1()
+            .gap_0()
             .w_full()
             .h(px(box_height))
             .bg(resolve_hsla(&self.theme, &tokens.bg))
@@ -778,12 +778,39 @@ impl Textarea {
                             horizontal_padding_for_click,
                             char_width_for_click,
                         );
+                        let len = value_for_click.chars().count();
+                        let current_caret = control::text_state(
+                            &id_for_focus,
+                            "caret-index",
+                            None,
+                            len.to_string(),
+                        )
+                        .parse::<usize>()
+                        .ok()
+                        .map(|value| value.min(len))
+                        .unwrap_or(len);
+                        let existing_selection = Self::selection_bounds_for(&id_for_focus, len);
                         control::set_text_state(
                             &id_for_focus,
                             "caret-index",
                             click_caret.to_string(),
                         );
-                        Self::clear_selection_for(&id_for_focus, click_caret);
+                        if event.modifiers().shift && !event.is_right_click() {
+                            let anchor = if let Some((start, end)) = existing_selection {
+                                if current_caret == start { end } else { start }
+                            } else {
+                                current_caret
+                            };
+                            Self::set_selection_for(&id_for_focus, anchor, click_caret);
+                        } else {
+                            let keep_selection = event.is_right_click()
+                                && existing_selection.is_some_and(|(start, end)| {
+                                    click_caret >= start && click_caret <= end
+                                });
+                            if !keep_selection {
+                                Self::clear_selection_for(&id_for_focus, click_caret);
+                            }
+                        }
                         window.focus(&handle_for_click, cx);
                         window.refresh();
                     });
@@ -805,8 +832,30 @@ impl Textarea {
                     horizontal_padding_for_click,
                     char_width_for_click,
                 );
+                let len = value_for_click.chars().count();
+                let current_caret =
+                    control::text_state(&id_for_focus, "caret-index", None, len.to_string())
+                        .parse::<usize>()
+                        .ok()
+                        .map(|value| value.min(len))
+                        .unwrap_or(len);
+                let existing_selection = Self::selection_bounds_for(&id_for_focus, len);
                 control::set_text_state(&id_for_focus, "caret-index", click_caret.to_string());
-                Self::clear_selection_for(&id_for_focus, click_caret);
+                if event.modifiers().shift && !event.is_right_click() {
+                    let anchor = if let Some((start, end)) = existing_selection {
+                        if current_caret == start { end } else { start }
+                    } else {
+                        current_caret
+                    };
+                    Self::set_selection_for(&id_for_focus, anchor, click_caret);
+                } else {
+                    let keep_selection = event.is_right_click()
+                        && existing_selection
+                            .is_some_and(|(start, end)| click_caret >= start && click_caret <= end);
+                    if !keep_selection {
+                        Self::clear_selection_for(&id_for_focus, click_caret);
+                    }
+                }
                 window.refresh();
             });
         }
@@ -853,14 +902,54 @@ impl Textarea {
             let value_controlled = self.value_controlled;
             let input_id = self.id.clone();
             let max_length = self.max_length;
-            let current_value_for_input = current_value.clone();
-            let current_caret_for_input = current_caret;
+            let rendered_value_for_input = current_value.clone();
             input = input.on_key_down(move |event, window, cx| {
                 control::set_focused_state(&input_id, true);
+                let current_value_for_input = control::text_state(
+                    &input_id,
+                    "value",
+                    value_controlled.then_some(rendered_value_for_input.clone()),
+                    rendered_value_for_input.clone(),
+                );
                 let len = current_value_for_input.chars().count();
+                let current_caret_for_input =
+                    control::text_state(&input_id, "caret-index", None, len.to_string())
+                        .parse::<usize>()
+                        .ok()
+                        .map(|value| value.min(len))
+                        .unwrap_or(len);
                 let selection = Self::selection_bounds_for(&input_id, len);
                 let modifiers =
                     event.keystroke.modifiers.control || event.keystroke.modifiers.platform;
+
+                if event.keystroke.modifiers.shift
+                    && matches!(
+                        event.keystroke.key.as_str(),
+                        "left" | "right" | "home" | "end" | "up" | "down"
+                    )
+                {
+                    let anchor = if let Some((start, end)) = selection {
+                        if current_caret_for_input == start {
+                            end
+                        } else {
+                            start
+                        }
+                    } else {
+                        current_caret_for_input
+                    };
+                    if let Some((_next, next_caret)) = Self::with_value_update(
+                        &current_value_for_input,
+                        event,
+                        max_length,
+                        current_caret_for_input,
+                        None,
+                    ) {
+                        control::set_text_state(&input_id, "caret-index", next_caret.to_string());
+                        Self::set_selection_for(&input_id, anchor, next_caret);
+                        window.refresh();
+                    }
+                    return;
+                }
 
                 if modifiers && event.keystroke.key == "a" {
                     control::set_text_state(&input_id, "caret-index", len.to_string());
