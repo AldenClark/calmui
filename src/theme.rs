@@ -1731,7 +1731,7 @@ impl ComponentTokens {
                     .unwrap_or_else(|_| black())),
                 },
                 segmented_control: SegmentedControlTokens {
-                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                     border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
@@ -2865,7 +2865,7 @@ impl ComponentTokens {
                     .unwrap_or_else(|_| black())),
                 },
                 segmented_control: SegmentedControlTokens {
-                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                    bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[7 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                     border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
@@ -2875,7 +2875,7 @@ impl ComponentTokens {
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                     item_active_bg: (Rgba::try_from(
-                        PaletteCatalog::scale(PaletteKey::Dark)[6 as usize],
+                        PaletteCatalog::scale(PaletteKey::Dark)[5 as usize],
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
@@ -2885,7 +2885,7 @@ impl ComponentTokens {
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
                     item_hover_bg: (Rgba::try_from(
-                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                        PaletteCatalog::scale(PaletteKey::Dark)[6 as usize],
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
