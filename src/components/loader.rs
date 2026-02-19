@@ -185,6 +185,9 @@ impl Loader {
 
         let inner = div()
             .id(self.id.slot("pulse-inner"))
+            .absolute()
+            .left(px(2.0))
+            .top(px(2.0))
             .w(px(dot))
             .h(px(dot))
             .rounded_full()
@@ -205,17 +208,7 @@ impl Loader {
                 .w(px(dot + 4.0))
                 .h(px(dot + 4.0))
                 .child(outer)
-                .child(
-                    div()
-                        .absolute()
-                        .top_0()
-                        .left_0()
-                        .size_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(inner),
-                ),
+                .child(inner),
         );
         if let Some(label) = self.label {
             row = row.gap(size_preset.label_gap).child(
@@ -242,25 +235,23 @@ impl Loader {
                 .repeat()
                 .with_easing(gpui::ease_in_out);
 
-            div().h(px(bar_h_max)).flex().items_end().child(
-                div()
-                    .id(self.id.slot_index("bar", index.to_string()))
-                    .w(px(bar_w))
-                    .h(px(bar_h_max))
-                    .rounded_full()
-                    .bg(color)
-                    .with_animation(
-                        self.id.slot_index("bar-anim", index.to_string()),
-                        animation,
-                        move |this, delta| {
-                            let progress = (delta + phase).fract();
-                            let wave = ((progress * TAU).sin() + 1.0) * 0.5;
-                            let h = bar_h_min + ((bar_h_max - bar_h_min) * wave);
-                            let opacity = 0.35 + (0.65 * wave);
-                            this.h(px(h)).opacity(opacity)
-                        },
-                    ),
-            )
+            div()
+                .id(self.id.slot_index("bar", index.to_string()))
+                .w(px(bar_w))
+                .h(px(bar_h_max))
+                .rounded_full()
+                .bg(color)
+                .with_animation(
+                    self.id.slot_index("bar-anim", index.to_string()),
+                    animation,
+                    move |this, delta| {
+                        let progress = (delta + phase).fract();
+                        let wave = ((progress * TAU).sin() + 1.0) * 0.5;
+                        let h = bar_h_min + ((bar_h_max - bar_h_min) * wave);
+                        let opacity = 0.35 + (0.65 * wave);
+                        this.h(px(h)).opacity(opacity)
+                    },
+                )
         });
 
         let mut row = Stack::horizontal()
@@ -321,14 +312,7 @@ impl Loader {
                 )
         });
 
-        let oval = div().relative().w(px(ring)).h(px(ring)).child(
-            div()
-                .absolute()
-                .top_0()
-                .left_0()
-                .size_full()
-                .children(segments),
-        );
+        let oval = div().relative().w(px(ring)).h(px(ring)).children(segments);
 
         let mut row = Stack::horizontal()
             .gap(size_preset.cluster_gap)

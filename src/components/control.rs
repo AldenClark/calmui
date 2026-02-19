@@ -376,3 +376,58 @@ pub fn clear_all() {
         *store = ControlStore::default();
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scope_roundtrip_for_bool_text_list_and_numbers() {
+        clear_all();
+        let id = "control-test";
+
+        assert!(!bool_state(id, "flag", None, false));
+        set_bool_state(id, "flag", true);
+        assert!(bool_state(id, "flag", None, false));
+
+        assert_eq!(text_state(id, "name", None, "a".into()), "a");
+        set_text_state(id, "name", "b".into());
+        assert_eq!(text_state(id, "name", None, "a".into()), "b");
+
+        assert_eq!(list_state(id, "items", None, vec!["x".into()]), vec!["x"]);
+        set_list_state(id, "items", vec!["y".into(), "z".into()]);
+        assert_eq!(list_state(id, "items", None, vec![]), vec!["y", "z"]);
+
+        set_f32_state(id, "f32", 1.25);
+        assert!((f32_state(id, "f32", None, 0.0) - 1.25).abs() < f32::EPSILON);
+
+        set_usize_state(id, "usize", 9);
+        assert_eq!(usize_state(id, "usize", None, 0), 9);
+    }
+
+    #[test]
+    fn clear_slot_component_and_all_work() {
+        clear_all();
+        set_bool_state("a", "k", true);
+        set_text_state("a", "t", "hello".into());
+        set_bool_state("b", "k", true);
+
+        clear_slot("a", "k");
+        assert!(!bool_state("a", "k", None, false));
+        assert_eq!(text_state("a", "t", None, "x".into()), "hello");
+
+        clear_component("a");
+        assert_eq!(text_state("a", "t", None, "x".into()), "x");
+        assert!(bool_state("b", "k", None, false));
+
+        clear_all();
+        assert!(!bool_state("b", "k", None, false));
+    }
+
+    #[test]
+    fn activation_key_helpers_match_expected_keys() {
+        assert!(is_activation_key("space"));
+        assert!(is_activation_key("enter"));
+        assert!(!is_activation_key("tab"));
+    }
+}

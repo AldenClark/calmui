@@ -948,17 +948,13 @@ impl RenderOnce for AppShell {
                     )
                     .w(px(sidebar_width_px))
                     .h_full()
-                    .flex_none();
+                    .flex_none()
+                    .id(self.id.slot("sidebar-overlay-host"))
+                    .absolute()
+                    .top_0()
+                    .left_0();
 
-                body_host = body_host.child(
-                    div()
-                        .id(self.id.slot("sidebar-overlay-host"))
-                        .absolute()
-                        .top_0()
-                        .left_0()
-                        .h_full()
-                        .child(sidebar_region),
-                );
+                body_host = body_host.child(sidebar_region);
             }
         }
 
@@ -975,17 +971,13 @@ impl RenderOnce for AppShell {
                     )
                     .w(px(inspector_width_px))
                     .h_full()
-                    .flex_none();
+                    .flex_none()
+                    .id(self.id.slot("inspector-overlay-host"))
+                    .absolute()
+                    .top_0()
+                    .right_0();
 
-                body_host = body_host.child(
-                    div()
-                        .id(self.id.slot("inspector-overlay-host"))
-                        .absolute()
-                        .top_0()
-                        .right_0()
-                        .h_full()
-                        .child(inspector_region),
-                );
+                body_host = body_host.child(inspector_region);
             }
         }
 

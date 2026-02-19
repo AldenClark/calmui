@@ -1,9 +1,18 @@
-# Behavior Test Coverage Matrix (v3)
+# Behavior Test Coverage Matrix (v4)
 
 Behavior test sources:
 
 - `src/components/test_behavior_matrix.rs`
 - `src/components/test_behavior_coverage.rs`
+- `src/components/test_state_logic.rs`
+- component-local behavior tests in:
+  - `src/components/control.rs`
+  - `src/components/field_variant.rs`
+  - `src/components/interaction_adapter.rs`
+  - `src/components/text_input_actions.rs`
+  - `src/components/toggle.rs`
+  - `src/components/transition.rs`
+  - `src/components/utils.rs`
 
 ## Covered Render Components (all)
 
@@ -83,3 +92,7 @@ Behavior test sources:
   - all `FieldLike` components
   - all `Varianted` / `Sized` / `Radiused` components
 - This prevents adding new components to contract matrixes without behavior matrix updates.
+
+## Current Regression Status
+
+- `cargo test --lib` passed (`93 passed, 0 failed`).

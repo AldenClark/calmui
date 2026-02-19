@@ -447,16 +447,15 @@ impl ModalLayer {
                 },
             );
 
-        let mut header_title = div().flex().items_center();
+        let mut header_title = div().flex().items_center().flex_1().min_w_0();
 
         if let Some(icon) = self.modal_kind_icon(entry.kind_ref()) {
             header_title = header_title.child(
-                div().mr(modal_tokens.kind_icon_gap).flex().child(
-                    Icon::new(icon)
-                        .size(f32::from(modal_tokens.kind_icon_size))
-                        .color(self.modal_kind_color(entry.kind_ref()))
-                        .registry(self.icons.clone()),
-                ),
+                Icon::new(icon)
+                    .size(f32::from(modal_tokens.kind_icon_size))
+                    .color(self.modal_kind_color(entry.kind_ref()))
+                    .registry(self.icons.clone())
+                    .mr(modal_tokens.kind_icon_gap),
             );
         }
         if let Some(title) = entry.title_ref() {
@@ -467,8 +466,6 @@ impl ModalLayer {
                     .font_weight(modal_tokens.title_weight)
                     .child(title.clone()),
             );
-        } else {
-            header_title = header_title.child(div().flex_1());
         }
 
         let close_action = if entry.close_button_enabled() {
@@ -590,6 +587,10 @@ impl ModalLayer {
             .absolute()
             .top_0()
             .left_0()
+            .relative()
+            .flex()
+            .items_center()
+            .justify_center()
             .on_key_down(move |event, window, _cx| {
                 if close_on_escape && control::is_escape_keystroke(event) {
                     manager_for_escape.close_with_reason(id, ModalCloseReason::EscapeKey);
@@ -597,17 +598,7 @@ impl ModalLayer {
                 }
             })
             .child(overlay)
-            .child(
-                div()
-                    .size_full()
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .flex()
-                    .justify_center()
-                    .items_center()
-                    .child(panel),
-            )
+            .child(panel)
             .into_any_element()
     }
 }

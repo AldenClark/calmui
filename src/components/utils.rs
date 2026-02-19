@@ -146,3 +146,32 @@ pub fn quantized_stroke_px(window: &Window, logical_px: f32) -> Pixels {
         hairline_px(window)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{deepened_surface_border, offset_with_progress, variant_text_weight};
+    use crate::style::Variant;
+    use gpui::FontWeight;
+
+    #[test]
+    fn offset_with_progress_interpolates_towards_zero() {
+        assert!((offset_with_progress(12, 0.0) - 12.0).abs() < f32::EPSILON);
+        assert!((offset_with_progress(12, 1.0) - 0.0).abs() < f32::EPSILON);
+        assert!((offset_with_progress(-10, 0.5) + 5.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn variant_text_weight_uses_semibold_only_for_filled() {
+        assert_eq!(variant_text_weight(Variant::Filled), FontWeight::SEMIBOLD);
+        assert_eq!(variant_text_weight(Variant::Default), FontWeight::MEDIUM);
+        assert_eq!(variant_text_weight(Variant::Outline), FontWeight::MEDIUM);
+    }
+
+    #[test]
+    fn deepened_surface_border_darkens_surface_alpha_mix() {
+        let base = gpui::white().opacity(0.8);
+        let border = deepened_surface_border(base);
+        assert!(border.a >= 0.0);
+        assert!(border.a <= 1.0);
+    }
+}

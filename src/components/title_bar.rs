@@ -433,10 +433,8 @@ impl RenderOnce for TitleBar {
                     .id(self.id.slot("mac-left"))
                     .flex()
                     .items_center()
-                    .gap(tokens.controls_slot_gap);
-
-                left_cluster =
-                    left_cluster.child(div().w(px(macos_controls_reserve)).h(px(height_px)));
+                    .gap(tokens.controls_slot_gap)
+                    .pl(px(macos_controls_reserve));
                 if let Some(title) = title_element {
                     left_cluster = left_cluster.child(title);
                 }
@@ -492,15 +490,6 @@ impl RenderOnce for TitleBar {
                     .window_control_area(WindowControlArea::Drag)
                     .children(title_element);
 
-                let mut middle_slot_content = div()
-                    .id(self.id.slot("win-slot-content"))
-                    .h_full()
-                    .flex()
-                    .items_center();
-                if let Some(slot) = self.slot {
-                    middle_slot_content = middle_slot_content.child(slot());
-                }
-
                 let middle_slot = div()
                     .id(self.id.slot("win-slot"))
                     .flex_1()
@@ -508,7 +497,7 @@ impl RenderOnce for TitleBar {
                     .h_full()
                     .flex()
                     .items_center()
-                    .child(middle_slot_content)
+                    .children(self.slot.map(|slot| slot().into_any_element()))
                     .child(
                         div()
                             .id(self.id.slot("win-slot-drag"))

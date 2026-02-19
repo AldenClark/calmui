@@ -80,3 +80,41 @@ where
         window.refresh();
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ToggleConfig;
+    use crate::id::ComponentId;
+
+    fn cfg(checked: bool, allow_uncheck: bool) -> ToggleConfig {
+        ToggleConfig {
+            id: ComponentId::stable("toggle-test"),
+            checked,
+            controlled: false,
+            allow_uncheck,
+            on_change: None,
+        }
+    }
+
+    #[test]
+    fn next_checked_respects_allow_uncheck() {
+        let allow = cfg(false, true);
+        assert!(allow.next_checked());
+
+        let allow_checked = cfg(true, true);
+        assert!(!allow_checked.next_checked());
+
+        let disallow = cfg(false, false);
+        assert!(disallow.next_checked());
+
+        let disallow_checked = cfg(true, false);
+        assert!(disallow_checked.next_checked());
+    }
+
+    #[test]
+    fn should_emit_only_when_state_changes() {
+        let c = cfg(false, true);
+        assert!(!c.should_emit(false));
+        assert!(c.should_emit(true));
+    }
+}

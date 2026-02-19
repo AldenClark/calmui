@@ -102,3 +102,24 @@ where
 
     node
 }
+
+#[cfg(test)]
+mod tests {
+    use super::PressAdapter;
+    use crate::id::ComponentId;
+
+    #[test]
+    fn press_adapter_builder_sets_handlers() {
+        let id = ComponentId::stable("press-adapter-test");
+        let adapter = PressAdapter::new(id.clone());
+        assert_eq!(adapter.id.to_string(), id.to_string());
+        assert!(adapter.on_activate.is_none());
+        assert!(adapter.on_click.is_none());
+
+        let adapter = adapter
+            .on_activate(Some(std::rc::Rc::new(|_, _| {})))
+            .on_click(Some(std::rc::Rc::new(|_, _, _| {})));
+        assert!(adapter.on_activate.is_some());
+        assert!(adapter.on_click.is_some());
+    }
+}

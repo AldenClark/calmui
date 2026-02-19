@@ -370,17 +370,13 @@ impl RenderOnce for Markdown {
                     .w_full()
                     .px(tokens.quote_padding_x)
                     .py(tokens.quote_padding_y)
+                    .text_size(tokens.quote_size)
+                    .text_color(quote_fg)
                     .rounded(tokens.quote_radius)
                     .border(super::utils::quantized_stroke_px(window, 1.0))
                     .border_color(quote_border)
                     .bg(quote_bg)
-                    .child(
-                        div()
-                            .w_full()
-                            .text_size(tokens.quote_size)
-                            .text_color(quote_fg)
-                            .child(text),
-                    )
+                    .child(text)
                     .into_any_element(),
                 MarkdownBlock::Code { lang, code } => {
                     let mut content = Stack::vertical().gap(tokens.code_gap);

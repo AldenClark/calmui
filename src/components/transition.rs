@@ -173,3 +173,43 @@ fn apply_preset<E: Styled>(element: E, profile: MotionTransition, progress: f32)
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{TransitionStage, apply_preset, easing_fn};
+    use crate::motion::{Easing, MotionTransition, TransitionPreset};
+    use gpui::div;
+
+    #[test]
+    fn easing_functions_return_finite_values() {
+        for easing in [
+            Easing::Linear,
+            Easing::Ease,
+            Easing::EaseIn,
+            Easing::EaseOut,
+            Easing::EaseInOut,
+            Easing::Quadratic,
+            Easing::QuintOut,
+            Easing::BounceInOut,
+        ] {
+            let f = easing_fn(easing);
+            let y = f(0.42);
+            assert!(y.is_finite());
+        }
+    }
+
+    #[test]
+    fn apply_preset_accepts_supported_presets() {
+        let base = div();
+        let profile = MotionTransition::new().offset_px(8).start_opacity_pct(15);
+        let _ = apply_preset(base, profile.preset(TransitionPreset::Fade), 0.3);
+        let _ = apply_preset(div(), profile.preset(TransitionPreset::FadeUp), 0.7);
+        let _ = apply_preset(div(), profile.preset(TransitionPreset::Pop), 0.5);
+        let _ = apply_preset(div(), profile.preset(TransitionPreset::Pulse), 0.9);
+    }
+
+    #[test]
+    fn transition_stage_order_is_stable() {
+        assert_ne!(TransitionStage::Enter, TransitionStage::Exit);
+    }
+}

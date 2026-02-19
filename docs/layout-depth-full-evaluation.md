@@ -1,4 +1,4 @@
-# Full Component Depth Evaluation (Pass v3)
+# Full Component Depth Evaluation (Pass v4)
 
 ## v3 Addendum
 
@@ -15,6 +15,26 @@ Tightened budget guardrails were updated in:
   - `textarea.rs`
   - `select.rs`
   - `tree.rs`
+
+## v4 Addendum
+
+Additional flattening and budget-tightening updates:
+
+- `app_shell.rs`
+- `layers.rs`
+- `loader.rs`
+- `markdown.rs`
+- `title_bar.rs`
+
+New module-level behavior tests added for low-level modules:
+
+- `control.rs`
+- `field_variant.rs`
+- `interaction_adapter.rs`
+- `text_input_actions.rs`
+- `toggle.rs`
+- `transition.rs`
+- `utils.rs`
 
 This file records a full-pass assessment across component modules in `src/components` (test files excluded).
 

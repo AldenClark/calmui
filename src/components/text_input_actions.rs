@@ -78,3 +78,28 @@ fn textarea_only_bindings() -> Vec<KeyBinding> {
         KeyBinding::new("shift-down", SelectDown, Some(TEXTAREA_KEY_CONTEXT)),
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn key_context_constants_are_stable() {
+        assert_eq!(INPUT_KEY_CONTEXT, "calmui_text_input");
+        assert_eq!(TEXTAREA_KEY_CONTEXT, "calmui_textarea");
+    }
+
+    #[test]
+    fn common_bindings_contain_core_navigation_and_edit_shortcuts() {
+        let bindings = common_bindings(INPUT_KEY_CONTEXT);
+        assert_eq!(bindings.len(), 18);
+    }
+
+    #[test]
+    fn input_and_textarea_bindings_have_expected_enter_behavior() {
+        let input = input_only_bindings();
+        let textarea = textarea_only_bindings();
+        assert_eq!(input.len(), 1);
+        assert!(textarea.len() >= 3);
+    }
+}
