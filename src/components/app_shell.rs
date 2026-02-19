@@ -83,7 +83,7 @@ impl Sidebar {
 
     /// 设置侧边栏宽度。
     pub fn width(mut self, value: f32) -> Self {
-        self.width_px = Some(value.max(120.0));
+        self.width_px = Some(value.max(0.0));
         self
     }
 
@@ -135,6 +135,7 @@ impl RenderOnce for Sidebar {
     fn render(mut self, window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.sidebar;
+        let min_width = f32::from(tokens.min_width);
         let bg_token = self.background.unwrap_or_else(|| tokens.bg.clone());
         let mut bg = resolve_hsla(&self.theme, &bg_token);
         let mut border_color = resolve_hsla(&self.theme, &tokens.border);
@@ -165,7 +166,7 @@ impl RenderOnce for Sidebar {
         }
 
         root = if let Some(width_px) = self.width_px {
-            root.w(px(width_px))
+            root.w(px(width_px.max(min_width)))
         } else {
             root.w_full()
         };
@@ -318,13 +319,13 @@ pub struct AppShell {
     /// 内容区底部面板。
     bottom_panel: Option<SlotRenderer>,
     /// 顶部区域高度。
-    title_bar_height_px: f32,
+    title_bar_height_px: Option<f32>,
     /// 左侧区域宽度。
-    sidebar_width_px: f32,
+    sidebar_width_px: Option<f32>,
     /// 右侧属性面板宽度。
-    inspector_width_px: f32,
+    inspector_width_px: Option<f32>,
     /// 底部面板高度。
-    bottom_panel_height_px: f32,
+    bottom_panel_height_px: Option<f32>,
     /// 左侧区域展示模式。
     sidebar_mode: PanelMode,
     /// 右侧属性面板展示模式。
@@ -370,10 +371,10 @@ impl AppShell {
             content: Box::new(|| content.into_any_element()),
             inspector: None,
             bottom_panel: None,
-            title_bar_height_px: 44.0,
-            sidebar_width_px: 260.0,
-            inspector_width_px: 320.0,
-            bottom_panel_height_px: 180.0,
+            title_bar_height_px: None,
+            sidebar_width_px: None,
+            inspector_width_px: None,
+            bottom_panel_height_px: None,
             sidebar_mode: PanelMode::Inline,
             inspector_mode: PanelMode::Inline,
             inline_dividers: true,
@@ -446,25 +447,25 @@ impl AppShell {
 
     /// 设置顶部区域高度。
     pub fn title_bar_height(mut self, value: f32) -> Self {
-        self.title_bar_height_px = value.max(0.0);
+        self.title_bar_height_px = Some(value.max(0.0));
         self
     }
 
     /// 设置左侧区域宽度。
     pub fn sidebar_width(mut self, value: f32) -> Self {
-        self.sidebar_width_px = value.max(120.0);
+        self.sidebar_width_px = Some(value.max(0.0));
         self
     }
 
     /// 设置右侧属性面板宽度。
     pub fn inspector_width(mut self, value: f32) -> Self {
-        self.inspector_width_px = value.max(120.0);
+        self.inspector_width_px = Some(value.max(0.0));
         self
     }
 
     /// 设置底部面板高度。
     pub fn bottom_panel_height(mut self, value: f32) -> Self {
-        self.bottom_panel_height_px = value.max(80.0);
+        self.bottom_panel_height_px = Some(value.max(0.0));
         self
     }
 
@@ -597,12 +598,11 @@ impl AppShell {
             Self::apply_surface(div().id(id).size_full(), chrome, default_bg).child(content);
 
         if chrome.bordered {
+            let border_color =
+                resolve_hsla(&self.theme, &self.theme.components.app_shell.region_border);
             region = region
                 .border(super::utils::quantized_stroke_px(window, 1.0))
-                .border_color(resolve_hsla(
-                    &self.theme,
-                    &self.theme.semantic.border_subtle,
-                ));
+                .border_color(border_color);
         }
 
         region
@@ -621,8 +621,30 @@ impl RenderOnce for AppShell {
         self.theme.sync_from_provider(_cx);
 
         let app_tokens = &self.theme.components.app_shell;
-        let title_tokens = &self.theme.components.title_bar;
         let body_bg = resolve_hsla(&self.theme, &app_tokens.bg);
+        let title_bar_bg = resolve_hsla(&self.theme, &app_tokens.title_bar_bg);
+        let sidebar_bg = resolve_hsla(&self.theme, &app_tokens.sidebar_bg);
+        let sidebar_overlay_bg = resolve_hsla(&self.theme, &app_tokens.sidebar_overlay_bg);
+        let content_bg = resolve_hsla(&self.theme, &app_tokens.content_bg);
+        let bottom_panel_bg = resolve_hsla(&self.theme, &app_tokens.bottom_panel_bg);
+        let inspector_bg = resolve_hsla(&self.theme, &app_tokens.inspector_bg);
+        let inspector_overlay_bg = resolve_hsla(&self.theme, &app_tokens.inspector_overlay_bg);
+        let title_bar_height_px = self
+            .title_bar_height_px
+            .unwrap_or_else(|| f32::from(app_tokens.title_bar_height))
+            .max(0.0);
+        let sidebar_width_px = self
+            .sidebar_width_px
+            .unwrap_or_else(|| f32::from(app_tokens.sidebar_width))
+            .max(f32::from(app_tokens.sidebar_min_width));
+        let inspector_width_px = self
+            .inspector_width_px
+            .unwrap_or_else(|| f32::from(app_tokens.inspector_width))
+            .max(f32::from(app_tokens.inspector_min_width));
+        let bottom_panel_height_px = self
+            .bottom_panel_height_px
+            .unwrap_or_else(|| f32::from(app_tokens.bottom_panel_height))
+            .max(f32::from(app_tokens.bottom_panel_min_height));
         let text_color = resolve_hsla(&self.theme, &self.theme.semantic.text_primary);
 
         let has_sidebar = self.sidebar.is_some();
@@ -650,7 +672,6 @@ impl RenderOnce for AppShell {
         // - 沉浸：标题栏悬浮在主体上层，不占据主体高度。
         let mut title_bar_overlay: Option<AnyElement> = None;
         if let Some(title_bar) = self.title_bar.take() {
-            let title_default_bg = resolve_hsla(&self.theme, &title_tokens.bg);
             let force_borderless_immersive = self.title_bar_immersive
                 && cfg!(any(
                     target_os = "windows",
@@ -672,9 +693,9 @@ impl RenderOnce for AppShell {
                     self.id.slot("title-bar"),
                     title_bar(self.title_bar_immersive),
                     &title_chrome,
-                    title_default_bg,
+                    title_bar_bg,
                 )
-                .h(px(self.title_bar_height_px.max(0.0)))
+                .h(px(title_bar_height_px))
                 .w_full()
                 .flex_none();
 
@@ -685,7 +706,7 @@ impl RenderOnce for AppShell {
                     .top_0()
                     .left_0()
                     .right_0()
-                    .h(px(self.title_bar_height_px.max(0.0)))
+                    .h(px(title_bar_height_px))
                     .child(title_region);
 
                 let use_overlay_drag = cfg!(any(target_os = "linux", target_os = "freebsd"))
@@ -758,7 +779,6 @@ impl RenderOnce for AppShell {
 
         if self.sidebar_mode == PanelMode::Inline {
             if let Some(sidebar) = self.sidebar.take() {
-                let sidebar_default_bg = resolve_hsla(&self.theme, &self.theme.semantic.bg_soft);
                 let mut sidebar_chrome = self.sidebar_chrome.clone();
                 if self.inline_dividers {
                     sidebar_chrome.bordered = false;
@@ -769,9 +789,9 @@ impl RenderOnce for AppShell {
                         self.id.slot("sidebar-inline"),
                         sidebar(),
                         &sidebar_chrome,
-                        sidebar_default_bg,
+                        sidebar_bg,
                     )
-                    .w(px(self.sidebar_width_px))
+                    .w(px(sidebar_width_px))
                     .h_full()
                     .flex_none();
                 row = row.child(sidebar_region);
@@ -801,11 +821,11 @@ impl RenderOnce for AppShell {
                 .flex_1()
                 .min_h_0()
                 .min_w_0()
+                .bg(content_bg)
                 .child(content_element),
         );
 
         if let Some(bottom_panel) = self.bottom_panel.take() {
-            let bottom_default_bg = resolve_hsla(&self.theme, &self.theme.semantic.bg_surface);
             let mut bottom_panel_chrome = self.bottom_panel_chrome.clone();
             if self.inline_dividers {
                 bottom_panel_chrome.bordered = false;
@@ -818,9 +838,9 @@ impl RenderOnce for AppShell {
                     self.id.slot("bottom-panel"),
                     bottom_panel(),
                     &bottom_panel_chrome,
-                    bottom_default_bg,
+                    bottom_panel_bg,
                 )
-                .h(px(self.bottom_panel_height_px))
+                .h(px(bottom_panel_height_px))
                 .w_full()
                 .flex_none();
             center = center.child(bottom_region);
@@ -830,7 +850,6 @@ impl RenderOnce for AppShell {
 
         if self.inspector_mode == PanelMode::Inline {
             if let Some(inspector) = self.inspector.take() {
-                let inspector_default_bg = resolve_hsla(&self.theme, &self.theme.semantic.bg_soft);
                 let mut inspector_chrome = self.inspector_chrome.clone();
                 if self.inline_dividers {
                     inspector_chrome.bordered = false;
@@ -844,9 +863,9 @@ impl RenderOnce for AppShell {
                         self.id.slot("inspector-inline"),
                         inspector(),
                         &inspector_chrome,
-                        inspector_default_bg,
+                        inspector_bg,
                     )
-                    .w(px(self.inspector_width_px))
+                    .w(px(inspector_width_px))
                     .h_full()
                     .flex_none();
                 row = row.child(inspector_region);
@@ -912,16 +931,15 @@ impl RenderOnce for AppShell {
         // overlay 左侧区域。
         if self.sidebar_mode == PanelMode::Overlay && sidebar_overlay_visible {
             if let Some(sidebar) = self.sidebar.take() {
-                let sidebar_default_bg = gpui::transparent_black();
                 let sidebar_region = self
                     .wrap_region(
                         window,
                         self.id.slot("sidebar-overlay"),
                         sidebar(),
                         &self.sidebar_chrome,
-                        sidebar_default_bg,
+                        sidebar_overlay_bg,
                     )
-                    .w(px(self.sidebar_width_px))
+                    .w(px(sidebar_width_px))
                     .h_full()
                     .flex_none();
 
@@ -940,16 +958,15 @@ impl RenderOnce for AppShell {
         // overlay 右侧属性面板。
         if self.inspector_mode == PanelMode::Overlay && inspector_overlay_visible {
             if let Some(inspector) = self.inspector.take() {
-                let inspector_default_bg = gpui::transparent_black();
                 let inspector_region = self
                     .wrap_region(
                         window,
                         self.id.slot("inspector-overlay"),
                         inspector(),
                         &self.inspector_chrome,
-                        inspector_default_bg,
+                        inspector_overlay_bg,
                     )
-                    .w(px(self.inspector_width_px))
+                    .w(px(inspector_width_px))
                     .h_full()
                     .flex_none();
 

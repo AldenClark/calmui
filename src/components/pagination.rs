@@ -1,21 +1,21 @@
 use std::{collections::BTreeSet, rc::Rc};
 
 use gpui::{
-    ClickEvent, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled,
-    Window, div,
+    ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, Window, div,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable};
 use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
+use crate::theme::PaginationSizePreset;
 
 use super::Stack;
+use super::interaction_adapter::{ActivateHandler, PressAdapter, bind_press_adapter};
 use super::selection_state;
 use super::transition::TransitionExt;
 use super::utils::{
-    InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles, apply_radius,
-    interaction_style, resolve_hsla, wire_pressable,
+    InteractionStyles, apply_interaction_styles, apply_radius, interaction_style, resolve_hsla,
 };
 
 type ChangeHandler = Rc<dyn Fn(usize, &mut Window, &mut gpui::App)>;
@@ -114,24 +114,11 @@ impl Pagination {
             .clamp(1, total)
     }
 
-    fn apply_item_size<T: Styled>(size: Size, node: T) -> T {
-        match size {
-            Size::Xs => node.text_xs().py_0p5().px_1p5(),
-            Size::Sm => node.text_sm().py_1().px_2(),
-            Size::Md => node.text_base().py_1().px_2p5(),
-            Size::Lg => node.text_lg().py_1p5().px_3(),
-            Size::Xl => node.text_xl().py_2().px_3p5(),
-        }
-    }
-
-    fn item_min_width_px(size: Size) -> f32 {
-        match size {
-            Size::Xs => 24.0,
-            Size::Sm => 28.0,
-            Size::Md => 32.0,
-            Size::Lg => 36.0,
-            Size::Xl => 40.0,
-        }
+    fn apply_item_size<T: Styled>(preset: PaginationSizePreset, node: T) -> T {
+        node.text_size(preset.font_size)
+            .px(preset.padding_x)
+            .py(preset.padding_y)
+            .min_w(preset.min_width)
     }
 
     fn active_bg(&self) -> gpui::Hsla {
@@ -231,8 +218,10 @@ impl RenderOnce for Pagination {
         let on_change = self.on_change.clone();
         let controlled = self.value_controlled;
         let pagination_id = self.id.clone();
+        let pagination_size_preset = tokens.sizes.for_size(self.size);
 
         let make_item = |id_suffix: ElementId, label: String, target: usize, disabled: bool| {
+            let adapter_id = pagination_id.slot_index("action", format!("{label}-{target}"));
             let mut item = div()
                 .id(id_suffix)
                 .border(super::utils::quantized_stroke_px(window, 1.0))
@@ -246,10 +235,8 @@ impl RenderOnce for Pagination {
                 .cursor_pointer()
                 .child(label);
 
-            item = Self::apply_item_size(self.size, item);
-            item = apply_radius(&self.theme, item, self.radius)
-                .min_w(gpui::px(Self::item_min_width_px(self.size)))
-                .text_center();
+            item = Self::apply_item_size(pagination_size_preset, item);
+            item = apply_radius(&self.theme, item, self.radius).text_center();
 
             if disabled || self.disabled {
                 item = item.cursor_default().opacity(0.6);
@@ -259,7 +246,7 @@ impl RenderOnce for Pagination {
                 let hover_bg = resolve_hsla(&theme, &tokens.item_hover_bg);
                 let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
                 let focus_ring = resolve_hsla(&theme, &theme.semantic.focus_ring);
-                let click_handler: PressHandler = Rc::new(move |_: &ClickEvent, window, cx| {
+                let activate_handler: ActivateHandler = Rc::new(move |window, cx| {
                     if selection_state::apply_usize(&id, "page", controlled, target) {
                         window.refresh();
                     }
@@ -276,7 +263,10 @@ impl RenderOnce for Pagination {
                             style.border_color(focus_ring)
                         })),
                 );
-                item = wire_pressable(item, PressableBehavior::new().on_click(Some(click_handler)));
+                item = bind_press_adapter(
+                    item,
+                    PressAdapter::new(adapter_id.clone()).on_activate(Some(activate_handler)),
+                );
             }
 
             item
@@ -295,9 +285,10 @@ impl RenderOnce for Pagination {
         for (index, node) in nodes.into_iter().enumerate() {
             match node {
                 PaginationNode::Page(page) => {
+                    let page_id = self.id.slot_index("page", index.to_string());
                     let is_active = page == current;
                     let mut page_item = div()
-                        .id(self.id.slot_index("page", index.to_string()))
+                        .id(page_id.clone())
                         .border(super::utils::quantized_stroke_px(window, 1.0))
                         .border_color(resolve_hsla(&theme, &tokens.item_border))
                         .bg(if is_active {
@@ -315,10 +306,8 @@ impl RenderOnce for Pagination {
                         .cursor_pointer()
                         .child(page.to_string());
 
-                    page_item = Self::apply_item_size(self.size, page_item);
-                    page_item = apply_radius(&self.theme, page_item, self.radius)
-                        .min_w(gpui::px(Self::item_min_width_px(self.size)))
-                        .text_center();
+                    page_item = Self::apply_item_size(pagination_size_preset, page_item);
+                    page_item = apply_radius(&self.theme, page_item, self.radius).text_center();
 
                     if self.disabled {
                         page_item = page_item.cursor_default().opacity(0.6);
@@ -330,15 +319,14 @@ impl RenderOnce for Pagination {
                         let hover_bg = resolve_hsla(&theme, &tokens.item_hover_bg);
                         let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
                         let focus_ring = resolve_hsla(&theme, &theme.semantic.focus_ring);
-                        let click_handler: PressHandler =
-                            Rc::new(move |_: &ClickEvent, window, cx| {
-                                if selection_state::apply_usize(&id, "page", controlled, page) {
-                                    window.refresh();
-                                }
-                                if let Some(handler) = on_change.as_ref() {
-                                    (handler)(page, window, cx);
-                                }
-                            });
+                        let activate_handler: ActivateHandler = Rc::new(move |window, cx| {
+                            if selection_state::apply_usize(&id, "page", controlled, page) {
+                                window.refresh();
+                            }
+                            if let Some(handler) = on_change.as_ref() {
+                                (handler)(page, window, cx);
+                            }
+                        });
                         page_item = apply_interaction_styles(
                             page_item.cursor_pointer(),
                             InteractionStyles::new()
@@ -348,9 +336,9 @@ impl RenderOnce for Pagination {
                                     style.border_color(focus_ring)
                                 })),
                         );
-                        page_item = wire_pressable(
+                        page_item = bind_press_adapter(
                             page_item,
-                            PressableBehavior::new().on_click(Some(click_handler)),
+                            PressAdapter::new(page_id.clone()).on_activate(Some(activate_handler)),
                         );
                     }
 
@@ -361,7 +349,7 @@ impl RenderOnce for Pagination {
                         .id(self.id.slot_index("dots", index.to_string()))
                         .text_color(resolve_hsla(&theme, &tokens.dots_fg))
                         .child("...");
-                    dots = Self::apply_item_size(self.size, dots);
+                    dots = Self::apply_item_size(pagination_size_preset, dots);
                     children.push(dots);
                 }
             }
@@ -377,7 +365,7 @@ impl RenderOnce for Pagination {
         Stack::horizontal()
             .id(self.id.clone())
             .items_center()
-            .gap_1()
+            .gap(tokens.root_gap)
             .children(children)
             .with_enter_transition(self.id.slot("enter"), self.motion)
     }

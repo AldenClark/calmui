@@ -1,39 +1,11 @@
 use std::rc::Rc;
 
-use gpui::{
-    ClickEvent, FocusHandle, FontWeight, Hsla, Pixels, StatefulInteractiveElement, Styled, Window,
-    px,
-};
+use gpui::{ClickEvent, FontWeight, Hsla, Pixels, StatefulInteractiveElement, Styled, Window, px};
 
 use crate::style::{Radius, Size, Variant};
 use crate::theme::{FieldSizePreset, ResolveWithTheme, SemanticRadiusToken, Theme};
 
 pub type PressHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)>;
-
-#[derive(Clone, Default)]
-pub struct PressableBehavior {
-    pub on_click: Option<PressHandler>,
-    pub focus_handle: Option<FocusHandle>,
-}
-
-impl PressableBehavior {
-    pub fn new() -> Self {
-        Self {
-            on_click: None,
-            focus_handle: None,
-        }
-    }
-
-    pub fn on_click(mut self, value: Option<PressHandler>) -> Self {
-        self.on_click = value;
-        self
-    }
-
-    pub fn focus_handle(mut self, value: Option<FocusHandle>) -> Self {
-        self.focus_handle = value;
-        self
-    }
-}
 
 #[derive(Clone, Default)]
 pub struct InteractionStyles {
@@ -84,32 +56,6 @@ where
     if let Some(focus_style) = styles.focus {
         node = node.focus(move |_| focus_style);
     }
-
-    node
-}
-
-pub fn wire_pressable<T>(mut node: T, behavior: PressableBehavior) -> T
-where
-    T: StatefulInteractiveElement,
-{
-    let Some(on_click) = behavior.on_click else {
-        return node;
-    };
-
-    node = node.focusable();
-
-    if let Some(focus_handle) = behavior.focus_handle.clone() {
-        node = node.track_focus(&focus_handle);
-    }
-
-    let click_handler = on_click.clone();
-    let click_focus_handle = behavior.focus_handle.clone();
-    node = node.on_click(move |event, window, cx| {
-        if let Some(focus_handle) = click_focus_handle.as_ref() {
-            window.focus(focus_handle, cx);
-        }
-        (click_handler)(event, window, cx);
-    });
 
     node
 }

@@ -64,11 +64,14 @@ impl_option_overrides_methods!(ButtonOverrides {
     ghost_fg: Hsla,
     disabled_bg: Hsla,
     disabled_fg: Hsla,
+    sizes: ButtonSizeScale,
 });
 
 impl_option_overrides_methods!(InputOverrides {
     bg: Hsla,
     fg: Hsla,
+    caret: Hsla,
+    selection_bg: Hsla,
     placeholder: Hsla,
     border: Hsla,
     border_focus: Hsla,
@@ -185,12 +188,25 @@ impl_option_overrides_methods!(MenuOverrides {
     item_hover_bg: Hsla,
     item_disabled_fg: Hsla,
     icon: Hsla,
+    item_gap: Pixels,
+    item_padding_x: Pixels,
+    item_padding_y: Pixels,
+    item_size: Pixels,
+    item_icon_size: Pixels,
+    item_radius: Pixels,
+    dropdown_padding: Pixels,
+    dropdown_gap: Pixels,
+    dropdown_radius: Pixels,
+    dropdown_width_fallback: Pixels,
+    dropdown_min_width: Pixels,
 });
 
 impl_option_overrides_methods!(ProgressOverrides {
     track_bg: Hsla,
     fill_bg: Hsla,
     label: Hsla,
+    default_width: Pixels,
+    min_width: Pixels,
 });
 
 impl_option_overrides_methods!(SliderOverrides {
@@ -204,6 +220,8 @@ impl_option_overrides_methods!(SliderOverrides {
     value_size: Pixels,
     header_gap_vertical: Pixels,
     header_gap_horizontal: Pixels,
+    default_width: Pixels,
+    min_width: Pixels,
     sizes: SliderSizeScale,
 });
 
@@ -284,6 +302,8 @@ impl_option_overrides_methods!(SelectOverrides {
     dropdown_padding: Pixels,
     dropdown_gap: Pixels,
     dropdown_max_height: Pixels,
+    dropdown_width_fallback: Pixels,
+    dropdown_open_preferred_height: Pixels,
     tag_size: Pixels,
     tag_padding_x: Pixels,
     tag_padding_y: Pixels,
@@ -308,6 +328,8 @@ impl_option_overrides_methods!(ModalOverrides {
     actions_gap: Pixels,
     close_size: Pixels,
     close_icon_size: Pixels,
+    default_width: Pixels,
+    min_width: Pixels,
 });
 
 impl_option_overrides_methods!(ToastOverrides {
@@ -324,6 +346,9 @@ impl_option_overrides_methods!(ToastOverrides {
 impl_option_overrides_methods!(DividerOverrides {
     line: Hsla,
     label: Hsla,
+    label_size: Pixels,
+    label_gap: Pixels,
+    edge_span: Pixels,
 });
 
 impl_option_overrides_methods!(ScrollAreaOverrides {
@@ -347,7 +372,24 @@ impl_option_overrides_methods!(DrawerOverrides {
     close_icon_size: Pixels,
 });
 
-impl_option_overrides_methods!(AppShellOverrides { bg: Hsla });
+impl_option_overrides_methods!(AppShellOverrides {
+    bg: Hsla,
+    title_bar_bg: Hsla,
+    sidebar_bg: Hsla,
+    sidebar_overlay_bg: Hsla,
+    content_bg: Hsla,
+    bottom_panel_bg: Hsla,
+    inspector_bg: Hsla,
+    inspector_overlay_bg: Hsla,
+    region_border: Hsla,
+    title_bar_height: Pixels,
+    sidebar_width: Pixels,
+    sidebar_min_width: Pixels,
+    inspector_width: Pixels,
+    inspector_min_width: Pixels,
+    bottom_panel_height: Pixels,
+    bottom_panel_min_height: Pixels,
+});
 
 impl_option_overrides_methods!(TitleBarOverrides {
     bg: Hsla,
@@ -379,9 +421,38 @@ impl_option_overrides_methods!(SidebarOverrides {
     footer_fg: Hsla,
     inline_radius: Pixels,
     overlay_radius: Pixels,
+    min_width: Pixels,
     section_padding: Pixels,
     footer_size: Pixels,
     scroll_padding: Size,
+});
+
+impl_option_overrides_methods!(MarkdownOverrides {
+    paragraph: Hsla,
+    quote_bg: Hsla,
+    quote_border: Hsla,
+    quote_fg: Hsla,
+    code_bg: Hsla,
+    code_border: Hsla,
+    code_fg: Hsla,
+    code_lang_fg: Hsla,
+    list_marker: Hsla,
+    rule: Hsla,
+    gap_regular: Pixels,
+    gap_compact: Pixels,
+    paragraph_size: Pixels,
+    quote_size: Pixels,
+    code_size: Pixels,
+    code_lang_size: Pixels,
+    list_size: Pixels,
+    quote_padding_x: Pixels,
+    quote_padding_y: Pixels,
+    quote_radius: Pixels,
+    code_padding: Pixels,
+    code_radius: Pixels,
+    code_gap: Pixels,
+    list_gap: Pixels,
+    list_item_gap: Pixels,
 });
 
 impl_option_overrides_methods!(TextOverrides {
@@ -430,6 +501,7 @@ impl_option_overrides_methods!(ActionIconOverrides {
     disabled_bg: Hsla,
     disabled_fg: Hsla,
     disabled_border: Hsla,
+    sizes: ActionIconSizeScale,
 });
 
 impl_option_overrides_methods!(SegmentedControlOverrides {
@@ -440,11 +512,16 @@ impl_option_overrides_methods!(SegmentedControlOverrides {
     item_active_fg: Hsla,
     item_hover_bg: Hsla,
     item_disabled_fg: Hsla,
+    track_padding: Pixels,
+    item_gap: Pixels,
+    sizes: SegmentedControlSizeScale,
 });
 
 impl_option_overrides_methods!(TextareaOverrides {
     bg: Hsla,
     fg: Hsla,
+    caret: Hsla,
+    selection_bg: Hsla,
     placeholder: Hsla,
     border: Hsla,
     border_focus: Hsla,
@@ -459,6 +536,7 @@ impl_option_overrides_methods!(TextareaOverrides {
     layout_gap_vertical: Pixels,
     layout_gap_horizontal: Pixels,
     horizontal_label_width: Pixels,
+    content_width_fallback: Pixels,
     sizes: FieldSizeScale,
 });
 
@@ -497,6 +575,8 @@ impl_option_overrides_methods!(RangeSliderOverrides {
     value_size: Pixels,
     header_gap_vertical: Pixels,
     header_gap_horizontal: Pixels,
+    default_width: Pixels,
+    min_width: Pixels,
     sizes: SliderSizeScale,
 });
 
@@ -516,6 +596,10 @@ impl_option_overrides_methods!(TabsOverrides {
     panel_bg: Hsla,
     panel_border: Hsla,
     panel_fg: Hsla,
+    root_gap: Pixels,
+    list_gap: Pixels,
+    list_padding: Pixels,
+    panel_padding: Pixels,
 });
 
 impl_option_overrides_methods!(PaginationOverrides {
@@ -527,6 +611,8 @@ impl_option_overrides_methods!(PaginationOverrides {
     item_hover_bg: Hsla,
     item_disabled_fg: Hsla,
     dots_fg: Hsla,
+    root_gap: Pixels,
+    sizes: PaginationSizeScale,
 });
 
 impl_option_overrides_methods!(BreadcrumbsOverrides {
@@ -534,6 +620,8 @@ impl_option_overrides_methods!(BreadcrumbsOverrides {
     item_current_fg: Hsla,
     separator: Hsla,
     item_hover_bg: Hsla,
+    root_gap: Pixels,
+    sizes: BreadcrumbsSizeScale,
 });
 
 impl_option_overrides_methods!(TableOverrides {
@@ -558,6 +646,7 @@ impl_option_overrides_methods!(TableOverrides {
     pagination_padding_y: Pixels,
     pagination_gap: Pixels,
     virtualization_padding: Pixels,
+    min_viewport_height: Pixels,
     sizes: TableSizeScale,
 });
 
@@ -577,6 +666,11 @@ impl_option_overrides_methods!(StepperOverrides {
     panel_bg: Hsla,
     panel_border: Hsla,
     panel_fg: Hsla,
+    root_gap: Pixels,
+    steps_gap_vertical: Pixels,
+    text_gap: Pixels,
+    panel_margin_top: Pixels,
+    sizes: StepperSizeScale,
 });
 
 impl_option_overrides_methods!(TimelineOverrides {
@@ -593,6 +687,14 @@ impl_option_overrides_methods!(TimelineOverrides {
     body: Hsla,
     card_bg: Hsla,
     card_border: Hsla,
+    root_gap: Pixels,
+    row_gap: Pixels,
+    content_gap: Pixels,
+    card_margin_top: Pixels,
+    row_padding_y: Pixels,
+    line_min_height: Pixels,
+    line_extra_height: Pixels,
+    sizes: TimelineSizeScale,
 });
 
 impl_option_overrides_methods!(TreeOverrides {
@@ -633,6 +735,7 @@ impl_nested_overrides_methods!(ComponentOverrides {
     app_shell: AppShellOverrides,
     title_bar: TitleBarOverrides,
     sidebar: SidebarOverrides,
+    markdown: MarkdownOverrides,
     text: TextOverrides,
     title: TitleOverrides,
     paper: PaperOverrides,
@@ -745,6 +848,7 @@ impl_theme_component_passthrough_methods!(
     app_shell: AppShellOverrides,
     title_bar: TitleBarOverrides,
     sidebar: SidebarOverrides,
+    markdown: MarkdownOverrides,
     text: TextOverrides,
     title: TitleOverrides,
     paper: PaperOverrides,

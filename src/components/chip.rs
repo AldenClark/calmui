@@ -255,17 +255,26 @@ impl RenderOnce for Chip {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ChipOption {
     pub value: SharedString,
-    pub label: SharedString,
+    pub label: Option<SharedString>,
     pub disabled: bool,
 }
 
 impl ChipOption {
-    pub fn new(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+    pub fn new(value: impl Into<SharedString>) -> Self {
         Self {
             value: value.into(),
-            label: label.into(),
+            label: None,
             disabled: false,
         }
+    }
+
+    pub fn labeled(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+        Self::new(value).label(label)
+    }
+
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
     }
 
     pub fn disabled(mut self, disabled: bool) -> Self {
@@ -462,12 +471,14 @@ impl RenderOnce for ChipGroup {
             .map(|(index, option)| {
                 let checked = Self::contains(&selected_values, &option.value);
                 let mut chip = Chip::new()
-                    .label(option.label.clone())
                     .with_id(self.id.slot_index("option", index.to_string()))
                     .value(option.value.clone())
                     .checked(checked)
                     .disabled(option.disabled)
                     .with_variant(self.variant);
+                if let Some(label) = option.label.clone() {
+                    chip = chip.label(label);
+                }
                 chip = Sized::with_size(chip, self.size);
                 chip = Radiused::with_radius(chip, self.radius);
                 chip = chip.motion(self.motion);

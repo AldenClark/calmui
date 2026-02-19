@@ -45,7 +45,7 @@ pub struct Slider {
     label: Option<SharedString>,
     show_value: bool,
     disabled: bool,
-    width_px: f32,
+    width_px: Option<f32>,
     orientation: SliderOrientation,
     variant: Variant,
     size: Size,
@@ -70,7 +70,7 @@ impl Slider {
             label: None,
             show_value: true,
             disabled: false,
-            width_px: 260.0,
+            width_px: None,
             orientation: SliderOrientation::Horizontal,
             variant: Variant::Filled,
             size: Size::Md,
@@ -145,7 +145,7 @@ impl Slider {
     }
 
     pub fn width(mut self, width_px: f32) -> Self {
-        self.width_px = width_px.max(120.0);
+        self.width_px = Some(width_px.max(0.0));
         self
     }
 
@@ -229,18 +229,21 @@ impl RenderOnce for Slider {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.slider;
         let size_preset = tokens.sizes.for_size(self.size);
+        let track_len = self
+            .width_px
+            .unwrap_or_else(|| f32::from(tokens.default_width))
+            .max(f32::from(tokens.min_width));
         let value = self.resolved_value();
         let ratio = self.ratio(value);
         let track_height = f32::from(size_preset.track_thickness);
         let thumb_size = f32::from(size_preset.thumb_size);
         let track_top = ((thumb_size - track_height) * 0.5).max(0.0);
         let thumb_left =
-            slider_axis::thumb_offset(SliderAxis::Horizontal, self.width_px, thumb_size, ratio);
+            slider_axis::thumb_offset(SliderAxis::Horizontal, track_len, thumb_size, ratio);
         let segment_count = self.segments();
         let display_precision = if self.step < 1.0 { 2 } else { 0 };
         let is_controlled = self.value_controlled;
         let orientation = self.orientation;
-        let track_len = self.width_px;
         let on_change = self.on_change.clone();
 
         if orientation == SliderOrientation::Vertical {
@@ -401,7 +404,7 @@ impl RenderOnce for Slider {
             .absolute()
             .top(px(track_top))
             .left_0()
-            .w(px(self.width_px))
+            .w(px(track_len))
             .h(px(track_height))
             .overflow_hidden()
             .border(super::utils::quantized_stroke_px(window, 1.0))
@@ -460,7 +463,7 @@ impl RenderOnce for Slider {
         let mut rail = div()
             .id(self.id.slot("rail"))
             .relative()
-            .w(px(self.width_px))
+            .w(px(track_len))
             .h(px(thumb_size))
             .child(track)
             .child(thumb);
@@ -514,7 +517,7 @@ impl RenderOnce for Slider {
             let mut header = Stack::horizontal()
                 .justify_between()
                 .items_center()
-                .w(px(self.width_px))
+                .w(px(track_len))
                 .gap(tokens.header_gap_horizontal);
             if let Some(label) = self.label {
                 header = header.child(

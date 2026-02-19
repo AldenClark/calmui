@@ -2,17 +2,16 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, LazyLock, Mutex};
 
-use gpui::{InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled, div};
+use gpui::{
+    InteractiveElement, IntoElement, ParentElement, Refineable, RenderOnce, SharedString, Styled,
+    div,
+};
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
-use crate::id::ComponentId;
-use crate::style::{Radius, Size};
-
 use super::Stack;
-use super::paper::Paper;
-use super::text::{Text, TextTone};
 use super::title::Title;
 use super::utils::resolve_hsla;
+use crate::id::ComponentId;
 
 #[derive(Clone)]
 enum MarkdownBlock {
@@ -335,87 +334,132 @@ impl Markdown {
 impl RenderOnce for Markdown {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
+        let tokens = &self.theme.components.markdown;
         let blocks = cached_blocks(self.source.as_ref());
         let mut root = Stack::vertical().id(self.id.clone()).w_full();
         root = if self.compact {
-            root.gap_1p5()
+            root.gap(tokens.gap_compact)
         } else {
-            root.gap_2()
+            root.gap(tokens.gap_regular)
         };
+        let paragraph_color = resolve_hsla(&self.theme, &tokens.paragraph);
+        let quote_bg = resolve_hsla(&self.theme, &tokens.quote_bg);
+        let quote_border = resolve_hsla(&self.theme, &tokens.quote_border);
+        let quote_fg = resolve_hsla(&self.theme, &tokens.quote_fg);
+        let code_bg = resolve_hsla(&self.theme, &tokens.code_bg);
+        let code_border = resolve_hsla(&self.theme, &tokens.code_border);
+        let code_fg = resolve_hsla(&self.theme, &tokens.code_fg);
+        let code_lang_fg = resolve_hsla(&self.theme, &tokens.code_lang_fg);
+        let list_marker = resolve_hsla(&self.theme, &tokens.list_marker);
+        let rule_color = resolve_hsla(&self.theme, &tokens.rule);
 
         for (index, block) in blocks.iter().cloned().enumerate() {
             let element = match block {
                 MarkdownBlock::Heading { level, text } => {
                     Title::new(text).order(level.clamp(1, 6)).into_any_element()
                 }
-                MarkdownBlock::Paragraph(text) => Text::new(text).into_any_element(),
+                MarkdownBlock::Paragraph(text) => div()
+                    .id(self.id.slot_index("paragraph", index.to_string()))
+                    .w_full()
+                    .text_size(tokens.paragraph_size)
+                    .text_color(paragraph_color)
+                    .child(text)
+                    .into_any_element(),
                 MarkdownBlock::Quote(text) => div()
                     .id(self.id.slot_index("quote", index.to_string()))
                     .w_full()
-                    .pl_3()
-                    .py_1()
+                    .px(tokens.quote_padding_x)
+                    .py(tokens.quote_padding_y)
+                    .rounded(tokens.quote_radius)
                     .border(super::utils::quantized_stroke_px(window, 1.0))
-                    .border_color(resolve_hsla(
-                        &self.theme,
-                        &self.theme.semantic.border_subtle,
-                    ))
-                    .bg(resolve_hsla(&self.theme, &self.theme.semantic.bg_surface))
-                    .child(Text::new(text).tone(TextTone::Secondary))
+                    .border_color(quote_border)
+                    .bg(quote_bg)
+                    .child(
+                        div()
+                            .w_full()
+                            .text_size(tokens.quote_size)
+                            .text_color(quote_fg)
+                            .child(text),
+                    )
                     .into_any_element(),
                 MarkdownBlock::Code { lang, code } => {
-                    let mut content = Stack::vertical().gap_1();
+                    let mut content = Stack::vertical().gap(tokens.code_gap);
                     if let Some(lang) = lang {
                         content = content.child(
-                            Text::new(lang)
-                                .with_size(Size::Xs)
-                                .tone(TextTone::Muted)
-                                .truncate(true),
+                            div()
+                                .text_size(tokens.code_lang_size)
+                                .text_color(code_lang_fg)
+                                .truncate()
+                                .child(lang),
                         );
                     }
                     content = content.child(
                         div()
-                            .text_sm()
-                            .text_color(resolve_hsla(
-                                &self.theme,
-                                &self.theme.semantic.text_primary,
-                            ))
+                            .text_size(tokens.code_size)
+                            .text_color(code_fg)
                             .child(code),
                     );
-                    Paper::new()
-                        .padding(Size::Sm)
-                        .with_radius(Radius::Sm)
-                        .bordered(true)
+                    div()
+                        .id(self.id.slot_index("code", index.to_string()))
+                        .w_full()
+                        .p(tokens.code_padding)
+                        .rounded(tokens.code_radius)
+                        .bg(code_bg)
+                        .border(super::utils::quantized_stroke_px(window, 1.0))
+                        .border_color(code_border)
                         .child(content)
                         .into_any_element()
                 }
                 MarkdownBlock::BulletList(items) => {
-                    let mut list = Stack::vertical().gap_1();
+                    let mut list = Stack::vertical().gap(tokens.list_gap);
                     for item in items {
                         list = list.child(
                             div()
                                 .flex()
                                 .flex_row()
-                                .gap_2()
+                                .gap(tokens.list_item_gap)
                                 .items_start()
-                                .child(Text::new("•").tone(TextTone::Secondary))
-                                .child(div().flex_1().min_w_0().child(Text::new(item))),
+                                .child(
+                                    div()
+                                        .text_size(tokens.list_size)
+                                        .text_color(list_marker)
+                                        .child("•"),
+                                )
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .text_size(tokens.list_size)
+                                        .text_color(paragraph_color)
+                                        .child(item),
+                                ),
                         );
                     }
                     list.into_any_element()
                 }
                 MarkdownBlock::OrderedList(items) => {
-                    let mut list = Stack::vertical().gap_1();
+                    let mut list = Stack::vertical().gap(tokens.list_gap);
                     for (order, item) in items.into_iter().enumerate() {
                         list = list.child(
                             div()
                                 .flex()
                                 .flex_row()
-                                .gap_2()
+                                .gap(tokens.list_item_gap)
                                 .items_start()
                                 .child(
-                                    Text::new(format!("{}.", order + 1)).tone(TextTone::Secondary),
+                                    div()
+                                        .text_size(tokens.list_size)
+                                        .text_color(list_marker)
+                                        .child(format!("{}.", order + 1)),
                                 )
-                                .child(div().flex_1().min_w_0().child(Text::new(item))),
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .text_size(tokens.list_size)
+                                        .text_color(paragraph_color)
+                                        .child(item),
+                                ),
                         );
                     }
                     list.into_any_element()
@@ -424,15 +468,13 @@ impl RenderOnce for Markdown {
                     .id(self.id.slot_index("rule", index.to_string()))
                     .w_full()
                     .h(super::utils::hairline_px(window))
-                    .bg(resolve_hsla(
-                        &self.theme,
-                        &self.theme.semantic.border_subtle,
-                    ))
+                    .bg(rule_color)
                     .into_any_element(),
             };
             root = root.child(element);
         }
 
+        root.style().refine(&self.style);
         root
     }
 }

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    AnyElement, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     SharedString, Styled, Window, div,
 };
 
@@ -12,11 +12,11 @@ use crate::style::{Radius, Size, Variant};
 
 use super::Stack;
 use super::icon::Icon;
+use super::interaction_adapter::{ActivateHandler, PressAdapter, bind_press_adapter};
 use super::selection_state;
 use super::transition::TransitionExt;
 use super::utils::{
-    InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles, apply_radius,
-    interaction_style, resolve_hsla, wire_pressable,
+    InteractionStyles, apply_interaction_styles, apply_radius, interaction_style, resolve_hsla,
 };
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
@@ -25,7 +25,7 @@ type ChangeHandler = Rc<dyn Fn(Option<SharedString>, &mut Window, &mut gpui::App
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AccordionItemMeta {
     pub value: SharedString,
-    pub label: SharedString,
+    pub label: Option<SharedString>,
     pub description: Option<SharedString>,
     pub disabled: bool,
 }
@@ -37,17 +37,26 @@ pub struct AccordionItem {
 }
 
 impl AccordionItem {
-    pub fn new(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+    pub fn new(value: impl Into<SharedString>) -> Self {
         Self {
             meta: AccordionItemMeta {
                 value: value.into(),
-                label: label.into(),
+                label: None,
                 description: None,
                 disabled: false,
             },
             body: None,
             content: None,
         }
+    }
+
+    pub fn labeled(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+        Self::new(value).label(label)
+    }
+
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.meta.label = Some(value.into());
+        self
     }
 
     pub fn description(mut self, value: impl Into<SharedString>) -> Self {
@@ -78,6 +87,7 @@ pub struct Accordion {
     value: Option<SharedString>,
     value_controlled: bool,
     default_value: Option<SharedString>,
+    variant: Variant,
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
@@ -95,6 +105,7 @@ impl Accordion {
             value: None,
             value_controlled: false,
             default_value: None,
+            variant: Variant::Default,
             size: Size::Md,
             radius: Radius::Md,
             theme: crate::theme::LocalTheme::default(),
@@ -162,10 +173,30 @@ impl Accordion {
     pub fn set_id(self, id: impl Into<ComponentId>) -> Self {
         self.with_id(id)
     }
+
+    fn variant_surface_color(&self, base: gpui::Hsla) -> gpui::Hsla {
+        match self.variant {
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.92),
+            Variant::Subtle => base.alpha(0.82),
+            Variant::Outline | Variant::Ghost => gpui::transparent_black(),
+        }
+    }
+
+    fn variant_border_color(&self, base: gpui::Hsla) -> gpui::Hsla {
+        match self.variant {
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.88),
+            Variant::Subtle => base.alpha(0.74),
+            Variant::Outline => base,
+            Variant::Ghost => base.alpha(0.55),
+        }
+    }
 }
 
 impl VariantConfigurable for Accordion {
-    fn with_variant(self, _value: Variant) -> Self {
+    fn with_variant(mut self, value: Variant) -> Self {
+        self.variant = value;
         self
     }
 
@@ -204,6 +235,10 @@ impl RenderOnce for Accordion {
         let description_size =
             gpui::px((f32::from(tokens.description_size) + size_delta).max(10.0));
         let content_size = gpui::px((f32::from(tokens.content_size) + size_delta).max(10.0));
+        let item_bg = self.variant_surface_color(resolve_hsla(&self.theme, &tokens.item_bg));
+        let item_border = self.variant_border_color(resolve_hsla(&self.theme, &tokens.item_border));
+        let header_hover_bg = item_bg.blend(gpui::white().opacity(0.04));
+        let header_press_bg = header_hover_bg.blend(gpui::black().opacity(0.08));
 
         let item_views = self
             .items
@@ -222,124 +257,122 @@ impl RenderOnce for Accordion {
                 let mut root = Stack::vertical()
                     .id(item_root_id)
                     .w_full()
-                    .bg(resolve_hsla(&self.theme, &tokens.item_bg))
+                    .bg(item_bg)
                     .border(super::utils::quantized_stroke_px(window, 1.0))
-                    .border_color(resolve_hsla(&self.theme, &tokens.item_border));
+                    .border_color(item_border);
                 root = apply_radius(&self.theme, root, self.radius);
 
                 let mut header = div()
-                    .id(header_id)
+                    .id(header_id.clone())
                     .flex()
                     .items_center()
                     .justify_between()
                     .gap(tokens.header_gap)
                     .cursor_pointer()
                     .px(tokens.header_padding_x)
-                    .py(tokens.header_padding_y)
-                    .child(
-                        Stack::vertical()
-                            .gap(tokens.label_stack_gap)
-                            .child(
-                                div()
-                                    .text_size(label_size)
-                                    .text_color(resolve_hsla(&self.theme, &tokens.label))
-                                    .child(item.meta.label),
-                            )
-                            .children(item.meta.description.clone().map(|description| {
-                                div()
-                                    .text_size(description_size)
-                                    .text_color(resolve_hsla(&self.theme, &tokens.description))
-                                    .child(description)
-                            })),
-                    )
-                    .child(
-                        Icon::named(if is_open {
-                            "chevron-up"
-                        } else {
-                            "chevron-down"
-                        })
-                        .with_id(chevron_id)
-                        .size(f32::from(tokens.chevron_size))
-                        .color(resolve_hsla(&self.theme, &tokens.chevron)),
-                    );
+                    .py(tokens.header_padding_y);
+                if item.meta.label.is_some() || item.meta.description.is_some() {
+                    let mut label_stack = Stack::vertical().gap(tokens.label_stack_gap);
+                    if let Some(label) = item.meta.label.clone() {
+                        label_stack = label_stack.child(
+                            div()
+                                .text_size(label_size)
+                                .text_color(resolve_hsla(&self.theme, &tokens.label))
+                                .child(label),
+                        );
+                    }
+                    if let Some(description) = item.meta.description.clone() {
+                        label_stack = label_stack.child(
+                            div()
+                                .text_size(description_size)
+                                .text_color(resolve_hsla(&self.theme, &tokens.description))
+                                .child(description),
+                        );
+                    }
+                    header = header.child(label_stack);
+                }
+                header = header.child(
+                    Icon::named(if is_open {
+                        "chevron-up"
+                    } else {
+                        "chevron-down"
+                    })
+                    .with_id(chevron_id)
+                    .size(f32::from(tokens.chevron_size))
+                    .color(resolve_hsla(&self.theme, &tokens.chevron)),
+                );
 
                 if item.meta.disabled {
                     header = header.cursor_default().opacity(0.55);
                 } else {
-                    let click_handler = if let Some(handler) = self.on_change.clone() {
+                    let activate_handler = if let Some(handler) = self.on_change.clone() {
                         let accordion_id = self.id.to_string();
                         let value = item.meta.value.clone();
-                        Some(Rc::new(
-                            move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
-                                let current = selection_state::resolve_optional_text(
-                                    &accordion_id,
-                                    "value",
-                                    false,
-                                    None,
-                                    None::<String>,
-                                );
-                                let next = if current.as_deref() == Some(value.as_ref()) {
-                                    None
-                                } else {
-                                    Some(value.to_string())
-                                };
+                        Some(Rc::new(move |window: &mut Window, cx: &mut gpui::App| {
+                            let current = selection_state::resolve_optional_text(
+                                &accordion_id,
+                                "value",
+                                false,
+                                None,
+                                None::<String>,
+                            );
+                            let next = if current.as_deref() == Some(value.as_ref()) {
+                                None
+                            } else {
+                                Some(value.to_string())
+                            };
 
-                                if selection_state::apply_optional_text(
-                                    &accordion_id,
-                                    "value",
-                                    is_controlled,
-                                    next.clone(),
-                                ) {
-                                    window.refresh();
-                                }
-                                (handler)(next.map(SharedString::from), window, cx);
-                            },
-                        ) as PressHandler)
+                            if selection_state::apply_optional_text(
+                                &accordion_id,
+                                "value",
+                                is_controlled,
+                                next.clone(),
+                            ) {
+                                window.refresh();
+                            }
+                            (handler)(next.map(SharedString::from), window, cx);
+                        }) as ActivateHandler)
                     } else if !is_controlled {
                         let accordion_id = self.id.to_string();
                         let value = item.meta.value.clone();
-                        Some(Rc::new(
-                            move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
-                                let current = selection_state::resolve_optional_text(
-                                    &accordion_id,
-                                    "value",
-                                    false,
-                                    None,
-                                    None::<String>,
-                                );
-                                let next = if current.as_deref() == Some(value.as_ref()) {
-                                    None
-                                } else {
-                                    Some(value.to_string())
-                                };
-                                if selection_state::apply_optional_text(
-                                    &accordion_id,
-                                    "value",
-                                    false,
-                                    next,
-                                ) {
-                                    window.refresh();
-                                }
-                            },
-                        ) as PressHandler)
+                        Some(Rc::new(move |window: &mut Window, _cx: &mut gpui::App| {
+                            let current = selection_state::resolve_optional_text(
+                                &accordion_id,
+                                "value",
+                                false,
+                                None,
+                                None::<String>,
+                            );
+                            let next = if current.as_deref() == Some(value.as_ref()) {
+                                None
+                            } else {
+                                Some(value.to_string())
+                            };
+                            if selection_state::apply_optional_text(
+                                &accordion_id,
+                                "value",
+                                false,
+                                next,
+                            ) {
+                                window.refresh();
+                            }
+                        }) as ActivateHandler)
                     } else {
                         None
                     };
 
-                    if let Some(click_handler) = click_handler {
-                        let hover_bg = resolve_hsla(&self.theme, &tokens.item_bg)
-                            .blend(gpui::white().opacity(0.04));
-                        let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
+                    if let Some(activate_handler) = activate_handler {
                         header = apply_interaction_styles(
                             header.cursor_pointer(),
                             InteractionStyles::new()
-                                .hover(interaction_style(move |style| style.bg(hover_bg)))
-                                .active(interaction_style(move |style| style.bg(press_bg)))
-                                .focus(interaction_style(move |style| style.bg(hover_bg))),
+                                .hover(interaction_style(move |style| style.bg(header_hover_bg)))
+                                .active(interaction_style(move |style| style.bg(header_press_bg)))
+                                .focus(interaction_style(move |style| style.bg(header_hover_bg))),
                         );
-                        header = wire_pressable(
+                        header = bind_press_adapter(
                             header,
-                            PressableBehavior::new().on_click(Some(click_handler)),
+                            PressAdapter::new(header_id.clone())
+                                .on_activate(Some(activate_handler)),
                         );
                     } else {
                         header = header.cursor_default();

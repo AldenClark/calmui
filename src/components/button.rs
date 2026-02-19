@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, ClickEvent, ElementId, FocusHandle, Hsla, InteractiveElement, IntoElement,
-    ParentElement, RenderOnce, SharedString, Styled, Window, div,
+    ParentElement, RenderOnce, SharedString, Styled, Window, div, px,
 };
 
 use crate::contracts::{MotionAware, Radiused, Sized, VariantConfigurable};
@@ -11,12 +11,13 @@ use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
 
 use super::Stack;
+use super::interaction_adapter::{PressAdapter, bind_press_adapter};
 use super::loader::{Loader, LoaderElement, LoaderVariant};
 use super::selection_state;
 use super::transition::TransitionExt;
 use super::utils::{
-    PressHandler, PressableBehavior, apply_button_size, apply_interaction_styles, apply_radius,
-    default_pressable_surface_styles, resolve_hsla, variant_text_weight, wire_pressable,
+    PressHandler, apply_interaction_styles, apply_radius, default_pressable_surface_styles,
+    resolve_hsla, variant_text_weight,
 };
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
@@ -157,9 +158,14 @@ impl Button {
         }
     }
 
+    fn size_preset(&self) -> crate::theme::ButtonSizePreset {
+        self.theme.components.button.sizes.for_size(self.size)
+    }
+
     fn render_content(&mut self) -> AnyElement {
-        let (bg_token, fg_token, _border_token) = self.variant_tokens();
+        let (_, fg_token, _) = self.variant_tokens();
         let fg = resolve_hsla(&self.theme, &fg_token);
+        let size_preset = self.size_preset();
 
         if self.loading {
             let loader_id = self.id.slot("loader");
@@ -174,7 +180,9 @@ impl Button {
                     .into_any_element()
             };
 
-            let mut placeholder = Stack::horizontal().gap_2().text_color(fg);
+            let mut placeholder = Stack::horizontal()
+                .gap(size_preset.content_gap)
+                .text_color(fg);
             if let Some(left) = self.left_slot.take() {
                 placeholder = placeholder.child(left());
             }
@@ -207,7 +215,9 @@ impl Button {
                 .into_any_element();
         }
 
-        let mut row = Stack::horizontal().gap_2().text_color(fg);
+        let mut row = Stack::horizontal()
+            .gap(size_preset.content_gap)
+            .text_color(fg);
         if let Some(left) = self.left_slot.take() {
             row = row.child(left());
         }
@@ -224,7 +234,6 @@ impl Button {
             row = row.child(right());
         }
 
-        let _ = bg_token;
         row.into_any_element()
     }
 }
@@ -266,6 +275,7 @@ impl RenderOnce for Button {
         let (bg_token, fg_token, border_token) = self.variant_tokens();
         let bg = resolve_hsla(&self.theme, &bg_token);
         let fg = resolve_hsla(&self.theme, &fg_token);
+        let size_preset = self.size_preset();
 
         let mut root = div()
             .id(self.id.clone())
@@ -276,9 +286,15 @@ impl RenderOnce for Button {
             .cursor_pointer()
             .text_color(fg)
             .bg(bg)
+            .text_size(size_preset.font_size)
+            .line_height(size_preset.line_height)
+            .py(size_preset.padding_y)
+            .px(size_preset.padding_x)
+            .min_h(px(
+                f32::from(size_preset.line_height) + f32::from(size_preset.padding_y) * 2.0
+            ))
             .border(super::utils::quantized_stroke_px(window, 1.0));
 
-        root = apply_button_size(root, self.size);
         root = apply_radius(&self.theme, root, self.radius);
 
         if let Some(border_token) = border_token {
@@ -298,9 +314,9 @@ impl RenderOnce for Button {
                     resolve_hsla(&self.theme, &self.theme.semantic.focus_ring),
                 ),
             );
-            root = wire_pressable(
+            root = bind_press_adapter(
                 root,
-                PressableBehavior::new()
+                PressAdapter::new(self.id.clone())
                     .on_click(self.on_click.clone())
                     .focus_handle(self.focus_handle.clone()),
             );
@@ -318,17 +334,26 @@ type GroupChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ButtonGroupItem {
     pub value: SharedString,
-    pub label: SharedString,
+    pub label: Option<SharedString>,
     pub disabled: bool,
 }
 
 impl ButtonGroupItem {
-    pub fn new(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+    pub fn new(value: impl Into<SharedString>) -> Self {
         Self {
             value: value.into(),
-            label: label.into(),
+            label: None,
             disabled: false,
         }
+    }
+
+    pub fn labeled(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+        Self::new(value).label(label)
+    }
+
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
     }
 
     pub fn disabled(mut self, disabled: bool) -> Self {
@@ -489,9 +514,11 @@ impl RenderOnce for ButtonGroup {
                 };
 
                 let mut button = Button::new()
-                    .label(item.label.clone())
                     .with_id(self.id.slot_index("item", index.to_string()))
                     .with_variant(variant);
+                if let Some(label) = item.label.clone() {
+                    button = button.label(label);
+                }
                 button = Sized::with_size(button, self.size);
                 button = Radiused::with_radius(button, self.radius);
                 button = button.motion(self.motion);

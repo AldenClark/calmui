@@ -19,6 +19,7 @@ use crate::style::{FieldLayout, Radius, Size, Variant};
 
 use super::Stack;
 use super::control;
+use super::field_variant::FieldVariantRuntime;
 use super::text_input_actions::{
     CopySelection, CutSelection, DeleteBackward, DeleteForward, INPUT_KEY_CONTEXT, MoveEnd,
     MoveHome, MoveLeft, MoveRight, PasteClipboard, SelectAll, SelectEnd, SelectHome, SelectLeft,
@@ -859,7 +860,10 @@ impl TextInput {
             .items_center()
             .gap(tokens.slot_gap)
             .w_full()
-            .bg(resolve_hsla(&self.theme, &tokens.bg))
+            .bg(FieldVariantRuntime::control_bg(
+                resolve_hsla(&self.theme, &tokens.bg),
+                self.variant,
+            ))
             .text_color(resolve_hsla(&self.theme, &tokens.fg))
             .border(quantized_stroke_px(window, 1.0));
 
@@ -867,13 +871,19 @@ impl TextInput {
         input = apply_field_size(input, field_size);
         input = apply_radius(&self.theme, input, self.radius);
 
-        let border = if self.error.is_some() {
+        let base_border = if self.error.is_some() {
             resolve_hsla(&self.theme, &tokens.border_error)
         } else if is_focused {
             resolve_hsla(&self.theme, &tokens.border_focus)
         } else {
             resolve_hsla(&self.theme, &tokens.border)
         };
+        let border = FieldVariantRuntime::control_border(
+            base_border,
+            self.variant,
+            is_focused,
+            self.error.is_some(),
+        );
         input = input.border_color(border);
 
         if self.disabled {
@@ -1482,8 +1492,7 @@ impl TextInput {
             );
         } else {
             let show_caret = is_focused;
-            let selection_bg =
-                resolve_hsla(&self.theme, &self.theme.semantic.focus_ring).alpha(0.28);
+            let selection_bg = resolve_hsla(&self.theme, &tokens.selection_bg);
             let mut content_row = div()
                 .relative()
                 .left(px(-scroll_x))
@@ -1530,7 +1539,7 @@ impl TextInput {
                     .flex_none()
                     .w(quantized_stroke_px(window, 1.5))
                     .h(px(self.caret_height_px()))
-                    .bg(resolve_hsla(&self.theme, &tokens.fg))
+                    .bg(resolve_hsla(&self.theme, &tokens.caret))
                     .rounded_sm()
                     .with_animation(
                         self.id.slot("caret-blink"),
@@ -1872,6 +1881,7 @@ pub struct PinInput {
     disabled: bool,
     read_only: bool,
     length: usize,
+    variant: Variant,
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
@@ -1893,6 +1903,7 @@ impl PinInput {
             disabled: false,
             read_only: false,
             length: length.max(1),
+            variant: Variant::Default,
             size: Size::Md,
             radius: Radius::Sm,
             theme: crate::theme::LocalTheme::default(),
@@ -1942,7 +1953,8 @@ impl PinInput {
         self
     }
 
-    pub fn with_variant(self, _value: Variant) -> Self {
+    pub fn with_variant(mut self, value: Variant) -> Self {
+        self.variant = value;
         self
     }
 
@@ -2049,6 +2061,25 @@ impl PinInput {
                 }
             })
     }
+
+    fn variant_surface_color(&self, base: gpui::Hsla) -> gpui::Hsla {
+        match self.variant {
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.92),
+            Variant::Subtle => base.alpha(0.82),
+            Variant::Outline | Variant::Ghost => gpui::transparent_black(),
+        }
+    }
+
+    fn variant_border_color(&self, base: gpui::Hsla) -> gpui::Hsla {
+        match self.variant {
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.9),
+            Variant::Subtle => base.alpha(0.78),
+            Variant::Outline => base,
+            Variant::Ghost => base.alpha(0.58),
+        }
+    }
 }
 
 impl PinInput {
@@ -2083,14 +2114,15 @@ impl RenderOnce for PinInput {
             .as_ref()
             .is_some_and(|focus_handle| focus_handle.is_focused(window))
             || tracked_focus;
-        let caret_height = match self.size {
-            Size::Xs => 13.0,
-            Size::Sm => 15.0,
-            Size::Md => 17.0,
-            Size::Lg => 19.0,
-            Size::Xl => 21.0,
-        };
-        let caret_color = resolve_hsla(&self.theme, &self.theme.components.input.fg);
+        let size_preset = self.theme.components.input.sizes.for_size(self.size);
+        let caret_height = f32::from(size_preset.caret_height);
+        let cell_height = (f32::from(size_preset.line_height)
+            + (f32::from(size_preset.padding_y) * 2.0))
+            .max(24.0);
+        let cell_width = (f32::from(size_preset.line_height)
+            + (f32::from(size_preset.padding_x) * 0.9))
+            .max(24.0);
+        let caret_color = resolve_hsla(&self.theme, &self.theme.components.input.caret);
         let has_error = self.error.is_some();
         let interactive = !self.disabled && !self.read_only;
 
@@ -2319,17 +2351,27 @@ impl RenderOnce for PinInput {
             } else if is_focused {
                 resolve_hsla(&self.theme, &self.theme.components.input.border_focus)
             } else {
-                resolve_hsla(&self.theme, &self.theme.components.input.border)
+                self.variant_border_color(resolve_hsla(
+                    &self.theme,
+                    &self.theme.components.input.border,
+                ))
+            };
+            let base_bg = resolve_hsla(&self.theme, &self.theme.components.input.bg);
+            let bg = if self.disabled {
+                base_bg
+            } else {
+                self.variant_surface_color(base_bg)
             };
             let mut cell = div()
-                .w(gpui::px(34.0))
-                .h(gpui::px(40.0))
+                .w(gpui::px(cell_width))
+                .h(gpui::px(cell_height))
                 .border(quantized_stroke_px(window, 1.0))
                 .border_color(border)
-                .bg(resolve_hsla(&self.theme, &self.theme.components.input.bg))
+                .bg(bg)
                 .flex()
                 .items_center()
-                .justify_center();
+                .justify_center()
+                .text_size(size_preset.font_size);
 
             if interactive {
                 let input_id = self.id.clone();

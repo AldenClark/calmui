@@ -1,8 +1,7 @@
 use std::rc::Rc;
 
 use gpui::{
-    ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
-    Window, div,
+    InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div,
 };
 
 use crate::contracts::MotionAware;
@@ -11,26 +10,33 @@ use crate::motion::MotionConfig;
 use crate::style::Size;
 
 use super::Stack;
+use super::interaction_adapter::{ActivateHandler, PressAdapter, bind_press_adapter};
 use super::transition::TransitionExt;
-use super::utils::{
-    InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles,
-    interaction_style, resolve_hsla, wire_pressable,
-};
+use super::utils::{InteractionStyles, apply_interaction_styles, interaction_style, resolve_hsla};
 
 type ItemClickHandler = Rc<dyn Fn(usize, SharedString, &mut Window, &mut gpui::App)>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BreadcrumbItem {
-    pub label: SharedString,
+    pub label: Option<SharedString>,
     pub disabled: bool,
 }
 
 impl BreadcrumbItem {
-    pub fn new(label: impl Into<SharedString>) -> Self {
+    pub fn new() -> Self {
         Self {
-            label: label.into(),
+            label: None,
             disabled: false,
         }
+    }
+
+    pub fn labeled(label: impl Into<SharedString>) -> Self {
+        Self::new().label(label)
+    }
+
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
     }
 
     pub fn disabled(mut self, value: bool) -> Self {
@@ -106,14 +112,12 @@ impl Breadcrumbs {
         self
     }
 
-    fn apply_item_size<T: Styled>(&self, node: T) -> T {
-        match self.size {
-            Size::Xs => node.text_xs(),
-            Size::Sm => node.text_sm(),
-            Size::Md => node.text_base(),
-            Size::Lg => node.text_lg(),
-            Size::Xl => node.text_xl(),
-        }
+    fn apply_item_size<T: Styled>(
+        &self,
+        node: T,
+        preset: crate::theme::BreadcrumbsSizePreset,
+    ) -> T {
+        node.text_size(preset.font_size)
     }
 
     fn nodes(&self) -> Vec<CrumbNode> {
@@ -173,6 +177,7 @@ impl RenderOnce for Breadcrumbs {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = self.theme.components.breadcrumbs.clone();
+        let size_preset = tokens.sizes.for_size(self.size);
         let nodes = self.nodes();
         let total_nodes = nodes.len();
 
@@ -187,20 +192,25 @@ impl RenderOnce for Breadcrumbs {
                             resolve_hsla(&self.theme, &tokens.item_current_fg)
                         } else {
                             resolve_hsla(&self.theme, &tokens.item_fg)
-                        })
-                        .child(item.label.clone());
-                    crumb = self.apply_item_size(crumb);
+                        });
+                    if let Some(label) = item.label.clone() {
+                        crumb = crumb.child(label);
+                    }
+                    crumb = self.apply_item_size(crumb, size_preset);
 
                     if !is_current && !item.disabled {
                         if let Some(handler) = self.on_item_click.clone() {
-                            let label = item.label.clone();
+                            let label = item.label.clone().unwrap_or_default();
                             let hover_bg = resolve_hsla(&self.theme, &tokens.item_hover_bg);
                             let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
-                            let click_handler: PressHandler =
-                                Rc::new(move |_: &ClickEvent, window, cx| {
-                                    (handler)(index, label.clone(), window, cx);
-                                });
-                            crumb = crumb.px_1().rounded_sm().cursor_pointer();
+                            let activate_handler: ActivateHandler = Rc::new(move |window, cx| {
+                                (handler)(index, label.clone(), window, cx);
+                            });
+                            crumb = crumb
+                                .px(size_preset.item_padding_x)
+                                .py(size_preset.item_padding_y)
+                                .rounded(size_preset.item_radius)
+                                .cursor_pointer();
                             crumb = apply_interaction_styles(
                                 crumb,
                                 InteractionStyles::new()
@@ -208,9 +218,10 @@ impl RenderOnce for Breadcrumbs {
                                     .active(interaction_style(move |style| style.bg(press_bg)))
                                     .focus(interaction_style(move |style| style.bg(hover_bg))),
                             );
-                            crumb = wire_pressable(
+                            crumb = bind_press_adapter(
                                 crumb,
-                                PressableBehavior::new().on_click(Some(click_handler)),
+                                PressAdapter::new(self.id.slot_index("item", index.to_string()))
+                                    .on_activate(Some(activate_handler)),
                             );
                         }
                     } else if item.disabled {
@@ -224,7 +235,7 @@ impl RenderOnce for Breadcrumbs {
                         .id(self.id.slot_index("ellipsis", position.to_string()))
                         .text_color(resolve_hsla(&self.theme, &tokens.separator))
                         .child("...");
-                    ellipsis = self.apply_item_size(ellipsis);
+                    ellipsis = self.apply_item_size(ellipsis, size_preset);
                     children.push(ellipsis);
                 }
             }
@@ -234,7 +245,7 @@ impl RenderOnce for Breadcrumbs {
                     .id(self.id.slot_index("sep", position.to_string()))
                     .text_color(resolve_hsla(&self.theme, &tokens.separator))
                     .child(self.separator.clone());
-                separator = self.apply_item_size(separator);
+                separator = self.apply_item_size(separator, size_preset);
                 children.push(separator);
             }
         }
@@ -242,7 +253,7 @@ impl RenderOnce for Breadcrumbs {
         Stack::horizontal()
             .id(self.id.clone())
             .items_center()
-            .gap_1()
+            .gap(tokens.root_gap)
             .children(children)
             .with_enter_transition(self.id.slot("enter"), self.motion)
     }

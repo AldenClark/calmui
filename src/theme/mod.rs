@@ -492,6 +492,77 @@ pub struct ButtonTokens {
     pub ghost_fg: Hsla,
     pub disabled_bg: Hsla,
     pub disabled_fg: Hsla,
+    pub sizes: ButtonSizeScale,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ButtonSizePreset {
+    pub font_size: Pixels,
+    pub line_height: Pixels,
+    pub padding_x: Pixels,
+    pub padding_y: Pixels,
+    pub content_gap: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ButtonSizeScale {
+    pub xs: ButtonSizePreset,
+    pub sm: ButtonSizePreset,
+    pub md: ButtonSizePreset,
+    pub lg: ButtonSizePreset,
+    pub xl: ButtonSizePreset,
+}
+
+impl ButtonSizeScale {
+    pub fn for_size(&self, size: Size) -> ButtonSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_button_size_scale() -> ButtonSizeScale {
+    ButtonSizeScale {
+        xs: ButtonSizePreset {
+            font_size: px(12.0),
+            line_height: px(16.0),
+            padding_x: px(8.0),
+            padding_y: px(4.0),
+            content_gap: px(6.0),
+        },
+        sm: ButtonSizePreset {
+            font_size: px(13.0),
+            line_height: px(18.0),
+            padding_x: px(10.0),
+            padding_y: px(6.0),
+            content_gap: px(6.0),
+        },
+        md: ButtonSizePreset {
+            font_size: px(14.0),
+            line_height: px(20.0),
+            padding_x: px(12.0),
+            padding_y: px(8.0),
+            content_gap: px(8.0),
+        },
+        lg: ButtonSizePreset {
+            font_size: px(16.0),
+            line_height: px(22.0),
+            padding_x: px(14.0),
+            padding_y: px(10.0),
+            content_gap: px(8.0),
+        },
+        xl: ButtonSizePreset {
+            font_size: px(18.0),
+            line_height: px(24.0),
+            padding_x: px(16.0),
+            padding_y: px(12.0),
+            content_gap: px(10.0),
+        },
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -568,6 +639,8 @@ fn default_field_size_scale() -> FieldSizeScale {
 pub struct InputTokens {
     pub bg: Hsla,
     pub fg: Hsla,
+    pub caret: Hsla,
+    pub selection_bg: Hsla,
     pub placeholder: Hsla,
     pub border: Hsla,
     pub border_focus: Hsla,
@@ -691,6 +764,17 @@ pub struct MenuTokens {
     pub item_hover_bg: Hsla,
     pub item_disabled_fg: Hsla,
     pub icon: Hsla,
+    pub item_gap: Pixels,
+    pub item_padding_x: Pixels,
+    pub item_padding_y: Pixels,
+    pub item_size: Pixels,
+    pub item_icon_size: Pixels,
+    pub item_radius: Pixels,
+    pub dropdown_padding: Pixels,
+    pub dropdown_gap: Pixels,
+    pub dropdown_radius: Pixels,
+    pub dropdown_width_fallback: Pixels,
+    pub dropdown_min_width: Pixels,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -698,6 +782,8 @@ pub struct ProgressTokens {
     pub track_bg: Hsla,
     pub fill_bg: Hsla,
     pub label: Hsla,
+    pub default_width: Pixels,
+    pub min_width: Pixels,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -712,6 +798,8 @@ pub struct SliderTokens {
     pub value_size: Pixels,
     pub header_gap_vertical: Pixels,
     pub header_gap_horizontal: Pixels,
+    pub default_width: Pixels,
+    pub min_width: Pixels,
     pub sizes: SliderSizeScale,
 }
 
@@ -1016,6 +1104,8 @@ pub struct SelectTokens {
     pub dropdown_padding: Pixels,
     pub dropdown_gap: Pixels,
     pub dropdown_max_height: Pixels,
+    pub dropdown_width_fallback: Pixels,
+    pub dropdown_open_preferred_height: Pixels,
     pub tag_size: Pixels,
     pub tag_padding_x: Pixels,
     pub tag_padding_y: Pixels,
@@ -1041,6 +1131,8 @@ pub struct ModalTokens {
     pub actions_gap: Pixels,
     pub close_size: Pixels,
     pub close_icon_size: Pixels,
+    pub default_width: Pixels,
+    pub min_width: Pixels,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1059,6 +1151,9 @@ pub struct ToastTokens {
 pub struct DividerTokens {
     pub line: Hsla,
     pub label: Hsla,
+    pub label_size: Pixels,
+    pub label_gap: Pixels,
+    pub edge_span: Pixels,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1087,6 +1182,21 @@ pub struct DrawerTokens {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AppShellTokens {
     pub bg: Hsla,
+    pub title_bar_bg: Hsla,
+    pub sidebar_bg: Hsla,
+    pub sidebar_overlay_bg: Hsla,
+    pub content_bg: Hsla,
+    pub bottom_panel_bg: Hsla,
+    pub inspector_bg: Hsla,
+    pub inspector_overlay_bg: Hsla,
+    pub region_border: Hsla,
+    pub title_bar_height: Pixels,
+    pub sidebar_width: Pixels,
+    pub sidebar_min_width: Pixels,
+    pub inspector_width: Pixels,
+    pub inspector_min_width: Pixels,
+    pub bottom_panel_height: Pixels,
+    pub bottom_panel_min_height: Pixels,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1121,9 +1231,39 @@ pub struct SidebarTokens {
     pub footer_fg: Hsla,
     pub inline_radius: Pixels,
     pub overlay_radius: Pixels,
+    pub min_width: Pixels,
     pub section_padding: Pixels,
     pub footer_size: Pixels,
     pub scroll_padding: Size,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MarkdownTokens {
+    pub paragraph: Hsla,
+    pub quote_bg: Hsla,
+    pub quote_border: Hsla,
+    pub quote_fg: Hsla,
+    pub code_bg: Hsla,
+    pub code_border: Hsla,
+    pub code_fg: Hsla,
+    pub code_lang_fg: Hsla,
+    pub list_marker: Hsla,
+    pub rule: Hsla,
+    pub gap_regular: Pixels,
+    pub gap_compact: Pixels,
+    pub paragraph_size: Pixels,
+    pub quote_size: Pixels,
+    pub code_size: Pixels,
+    pub code_lang_size: Pixels,
+    pub list_size: Pixels,
+    pub quote_padding_x: Pixels,
+    pub quote_padding_y: Pixels,
+    pub quote_radius: Pixels,
+    pub code_padding: Pixels,
+    pub code_radius: Pixels,
+    pub code_gap: Pixels,
+    pub list_gap: Pixels,
+    pub list_item_gap: Pixels,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1196,6 +1336,59 @@ pub struct ActionIconTokens {
     pub disabled_bg: Hsla,
     pub disabled_fg: Hsla,
     pub disabled_border: Hsla,
+    pub sizes: ActionIconSizeScale,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ActionIconSizePreset {
+    pub box_size: Pixels,
+    pub icon_size: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ActionIconSizeScale {
+    pub xs: ActionIconSizePreset,
+    pub sm: ActionIconSizePreset,
+    pub md: ActionIconSizePreset,
+    pub lg: ActionIconSizePreset,
+    pub xl: ActionIconSizePreset,
+}
+
+impl ActionIconSizeScale {
+    pub fn for_size(&self, size: Size) -> ActionIconSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_action_icon_size_scale() -> ActionIconSizeScale {
+    ActionIconSizeScale {
+        xs: ActionIconSizePreset {
+            box_size: px(22.0),
+            icon_size: px(12.0),
+        },
+        sm: ActionIconSizePreset {
+            box_size: px(26.0),
+            icon_size: px(14.0),
+        },
+        md: ActionIconSizePreset {
+            box_size: px(30.0),
+            icon_size: px(16.0),
+        },
+        lg: ActionIconSizePreset {
+            box_size: px(36.0),
+            icon_size: px(18.0),
+        },
+        xl: ActionIconSizePreset {
+            box_size: px(42.0),
+            icon_size: px(20.0),
+        },
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1207,12 +1400,93 @@ pub struct SegmentedControlTokens {
     pub item_active_fg: Hsla,
     pub item_hover_bg: Hsla,
     pub item_disabled_fg: Hsla,
+    pub track_padding: Pixels,
+    pub item_gap: Pixels,
+    pub sizes: SegmentedControlSizeScale,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SegmentedControlSizePreset {
+    pub font_size: Pixels,
+    pub line_height: Pixels,
+    pub padding_x: Pixels,
+    pub padding_y: Pixels,
+    pub indicator_inset: Pixels,
+    pub divider_height: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SegmentedControlSizeScale {
+    pub xs: SegmentedControlSizePreset,
+    pub sm: SegmentedControlSizePreset,
+    pub md: SegmentedControlSizePreset,
+    pub lg: SegmentedControlSizePreset,
+    pub xl: SegmentedControlSizePreset,
+}
+
+impl SegmentedControlSizeScale {
+    pub fn for_size(&self, size: Size) -> SegmentedControlSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_segmented_control_size_scale() -> SegmentedControlSizeScale {
+    SegmentedControlSizeScale {
+        xs: SegmentedControlSizePreset {
+            font_size: px(12.0),
+            line_height: px(16.0),
+            padding_x: px(8.0),
+            padding_y: px(4.0),
+            indicator_inset: px(0.5),
+            divider_height: px(12.0),
+        },
+        sm: SegmentedControlSizePreset {
+            font_size: px(13.0),
+            line_height: px(18.0),
+            padding_x: px(10.0),
+            padding_y: px(4.0),
+            indicator_inset: px(1.0),
+            divider_height: px(14.0),
+        },
+        md: SegmentedControlSizePreset {
+            font_size: px(14.0),
+            line_height: px(20.0),
+            padding_x: px(12.0),
+            padding_y: px(6.0),
+            indicator_inset: px(1.0),
+            divider_height: px(16.0),
+        },
+        lg: SegmentedControlSizePreset {
+            font_size: px(16.0),
+            line_height: px(22.0),
+            padding_x: px(14.0),
+            padding_y: px(8.0),
+            indicator_inset: px(1.5),
+            divider_height: px(18.0),
+        },
+        xl: SegmentedControlSizePreset {
+            font_size: px(18.0),
+            line_height: px(24.0),
+            padding_x: px(16.0),
+            padding_y: px(10.0),
+            indicator_inset: px(1.5),
+            divider_height: px(20.0),
+        },
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TextareaTokens {
     pub bg: Hsla,
     pub fg: Hsla,
+    pub caret: Hsla,
+    pub selection_bg: Hsla,
     pub placeholder: Hsla,
     pub border: Hsla,
     pub border_focus: Hsla,
@@ -1227,6 +1501,7 @@ pub struct TextareaTokens {
     pub layout_gap_vertical: Pixels,
     pub layout_gap_horizontal: Pixels,
     pub horizontal_label_width: Pixels,
+    pub content_width_fallback: Pixels,
     pub sizes: FieldSizeScale,
 }
 
@@ -1267,6 +1542,8 @@ pub struct RangeSliderTokens {
     pub value_size: Pixels,
     pub header_gap_vertical: Pixels,
     pub header_gap_horizontal: Pixels,
+    pub default_width: Pixels,
+    pub min_width: Pixels,
     pub sizes: SliderSizeScale,
 }
 
@@ -1288,6 +1565,74 @@ pub struct TabsTokens {
     pub panel_bg: Hsla,
     pub panel_border: Hsla,
     pub panel_fg: Hsla,
+    pub root_gap: Pixels,
+    pub list_gap: Pixels,
+    pub list_padding: Pixels,
+    pub panel_padding: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PaginationSizePreset {
+    pub font_size: Pixels,
+    pub padding_x: Pixels,
+    pub padding_y: Pixels,
+    pub min_width: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PaginationSizeScale {
+    pub xs: PaginationSizePreset,
+    pub sm: PaginationSizePreset,
+    pub md: PaginationSizePreset,
+    pub lg: PaginationSizePreset,
+    pub xl: PaginationSizePreset,
+}
+
+impl PaginationSizeScale {
+    pub fn for_size(&self, size: Size) -> PaginationSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_pagination_size_scale() -> PaginationSizeScale {
+    PaginationSizeScale {
+        xs: PaginationSizePreset {
+            font_size: px(12.0),
+            padding_x: px(6.0),
+            padding_y: px(3.0),
+            min_width: px(24.0),
+        },
+        sm: PaginationSizePreset {
+            font_size: px(13.0),
+            padding_x: px(8.0),
+            padding_y: px(4.0),
+            min_width: px(28.0),
+        },
+        md: PaginationSizePreset {
+            font_size: px(14.0),
+            padding_x: px(10.0),
+            padding_y: px(4.0),
+            min_width: px(32.0),
+        },
+        lg: PaginationSizePreset {
+            font_size: px(16.0),
+            padding_x: px(12.0),
+            padding_y: px(6.0),
+            min_width: px(36.0),
+        },
+        xl: PaginationSizePreset {
+            font_size: px(18.0),
+            padding_x: px(14.0),
+            padding_y: px(8.0),
+            min_width: px(40.0),
+        },
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1300,6 +1645,8 @@ pub struct PaginationTokens {
     pub item_hover_bg: Hsla,
     pub item_disabled_fg: Hsla,
     pub dots_fg: Hsla,
+    pub root_gap: Pixels,
+    pub sizes: PaginationSizeScale,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1308,6 +1655,72 @@ pub struct BreadcrumbsTokens {
     pub item_current_fg: Hsla,
     pub separator: Hsla,
     pub item_hover_bg: Hsla,
+    pub root_gap: Pixels,
+    pub sizes: BreadcrumbsSizeScale,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BreadcrumbsSizePreset {
+    pub font_size: Pixels,
+    pub item_padding_x: Pixels,
+    pub item_padding_y: Pixels,
+    pub item_radius: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BreadcrumbsSizeScale {
+    pub xs: BreadcrumbsSizePreset,
+    pub sm: BreadcrumbsSizePreset,
+    pub md: BreadcrumbsSizePreset,
+    pub lg: BreadcrumbsSizePreset,
+    pub xl: BreadcrumbsSizePreset,
+}
+
+impl BreadcrumbsSizeScale {
+    pub fn for_size(&self, size: Size) -> BreadcrumbsSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_breadcrumbs_size_scale() -> BreadcrumbsSizeScale {
+    BreadcrumbsSizeScale {
+        xs: BreadcrumbsSizePreset {
+            font_size: px(12.0),
+            item_padding_x: px(4.0),
+            item_padding_y: px(1.0),
+            item_radius: px(4.0),
+        },
+        sm: BreadcrumbsSizePreset {
+            font_size: px(13.0),
+            item_padding_x: px(4.0),
+            item_padding_y: px(2.0),
+            item_radius: px(4.0),
+        },
+        md: BreadcrumbsSizePreset {
+            font_size: px(14.0),
+            item_padding_x: px(5.0),
+            item_padding_y: px(2.0),
+            item_radius: px(5.0),
+        },
+        lg: BreadcrumbsSizePreset {
+            font_size: px(16.0),
+            item_padding_x: px(6.0),
+            item_padding_y: px(3.0),
+            item_radius: px(6.0),
+        },
+        xl: BreadcrumbsSizePreset {
+            font_size: px(18.0),
+            item_padding_x: px(7.0),
+            item_padding_y: px(4.0),
+            item_radius: px(7.0),
+        },
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1333,6 +1746,7 @@ pub struct TableTokens {
     pub pagination_padding_y: Pixels,
     pub pagination_gap: Pixels,
     pub virtualization_padding: Pixels,
+    pub min_viewport_height: Pixels,
     pub sizes: TableSizeScale,
 }
 
@@ -1353,6 +1767,105 @@ pub struct StepperTokens {
     pub panel_bg: Hsla,
     pub panel_border: Hsla,
     pub panel_fg: Hsla,
+    pub root_gap: Pixels,
+    pub steps_gap_vertical: Pixels,
+    pub text_gap: Pixels,
+    pub panel_margin_top: Pixels,
+    pub sizes: StepperSizeScale,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct StepperSizePreset {
+    pub indicator_size: Pixels,
+    pub connector_thickness: Pixels,
+    pub connector_span: Pixels,
+    pub label_size: Pixels,
+    pub description_size: Pixels,
+    pub item_padding: Pixels,
+    pub item_gap_vertical: Pixels,
+    pub item_gap_horizontal: Pixels,
+    pub panel_padding: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct StepperSizeScale {
+    pub xs: StepperSizePreset,
+    pub sm: StepperSizePreset,
+    pub md: StepperSizePreset,
+    pub lg: StepperSizePreset,
+    pub xl: StepperSizePreset,
+}
+
+impl StepperSizeScale {
+    pub fn for_size(&self, size: Size) -> StepperSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_stepper_size_scale() -> StepperSizeScale {
+    StepperSizeScale {
+        xs: StepperSizePreset {
+            indicator_size: px(18.0),
+            connector_thickness: px(1.0),
+            connector_span: px(20.0),
+            label_size: px(12.0),
+            description_size: px(11.0),
+            item_padding: px(4.0),
+            item_gap_vertical: px(4.0),
+            item_gap_horizontal: px(6.0),
+            panel_padding: px(10.0),
+        },
+        sm: StepperSizePreset {
+            indicator_size: px(20.0),
+            connector_thickness: px(1.0),
+            connector_span: px(24.0),
+            label_size: px(13.0),
+            description_size: px(12.0),
+            item_padding: px(5.0),
+            item_gap_vertical: px(4.0),
+            item_gap_horizontal: px(6.0),
+            panel_padding: px(11.0),
+        },
+        md: StepperSizePreset {
+            indicator_size: px(24.0),
+            connector_thickness: px(2.0),
+            connector_span: px(28.0),
+            label_size: px(14.0),
+            description_size: px(13.0),
+            item_padding: px(6.0),
+            item_gap_vertical: px(6.0),
+            item_gap_horizontal: px(8.0),
+            panel_padding: px(12.0),
+        },
+        lg: StepperSizePreset {
+            indicator_size: px(28.0),
+            connector_thickness: px(3.0),
+            connector_span: px(32.0),
+            label_size: px(16.0),
+            description_size: px(14.0),
+            item_padding: px(7.0),
+            item_gap_vertical: px(8.0),
+            item_gap_horizontal: px(10.0),
+            panel_padding: px(14.0),
+        },
+        xl: StepperSizePreset {
+            indicator_size: px(32.0),
+            connector_thickness: px(3.0),
+            connector_span: px(36.0),
+            label_size: px(18.0),
+            description_size: px(15.0),
+            item_padding: px(8.0),
+            item_gap_vertical: px(10.0),
+            item_gap_horizontal: px(12.0),
+            panel_padding: px(16.0),
+        },
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1370,6 +1883,84 @@ pub struct TimelineTokens {
     pub body: Hsla,
     pub card_bg: Hsla,
     pub card_border: Hsla,
+    pub root_gap: Pixels,
+    pub row_gap: Pixels,
+    pub content_gap: Pixels,
+    pub card_margin_top: Pixels,
+    pub row_padding_y: Pixels,
+    pub line_min_height: Pixels,
+    pub line_extra_height: Pixels,
+    pub sizes: TimelineSizeScale,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TimelineSizePreset {
+    pub bullet_size: Pixels,
+    pub line_width: Pixels,
+    pub title_size: Pixels,
+    pub body_size: Pixels,
+    pub card_padding: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TimelineSizeScale {
+    pub xs: TimelineSizePreset,
+    pub sm: TimelineSizePreset,
+    pub md: TimelineSizePreset,
+    pub lg: TimelineSizePreset,
+    pub xl: TimelineSizePreset,
+}
+
+impl TimelineSizeScale {
+    pub fn for_size(&self, size: Size) -> TimelineSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_timeline_size_scale() -> TimelineSizeScale {
+    TimelineSizeScale {
+        xs: TimelineSizePreset {
+            bullet_size: px(14.0),
+            line_width: px(1.0),
+            title_size: px(12.0),
+            body_size: px(11.0),
+            card_padding: px(8.0),
+        },
+        sm: TimelineSizePreset {
+            bullet_size: px(16.0),
+            line_width: px(1.0),
+            title_size: px(13.0),
+            body_size: px(12.0),
+            card_padding: px(8.0),
+        },
+        md: TimelineSizePreset {
+            bullet_size: px(18.0),
+            line_width: px(2.0),
+            title_size: px(14.0),
+            body_size: px(13.0),
+            card_padding: px(10.0),
+        },
+        lg: TimelineSizePreset {
+            bullet_size: px(22.0),
+            line_width: px(3.0),
+            title_size: px(16.0),
+            body_size: px(14.0),
+            card_padding: px(12.0),
+        },
+        xl: TimelineSizePreset {
+            bullet_size: px(26.0),
+            line_width: px(3.0),
+            title_size: px(18.0),
+            body_size: px(15.0),
+            card_padding: px(14.0),
+        },
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1412,6 +2003,7 @@ pub struct ComponentTokens {
     pub app_shell: AppShellTokens,
     pub title_bar: TitleBarTokens,
     pub sidebar: SidebarTokens,
+    pub markdown: MarkdownTokens,
     pub text: TextTokens,
     pub title: TitleTokens,
     pub paper: PaperTokens,
@@ -1478,10 +2070,17 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    sizes: default_button_size_scale(),
                 },
                 input: InputTokens {
                     bg: white(),
                     fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    caret: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    selection_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[1 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                     placeholder: (Rgba::try_from(
@@ -1783,6 +2382,17 @@ impl ComponentTokens {
                     icon: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    item_gap: px(8.0),
+                    item_padding_x: px(10.0),
+                    item_padding_y: px(8.0),
+                    item_size: px(14.0),
+                    item_icon_size: px(14.0),
+                    item_radius: px(6.0),
+                    dropdown_padding: px(6.0),
+                    dropdown_gap: px(4.0),
+                    dropdown_radius: px(8.0),
+                    dropdown_width_fallback: px(220.0),
+                    dropdown_min_width: px(180.0),
                 },
                 progress: ProgressTokens {
                     track_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
@@ -1794,6 +2404,8 @@ impl ComponentTokens {
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    default_width: px(260.0),
+                    min_width: px(80.0),
                 },
                 slider: SliderTokens {
                     track_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
@@ -1816,6 +2428,8 @@ impl ComponentTokens {
                     value_size: px(14.0),
                     header_gap_vertical: px(6.0),
                     header_gap_horizontal: px(8.0),
+                    default_width: px(260.0),
+                    min_width: px(120.0),
                     sizes: default_slider_size_scale(),
                 },
                 overlay: OverlayTokens {
@@ -1960,6 +2574,8 @@ impl ComponentTokens {
                     dropdown_padding: px(6.0),
                     dropdown_gap: px(4.0),
                     dropdown_max_height: px(280.0),
+                    dropdown_width_fallback: px(220.0),
+                    dropdown_open_preferred_height: px(260.0),
                     tag_size: px(12.0),
                     tag_padding_x: px(8.0),
                     tag_padding_y: px(3.0),
@@ -1993,6 +2609,8 @@ impl ComponentTokens {
                     actions_gap: px(8.0),
                     close_size: px(26.0),
                     close_icon_size: px(14.0),
+                    default_width: px(560.0),
+                    min_width: px(240.0),
                 },
                 toast: ToastTokens {
                     info_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Blue)[0 as usize])
@@ -2035,6 +2653,9 @@ impl ComponentTokens {
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[6 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    label_size: px(12.0),
+                    label_gap: px(8.0),
+                    edge_span: px(16.0),
                 },
                 scroll_area: ScrollAreaTokens {
                     bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
@@ -2069,7 +2690,40 @@ impl ComponentTokens {
                     close_size: px(28.0),
                     close_icon_size: px(14.0),
                 },
-                app_shell: AppShellTokens { bg: white() },
+                app_shell: AppShellTokens {
+                    bg: white(),
+                    title_bar_bg: white(),
+                    sidebar_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    sidebar_overlay_bg: white(),
+                    content_bg: white(),
+                    bottom_panel_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    inspector_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    inspector_overlay_bg: white(),
+                    region_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    title_bar_height: px(44.0),
+                    sidebar_width: px(260.0),
+                    sidebar_min_width: px(120.0),
+                    inspector_width: px(320.0),
+                    inspector_min_width: px(120.0),
+                    bottom_panel_height: px(180.0),
+                    bottom_panel_min_height: px(80.0),
+                },
                 title_bar: TitleBarTokens {
                     bg: transparent_black(),
                     border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
@@ -2123,9 +2777,67 @@ impl ComponentTokens {
                     .unwrap_or_else(|_| black())),
                     inline_radius: px(10.0),
                     overlay_radius: px(18.0),
+                    min_width: px(120.0),
                     section_padding: px(12.0),
                     footer_size: px(14.0),
                     scroll_padding: Size::Md,
+                },
+                markdown: MarkdownTokens {
+                    paragraph: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    quote_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    quote_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    quote_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    code_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    code_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    code_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    code_lang_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    list_marker: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[6 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    rule: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    gap_regular: px(8.0),
+                    gap_compact: px(6.0),
+                    paragraph_size: px(14.0),
+                    quote_size: px(14.0),
+                    code_size: px(13.0),
+                    code_lang_size: px(12.0),
+                    list_size: px(14.0),
+                    quote_padding_x: px(12.0),
+                    quote_padding_y: px(8.0),
+                    quote_radius: px(8.0),
+                    code_padding: px(10.0),
+                    code_radius: px(8.0),
+                    code_gap: px(6.0),
+                    list_gap: px(6.0),
+                    list_item_gap: px(8.0),
                 },
                 text: TextTokens {
                     fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
@@ -2262,6 +2974,7 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    sizes: default_action_icon_size_scale(),
                 },
                 segmented_control: SegmentedControlTokens {
                     bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
@@ -2289,10 +3002,19 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    track_padding: px(2.0),
+                    item_gap: px(0.0),
+                    sizes: default_segmented_control_size_scale(),
                 },
                 textarea: TextareaTokens {
                     bg: white(),
                     fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    caret: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    selection_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[1 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                     placeholder: (Rgba::try_from(
@@ -2329,6 +3051,7 @@ impl ComponentTokens {
                     layout_gap_vertical: px(8.0),
                     layout_gap_horizontal: px(12.0),
                     horizontal_label_width: px(168.0),
+                    content_width_fallback: px(240.0),
                     sizes: default_field_size_scale(),
                 },
                 number_input: NumberInputTokens {
@@ -2409,6 +3132,8 @@ impl ComponentTokens {
                     value_size: px(14.0),
                     header_gap_vertical: px(6.0),
                     header_gap_horizontal: px(8.0),
+                    default_width: px(260.0),
+                    min_width: px(140.0),
                     sizes: default_slider_size_scale(),
                 },
                 rating: RatingTokens {
@@ -2456,6 +3181,10 @@ impl ComponentTokens {
                     panel_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    root_gap: px(8.0),
+                    list_gap: px(2.0),
+                    list_padding: px(2.0),
+                    panel_padding: px(16.0),
                 },
                 pagination: PaginationTokens {
                     item_bg: white(),
@@ -2484,6 +3213,8 @@ impl ComponentTokens {
                     dots_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[6 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    root_gap: px(4.0),
+                    sizes: default_pagination_size_scale(),
                 },
                 breadcrumbs: BreadcrumbsTokens {
                     item_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
@@ -2504,6 +3235,8 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    root_gap: px(4.0),
+                    sizes: default_breadcrumbs_size_scale(),
                 },
                 table: TableTokens {
                     header_bg: (Rgba::try_from(
@@ -2551,6 +3284,7 @@ impl ComponentTokens {
                     pagination_padding_y: px(8.0),
                     pagination_gap: px(8.0),
                     virtualization_padding: px(4.0),
+                    min_viewport_height: px(80.0),
                     sizes: default_table_size_scale(),
                 },
                 stepper: StepperTokens {
@@ -2603,6 +3337,11 @@ impl ComponentTokens {
                     panel_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    root_gap: px(6.0),
+                    steps_gap_vertical: px(6.0),
+                    text_gap: px(2.0),
+                    panel_margin_top: px(8.0),
+                    sizes: default_stepper_size_scale(),
                 },
                 timeline: TimelineTokens {
                     bullet_bg: white(),
@@ -2650,6 +3389,14 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    root_gap: px(0.0),
+                    row_gap: px(8.0),
+                    content_gap: px(4.0),
+                    card_margin_top: px(4.0),
+                    row_padding_y: px(0.0),
+                    line_min_height: px(24.0),
+                    line_extra_height: px(8.0),
+                    sizes: default_timeline_size_scale(),
                 },
                 tree: TreeTokens {
                     row_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
@@ -2724,12 +3471,19 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    sizes: default_button_size_scale(),
                 },
                 input: InputTokens {
                     bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                     fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    caret: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    selection_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                     placeholder: (Rgba::try_from(
@@ -3055,6 +3809,17 @@ impl ComponentTokens {
                     icon: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    item_gap: px(8.0),
+                    item_padding_x: px(10.0),
+                    item_padding_y: px(8.0),
+                    item_size: px(14.0),
+                    item_icon_size: px(14.0),
+                    item_radius: px(6.0),
+                    dropdown_padding: px(6.0),
+                    dropdown_gap: px(4.0),
+                    dropdown_radius: px(8.0),
+                    dropdown_width_fallback: px(220.0),
+                    dropdown_min_width: px(180.0),
                 },
                 progress: ProgressTokens {
                     track_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[5 as usize])
@@ -3066,6 +3831,8 @@ impl ComponentTokens {
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    default_width: px(260.0),
+                    min_width: px(80.0),
                 },
                 slider: SliderTokens {
                     track_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[5 as usize])
@@ -3090,6 +3857,8 @@ impl ComponentTokens {
                     value_size: px(14.0),
                     header_gap_vertical: px(6.0),
                     header_gap_horizontal: px(8.0),
+                    default_width: px(260.0),
+                    min_width: px(120.0),
                     sizes: default_slider_size_scale(),
                 },
                 overlay: OverlayTokens {
@@ -3248,6 +4017,8 @@ impl ComponentTokens {
                     dropdown_padding: px(6.0),
                     dropdown_gap: px(4.0),
                     dropdown_max_height: px(280.0),
+                    dropdown_width_fallback: px(220.0),
+                    dropdown_open_preferred_height: px(260.0),
                     tag_size: px(12.0),
                     tag_padding_x: px(8.0),
                     tag_padding_y: px(3.0),
@@ -3283,6 +4054,8 @@ impl ComponentTokens {
                     actions_gap: px(8.0),
                     close_size: px(26.0),
                     close_icon_size: px(14.0),
+                    default_width: px(560.0),
+                    min_width: px(240.0),
                 },
                 toast: ToastTokens {
                     info_bg: resolve_palette_hsla(PaletteKey::Blue, 4).opacity(0.15),
@@ -3301,6 +4074,9 @@ impl ComponentTokens {
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[5 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    label_size: px(12.0),
+                    label_gap: px(8.0),
+                    edge_span: px(16.0),
                 },
                 scroll_area: ScrollAreaTokens {
                     bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
@@ -3341,6 +4117,53 @@ impl ComponentTokens {
                     bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    title_bar_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[9 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    sidebar_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    sidebar_overlay_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    content_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[9 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    bottom_panel_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    inspector_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    inspector_overlay_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    region_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    title_bar_height: px(44.0),
+                    sidebar_width: px(260.0),
+                    sidebar_min_width: px(120.0),
+                    inspector_width: px(320.0),
+                    inspector_min_width: px(120.0),
+                    bottom_panel_height: px(180.0),
+                    bottom_panel_min_height: px(80.0),
                 },
                 title_bar: TitleBarTokens {
                     bg: transparent_black(),
@@ -3395,9 +4218,67 @@ impl ComponentTokens {
                     .unwrap_or_else(|_| black())),
                     inline_radius: px(10.0),
                     overlay_radius: px(18.0),
+                    min_width: px(120.0),
                     section_padding: px(12.0),
                     footer_size: px(14.0),
                     scroll_padding: Size::Md,
+                },
+                markdown: MarkdownTokens {
+                    paragraph: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[2 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    quote_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    quote_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    quote_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    code_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    code_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    code_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    code_lang_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    list_marker: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    rule: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    gap_regular: px(8.0),
+                    gap_compact: px(6.0),
+                    paragraph_size: px(14.0),
+                    quote_size: px(14.0),
+                    code_size: px(13.0),
+                    code_lang_size: px(12.0),
+                    list_size: px(14.0),
+                    quote_padding_x: px(12.0),
+                    quote_padding_y: px(8.0),
+                    quote_radius: px(8.0),
+                    code_padding: px(10.0),
+                    code_radius: px(8.0),
+                    code_gap: px(6.0),
+                    list_gap: px(6.0),
+                    list_item_gap: px(8.0),
                 },
                 text: TextTokens {
                     fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
@@ -3540,6 +4421,7 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    sizes: default_action_icon_size_scale(),
                 },
                 segmented_control: SegmentedControlTokens {
                     bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[7 as usize])
@@ -3571,12 +4453,21 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    track_padding: px(2.0),
+                    item_gap: px(0.0),
+                    sizes: default_segmented_control_size_scale(),
                 },
                 textarea: TextareaTokens {
                     bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                     fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    caret: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    selection_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                     placeholder: (Rgba::try_from(
@@ -3613,6 +4504,7 @@ impl ComponentTokens {
                     layout_gap_vertical: px(8.0),
                     layout_gap_horizontal: px(12.0),
                     horizontal_label_width: px(168.0),
+                    content_width_fallback: px(240.0),
                     sizes: default_field_size_scale(),
                 },
                 number_input: NumberInputTokens {
@@ -3697,6 +4589,8 @@ impl ComponentTokens {
                     value_size: px(14.0),
                     header_gap_vertical: px(6.0),
                     header_gap_horizontal: px(8.0),
+                    default_width: px(260.0),
+                    min_width: px(140.0),
                     sizes: default_slider_size_scale(),
                 },
                 rating: RatingTokens {
@@ -3750,6 +4644,10 @@ impl ComponentTokens {
                     panel_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    root_gap: px(8.0),
+                    list_gap: px(2.0),
+                    list_padding: px(2.0),
+                    panel_padding: px(16.0),
                 },
                 pagination: PaginationTokens {
                     item_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[7 as usize])
@@ -3780,6 +4678,8 @@ impl ComponentTokens {
                     dots_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[5 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    root_gap: px(4.0),
+                    sizes: default_pagination_size_scale(),
                 },
                 breadcrumbs: BreadcrumbsTokens {
                     item_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
@@ -3800,6 +4700,8 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    root_gap: px(4.0),
+                    sizes: default_breadcrumbs_size_scale(),
                 },
                 table: TableTokens {
                     header_bg: (Rgba::try_from(
@@ -3849,6 +4751,7 @@ impl ComponentTokens {
                     pagination_padding_y: px(8.0),
                     pagination_gap: px(8.0),
                     virtualization_padding: px(4.0),
+                    min_viewport_height: px(80.0),
                     sizes: default_table_size_scale(),
                 },
                 stepper: StepperTokens {
@@ -3905,6 +4808,11 @@ impl ComponentTokens {
                     panel_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    root_gap: px(6.0),
+                    steps_gap_vertical: px(6.0),
+                    text_gap: px(2.0),
+                    panel_margin_top: px(8.0),
+                    sizes: default_stepper_size_scale(),
                 },
                 timeline: TimelineTokens {
                     bullet_bg: (Rgba::try_from(
@@ -3956,6 +4864,14 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    root_gap: px(0.0),
+                    row_gap: px(8.0),
+                    content_gap: px(4.0),
+                    card_margin_top: px(4.0),
+                    row_padding_y: px(0.0),
+                    line_min_height: px(24.0),
+                    line_extra_height: px(8.0),
+                    sizes: default_timeline_size_scale(),
                 },
                 tree: TreeTokens {
                     row_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
@@ -4221,6 +5137,7 @@ pub struct ButtonOverrides {
     pub ghost_fg: Option<Hsla>,
     pub disabled_bg: Option<Hsla>,
     pub disabled_fg: Option<Hsla>,
+    pub sizes: Option<ButtonSizeScale>,
 }
 
 impl ButtonOverrides {
@@ -4258,6 +5175,9 @@ impl ButtonOverrides {
         if let Some(value) = &self.disabled_fg {
             current.disabled_fg = value.clone();
         }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
+        }
         current
     }
 }
@@ -4266,6 +5186,8 @@ impl ButtonOverrides {
 pub struct InputOverrides {
     pub bg: Option<Hsla>,
     pub fg: Option<Hsla>,
+    pub caret: Option<Hsla>,
+    pub selection_bg: Option<Hsla>,
     pub placeholder: Option<Hsla>,
     pub border: Option<Hsla>,
     pub border_focus: Option<Hsla>,
@@ -4293,6 +5215,12 @@ impl InputOverrides {
         }
         if let Some(value) = &self.fg {
             current.fg = value.clone();
+        }
+        if let Some(value) = &self.caret {
+            current.caret = value.clone();
+        }
+        if let Some(value) = &self.selection_bg {
+            current.selection_bg = value.clone();
         }
         if let Some(value) = &self.placeholder {
             current.placeholder = value.clone();
@@ -4704,6 +5632,17 @@ pub struct MenuOverrides {
     pub item_hover_bg: Option<Hsla>,
     pub item_disabled_fg: Option<Hsla>,
     pub icon: Option<Hsla>,
+    pub item_gap: Option<Pixels>,
+    pub item_padding_x: Option<Pixels>,
+    pub item_padding_y: Option<Pixels>,
+    pub item_size: Option<Pixels>,
+    pub item_icon_size: Option<Pixels>,
+    pub item_radius: Option<Pixels>,
+    pub dropdown_padding: Option<Pixels>,
+    pub dropdown_gap: Option<Pixels>,
+    pub dropdown_radius: Option<Pixels>,
+    pub dropdown_width_fallback: Option<Pixels>,
+    pub dropdown_min_width: Option<Pixels>,
 }
 
 impl MenuOverrides {
@@ -4726,6 +5665,39 @@ impl MenuOverrides {
         if let Some(value) = &self.icon {
             current.icon = value.clone();
         }
+        if let Some(value) = self.item_gap {
+            current.item_gap = value;
+        }
+        if let Some(value) = self.item_padding_x {
+            current.item_padding_x = value;
+        }
+        if let Some(value) = self.item_padding_y {
+            current.item_padding_y = value;
+        }
+        if let Some(value) = self.item_size {
+            current.item_size = value;
+        }
+        if let Some(value) = self.item_icon_size {
+            current.item_icon_size = value;
+        }
+        if let Some(value) = self.item_radius {
+            current.item_radius = value;
+        }
+        if let Some(value) = self.dropdown_padding {
+            current.dropdown_padding = value;
+        }
+        if let Some(value) = self.dropdown_gap {
+            current.dropdown_gap = value;
+        }
+        if let Some(value) = self.dropdown_radius {
+            current.dropdown_radius = value;
+        }
+        if let Some(value) = self.dropdown_width_fallback {
+            current.dropdown_width_fallback = value;
+        }
+        if let Some(value) = self.dropdown_min_width {
+            current.dropdown_min_width = value;
+        }
         current
     }
 }
@@ -4735,6 +5707,8 @@ pub struct ProgressOverrides {
     pub track_bg: Option<Hsla>,
     pub fill_bg: Option<Hsla>,
     pub label: Option<Hsla>,
+    pub default_width: Option<Pixels>,
+    pub min_width: Option<Pixels>,
 }
 
 impl ProgressOverrides {
@@ -4747,6 +5721,12 @@ impl ProgressOverrides {
         }
         if let Some(value) = &self.label {
             current.label = value.clone();
+        }
+        if let Some(value) = self.default_width {
+            current.default_width = value;
+        }
+        if let Some(value) = self.min_width {
+            current.min_width = value;
         }
         current
     }
@@ -4764,6 +5744,8 @@ pub struct SliderOverrides {
     pub value_size: Option<Pixels>,
     pub header_gap_vertical: Option<Pixels>,
     pub header_gap_horizontal: Option<Pixels>,
+    pub default_width: Option<Pixels>,
+    pub min_width: Option<Pixels>,
     pub sizes: Option<SliderSizeScale>,
 }
 
@@ -4798,6 +5780,12 @@ impl SliderOverrides {
         }
         if let Some(value) = self.header_gap_horizontal {
             current.header_gap_horizontal = value;
+        }
+        if let Some(value) = self.default_width {
+            current.default_width = value;
+        }
+        if let Some(value) = self.min_width {
+            current.min_width = value;
         }
         if let Some(value) = self.sizes {
             current.sizes = value;
@@ -5005,6 +5993,8 @@ pub struct SelectOverrides {
     pub dropdown_padding: Option<Pixels>,
     pub dropdown_gap: Option<Pixels>,
     pub dropdown_max_height: Option<Pixels>,
+    pub dropdown_width_fallback: Option<Pixels>,
+    pub dropdown_open_preferred_height: Option<Pixels>,
     pub tag_size: Option<Pixels>,
     pub tag_padding_x: Option<Pixels>,
     pub tag_padding_y: Option<Pixels>,
@@ -5119,6 +6109,12 @@ impl SelectOverrides {
         if let Some(value) = self.dropdown_max_height {
             current.dropdown_max_height = value;
         }
+        if let Some(value) = self.dropdown_width_fallback {
+            current.dropdown_width_fallback = value;
+        }
+        if let Some(value) = self.dropdown_open_preferred_height {
+            current.dropdown_open_preferred_height = value;
+        }
         if let Some(value) = self.tag_size {
             current.tag_size = value;
         }
@@ -5156,6 +6152,8 @@ pub struct ModalOverrides {
     pub actions_gap: Option<Pixels>,
     pub close_size: Option<Pixels>,
     pub close_icon_size: Option<Pixels>,
+    pub default_width: Option<Pixels>,
+    pub min_width: Option<Pixels>,
 }
 
 impl ModalOverrides {
@@ -5208,6 +6206,12 @@ impl ModalOverrides {
         if let Some(value) = self.close_icon_size {
             current.close_icon_size = value;
         }
+        if let Some(value) = self.default_width {
+            current.default_width = value;
+        }
+        if let Some(value) = self.min_width {
+            current.min_width = value;
+        }
         current
     }
 }
@@ -5258,6 +6262,9 @@ impl ToastOverrides {
 pub struct DividerOverrides {
     pub line: Option<Hsla>,
     pub label: Option<Hsla>,
+    pub label_size: Option<Pixels>,
+    pub label_gap: Option<Pixels>,
+    pub edge_span: Option<Pixels>,
 }
 
 impl DividerOverrides {
@@ -5267,6 +6274,15 @@ impl DividerOverrides {
         }
         if let Some(value) = &self.label {
             current.label = value.clone();
+        }
+        if let Some(value) = self.label_size {
+            current.label_size = value;
+        }
+        if let Some(value) = self.label_gap {
+            current.label_gap = value;
+        }
+        if let Some(value) = self.edge_span {
+            current.edge_span = value;
         }
         current
     }
@@ -5355,12 +6371,72 @@ impl DrawerOverrides {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct AppShellOverrides {
     pub bg: Option<Hsla>,
+    pub title_bar_bg: Option<Hsla>,
+    pub sidebar_bg: Option<Hsla>,
+    pub sidebar_overlay_bg: Option<Hsla>,
+    pub content_bg: Option<Hsla>,
+    pub bottom_panel_bg: Option<Hsla>,
+    pub inspector_bg: Option<Hsla>,
+    pub inspector_overlay_bg: Option<Hsla>,
+    pub region_border: Option<Hsla>,
+    pub title_bar_height: Option<Pixels>,
+    pub sidebar_width: Option<Pixels>,
+    pub sidebar_min_width: Option<Pixels>,
+    pub inspector_width: Option<Pixels>,
+    pub inspector_min_width: Option<Pixels>,
+    pub bottom_panel_height: Option<Pixels>,
+    pub bottom_panel_min_height: Option<Pixels>,
 }
 
 impl AppShellOverrides {
     fn apply(&self, mut current: AppShellTokens) -> AppShellTokens {
         if let Some(value) = &self.bg {
             current.bg = value.clone();
+        }
+        if let Some(value) = &self.title_bar_bg {
+            current.title_bar_bg = value.clone();
+        }
+        if let Some(value) = &self.sidebar_bg {
+            current.sidebar_bg = value.clone();
+        }
+        if let Some(value) = &self.sidebar_overlay_bg {
+            current.sidebar_overlay_bg = value.clone();
+        }
+        if let Some(value) = &self.content_bg {
+            current.content_bg = value.clone();
+        }
+        if let Some(value) = &self.bottom_panel_bg {
+            current.bottom_panel_bg = value.clone();
+        }
+        if let Some(value) = &self.inspector_bg {
+            current.inspector_bg = value.clone();
+        }
+        if let Some(value) = &self.inspector_overlay_bg {
+            current.inspector_overlay_bg = value.clone();
+        }
+        if let Some(value) = &self.region_border {
+            current.region_border = value.clone();
+        }
+        if let Some(value) = self.title_bar_height {
+            current.title_bar_height = value;
+        }
+        if let Some(value) = self.sidebar_width {
+            current.sidebar_width = value;
+        }
+        if let Some(value) = self.sidebar_min_width {
+            current.sidebar_min_width = value;
+        }
+        if let Some(value) = self.inspector_width {
+            current.inspector_width = value;
+        }
+        if let Some(value) = self.inspector_min_width {
+            current.inspector_min_width = value;
+        }
+        if let Some(value) = self.bottom_panel_height {
+            current.bottom_panel_height = value;
+        }
+        if let Some(value) = self.bottom_panel_min_height {
+            current.bottom_panel_min_height = value;
         }
         current
     }
@@ -5461,6 +6537,7 @@ pub struct SidebarOverrides {
     pub footer_fg: Option<Hsla>,
     pub inline_radius: Option<Pixels>,
     pub overlay_radius: Option<Pixels>,
+    pub min_width: Option<Pixels>,
     pub section_padding: Option<Pixels>,
     pub footer_size: Option<Pixels>,
     pub scroll_padding: Option<Size>,
@@ -5489,6 +6566,9 @@ impl SidebarOverrides {
         if let Some(value) = self.overlay_radius {
             current.overlay_radius = value;
         }
+        if let Some(value) = self.min_width {
+            current.min_width = value;
+        }
         if let Some(value) = self.section_padding {
             current.section_padding = value;
         }
@@ -5497,6 +6577,116 @@ impl SidebarOverrides {
         }
         if let Some(value) = self.scroll_padding {
             current.scroll_padding = value;
+        }
+        current
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct MarkdownOverrides {
+    pub paragraph: Option<Hsla>,
+    pub quote_bg: Option<Hsla>,
+    pub quote_border: Option<Hsla>,
+    pub quote_fg: Option<Hsla>,
+    pub code_bg: Option<Hsla>,
+    pub code_border: Option<Hsla>,
+    pub code_fg: Option<Hsla>,
+    pub code_lang_fg: Option<Hsla>,
+    pub list_marker: Option<Hsla>,
+    pub rule: Option<Hsla>,
+    pub gap_regular: Option<Pixels>,
+    pub gap_compact: Option<Pixels>,
+    pub paragraph_size: Option<Pixels>,
+    pub quote_size: Option<Pixels>,
+    pub code_size: Option<Pixels>,
+    pub code_lang_size: Option<Pixels>,
+    pub list_size: Option<Pixels>,
+    pub quote_padding_x: Option<Pixels>,
+    pub quote_padding_y: Option<Pixels>,
+    pub quote_radius: Option<Pixels>,
+    pub code_padding: Option<Pixels>,
+    pub code_radius: Option<Pixels>,
+    pub code_gap: Option<Pixels>,
+    pub list_gap: Option<Pixels>,
+    pub list_item_gap: Option<Pixels>,
+}
+
+impl MarkdownOverrides {
+    fn apply(&self, mut current: MarkdownTokens) -> MarkdownTokens {
+        if let Some(value) = &self.paragraph {
+            current.paragraph = value.clone();
+        }
+        if let Some(value) = &self.quote_bg {
+            current.quote_bg = value.clone();
+        }
+        if let Some(value) = &self.quote_border {
+            current.quote_border = value.clone();
+        }
+        if let Some(value) = &self.quote_fg {
+            current.quote_fg = value.clone();
+        }
+        if let Some(value) = &self.code_bg {
+            current.code_bg = value.clone();
+        }
+        if let Some(value) = &self.code_border {
+            current.code_border = value.clone();
+        }
+        if let Some(value) = &self.code_fg {
+            current.code_fg = value.clone();
+        }
+        if let Some(value) = &self.code_lang_fg {
+            current.code_lang_fg = value.clone();
+        }
+        if let Some(value) = &self.list_marker {
+            current.list_marker = value.clone();
+        }
+        if let Some(value) = &self.rule {
+            current.rule = value.clone();
+        }
+        if let Some(value) = self.gap_regular {
+            current.gap_regular = value;
+        }
+        if let Some(value) = self.gap_compact {
+            current.gap_compact = value;
+        }
+        if let Some(value) = self.paragraph_size {
+            current.paragraph_size = value;
+        }
+        if let Some(value) = self.quote_size {
+            current.quote_size = value;
+        }
+        if let Some(value) = self.code_size {
+            current.code_size = value;
+        }
+        if let Some(value) = self.code_lang_size {
+            current.code_lang_size = value;
+        }
+        if let Some(value) = self.list_size {
+            current.list_size = value;
+        }
+        if let Some(value) = self.quote_padding_x {
+            current.quote_padding_x = value;
+        }
+        if let Some(value) = self.quote_padding_y {
+            current.quote_padding_y = value;
+        }
+        if let Some(value) = self.quote_radius {
+            current.quote_radius = value;
+        }
+        if let Some(value) = self.code_padding {
+            current.code_padding = value;
+        }
+        if let Some(value) = self.code_radius {
+            current.code_radius = value;
+        }
+        if let Some(value) = self.code_gap {
+            current.code_gap = value;
+        }
+        if let Some(value) = self.list_gap {
+            current.list_gap = value;
+        }
+        if let Some(value) = self.list_item_gap {
+            current.list_item_gap = value;
         }
         current
     }
@@ -5643,6 +6833,7 @@ pub struct ActionIconOverrides {
     pub disabled_bg: Option<Hsla>,
     pub disabled_fg: Option<Hsla>,
     pub disabled_border: Option<Hsla>,
+    pub sizes: Option<ActionIconSizeScale>,
 }
 
 impl ActionIconOverrides {
@@ -5692,6 +6883,9 @@ impl ActionIconOverrides {
         if let Some(value) = &self.disabled_border {
             current.disabled_border = value.clone();
         }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
+        }
         current
     }
 }
@@ -5705,6 +6899,9 @@ pub struct SegmentedControlOverrides {
     pub item_active_fg: Option<Hsla>,
     pub item_hover_bg: Option<Hsla>,
     pub item_disabled_fg: Option<Hsla>,
+    pub track_padding: Option<Pixels>,
+    pub item_gap: Option<Pixels>,
+    pub sizes: Option<SegmentedControlSizeScale>,
 }
 
 impl SegmentedControlOverrides {
@@ -5730,6 +6927,15 @@ impl SegmentedControlOverrides {
         if let Some(value) = &self.item_disabled_fg {
             current.item_disabled_fg = value.clone();
         }
+        if let Some(value) = self.track_padding {
+            current.track_padding = value;
+        }
+        if let Some(value) = self.item_gap {
+            current.item_gap = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
+        }
         current
     }
 }
@@ -5738,6 +6944,8 @@ impl SegmentedControlOverrides {
 pub struct TextareaOverrides {
     pub bg: Option<Hsla>,
     pub fg: Option<Hsla>,
+    pub caret: Option<Hsla>,
+    pub selection_bg: Option<Hsla>,
     pub placeholder: Option<Hsla>,
     pub border: Option<Hsla>,
     pub border_focus: Option<Hsla>,
@@ -5752,6 +6960,7 @@ pub struct TextareaOverrides {
     pub layout_gap_vertical: Option<Pixels>,
     pub layout_gap_horizontal: Option<Pixels>,
     pub horizontal_label_width: Option<Pixels>,
+    pub content_width_fallback: Option<Pixels>,
     pub sizes: Option<FieldSizeScale>,
 }
 
@@ -5762,6 +6971,12 @@ impl TextareaOverrides {
         }
         if let Some(value) = &self.fg {
             current.fg = value.clone();
+        }
+        if let Some(value) = &self.caret {
+            current.caret = value.clone();
+        }
+        if let Some(value) = &self.selection_bg {
+            current.selection_bg = value.clone();
         }
         if let Some(value) = &self.placeholder {
             current.placeholder = value.clone();
@@ -5804,6 +7019,9 @@ impl TextareaOverrides {
         }
         if let Some(value) = self.horizontal_label_width {
             current.horizontal_label_width = value;
+        }
+        if let Some(value) = self.content_width_fallback {
+            current.content_width_fallback = value;
         }
         if let Some(value) = self.sizes {
             current.sizes = value;
@@ -5918,6 +7136,8 @@ pub struct RangeSliderOverrides {
     pub value_size: Option<Pixels>,
     pub header_gap_vertical: Option<Pixels>,
     pub header_gap_horizontal: Option<Pixels>,
+    pub default_width: Option<Pixels>,
+    pub min_width: Option<Pixels>,
     pub sizes: Option<SliderSizeScale>,
 }
 
@@ -5952,6 +7172,12 @@ impl RangeSliderOverrides {
         }
         if let Some(value) = self.header_gap_horizontal {
             current.header_gap_horizontal = value;
+        }
+        if let Some(value) = self.default_width {
+            current.default_width = value;
+        }
+        if let Some(value) = self.min_width {
+            current.min_width = value;
         }
         if let Some(value) = self.sizes {
             current.sizes = value;
@@ -5990,6 +7216,10 @@ pub struct TabsOverrides {
     pub panel_bg: Option<Hsla>,
     pub panel_border: Option<Hsla>,
     pub panel_fg: Option<Hsla>,
+    pub root_gap: Option<Pixels>,
+    pub list_gap: Option<Pixels>,
+    pub list_padding: Option<Pixels>,
+    pub panel_padding: Option<Pixels>,
 }
 
 impl TabsOverrides {
@@ -6024,6 +7254,18 @@ impl TabsOverrides {
         if let Some(value) = &self.panel_fg {
             current.panel_fg = value.clone();
         }
+        if let Some(value) = self.root_gap {
+            current.root_gap = value;
+        }
+        if let Some(value) = self.list_gap {
+            current.list_gap = value;
+        }
+        if let Some(value) = self.list_padding {
+            current.list_padding = value;
+        }
+        if let Some(value) = self.panel_padding {
+            current.panel_padding = value;
+        }
         current
     }
 }
@@ -6038,6 +7280,8 @@ pub struct PaginationOverrides {
     pub item_hover_bg: Option<Hsla>,
     pub item_disabled_fg: Option<Hsla>,
     pub dots_fg: Option<Hsla>,
+    pub root_gap: Option<Pixels>,
+    pub sizes: Option<PaginationSizeScale>,
 }
 
 impl PaginationOverrides {
@@ -6066,6 +7310,12 @@ impl PaginationOverrides {
         if let Some(value) = &self.dots_fg {
             current.dots_fg = value.clone();
         }
+        if let Some(value) = self.root_gap {
+            current.root_gap = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
+        }
         current
     }
 }
@@ -6076,6 +7326,8 @@ pub struct BreadcrumbsOverrides {
     pub item_current_fg: Option<Hsla>,
     pub separator: Option<Hsla>,
     pub item_hover_bg: Option<Hsla>,
+    pub root_gap: Option<Pixels>,
+    pub sizes: Option<BreadcrumbsSizeScale>,
 }
 
 impl BreadcrumbsOverrides {
@@ -6091,6 +7343,12 @@ impl BreadcrumbsOverrides {
         }
         if let Some(value) = &self.item_hover_bg {
             current.item_hover_bg = value.clone();
+        }
+        if let Some(value) = self.root_gap {
+            current.root_gap = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
         }
         current
     }
@@ -6119,6 +7377,7 @@ pub struct TableOverrides {
     pub pagination_padding_y: Option<Pixels>,
     pub pagination_gap: Option<Pixels>,
     pub virtualization_padding: Option<Pixels>,
+    pub min_viewport_height: Option<Pixels>,
     pub sizes: Option<TableSizeScale>,
 }
 
@@ -6187,6 +7446,9 @@ impl TableOverrides {
         if let Some(value) = self.virtualization_padding {
             current.virtualization_padding = value;
         }
+        if let Some(value) = self.min_viewport_height {
+            current.min_viewport_height = value;
+        }
         if let Some(value) = self.sizes {
             current.sizes = value;
         }
@@ -6211,6 +7473,11 @@ pub struct StepperOverrides {
     pub panel_bg: Option<Hsla>,
     pub panel_border: Option<Hsla>,
     pub panel_fg: Option<Hsla>,
+    pub root_gap: Option<Pixels>,
+    pub steps_gap_vertical: Option<Pixels>,
+    pub text_gap: Option<Pixels>,
+    pub panel_margin_top: Option<Pixels>,
+    pub sizes: Option<StepperSizeScale>,
 }
 
 impl StepperOverrides {
@@ -6260,6 +7527,21 @@ impl StepperOverrides {
         if let Some(value) = &self.panel_fg {
             current.panel_fg = value.clone();
         }
+        if let Some(value) = self.root_gap {
+            current.root_gap = value;
+        }
+        if let Some(value) = self.steps_gap_vertical {
+            current.steps_gap_vertical = value;
+        }
+        if let Some(value) = self.text_gap {
+            current.text_gap = value;
+        }
+        if let Some(value) = self.panel_margin_top {
+            current.panel_margin_top = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
+        }
         current
     }
 }
@@ -6279,6 +7561,14 @@ pub struct TimelineOverrides {
     pub body: Option<Hsla>,
     pub card_bg: Option<Hsla>,
     pub card_border: Option<Hsla>,
+    pub root_gap: Option<Pixels>,
+    pub row_gap: Option<Pixels>,
+    pub content_gap: Option<Pixels>,
+    pub card_margin_top: Option<Pixels>,
+    pub row_padding_y: Option<Pixels>,
+    pub line_min_height: Option<Pixels>,
+    pub line_extra_height: Option<Pixels>,
+    pub sizes: Option<TimelineSizeScale>,
 }
 
 impl TimelineOverrides {
@@ -6321,6 +7611,30 @@ impl TimelineOverrides {
         }
         if let Some(value) = &self.card_border {
             current.card_border = value.clone();
+        }
+        if let Some(value) = self.root_gap {
+            current.root_gap = value;
+        }
+        if let Some(value) = self.row_gap {
+            current.row_gap = value;
+        }
+        if let Some(value) = self.content_gap {
+            current.content_gap = value;
+        }
+        if let Some(value) = self.card_margin_top {
+            current.card_margin_top = value;
+        }
+        if let Some(value) = self.row_padding_y {
+            current.row_padding_y = value;
+        }
+        if let Some(value) = self.line_min_height {
+            current.line_min_height = value;
+        }
+        if let Some(value) = self.line_extra_height {
+            current.line_extra_height = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
         }
         current
     }
@@ -6399,6 +7713,7 @@ pub struct ComponentOverrides {
     pub app_shell: AppShellOverrides,
     pub title_bar: TitleBarOverrides,
     pub sidebar: SidebarOverrides,
+    pub markdown: MarkdownOverrides,
     pub text: TextOverrides,
     pub title: TitleOverrides,
     pub paper: PaperOverrides,
@@ -6445,6 +7760,7 @@ impl ComponentOverrides {
             app_shell: self.app_shell.apply(current.app_shell),
             title_bar: self.title_bar.apply(current.title_bar),
             sidebar: self.sidebar.apply(current.sidebar),
+            markdown: self.markdown.apply(current.markdown),
             text: self.text.apply(current.text),
             title: self.title.apply(current.title),
             paper: self.paper.apply(current.paper),

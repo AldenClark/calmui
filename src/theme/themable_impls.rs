@@ -1,21 +1,21 @@
 use crate::components::{
     Accordion, ActionIcon, Alert, AppShell, Badge, Breadcrumbs, Button, ButtonGroup, Checkbox,
-    CheckboxGroup, Chip, ChipGroup, Divider, Drawer, HoverCard, LoadingOverlay, Menu, Modal,
-    ModalLayer, MultiSelect, NumberInput, Overlay, Pagination, Paper, PasswordInput, PinInput,
-    Popover, Progress, Radio, RadioGroup, RangeSlider, Rating, ScrollArea, SegmentedControl,
-    Select, Slider, Stepper, Switch, Table, Tabs, Text, TextInput, Textarea, Timeline, Title,
-    ToastLayer, Tooltip, Tree,
+    CheckboxGroup, Chip, ChipGroup, Divider, Drawer, HoverCard, LoadingOverlay, Markdown, Menu,
+    Modal, ModalLayer, MultiSelect, NumberInput, Overlay, Pagination, Paper, PasswordInput,
+    PinInput, Popover, Progress, Radio, RadioGroup, RangeSlider, Rating, ScrollArea,
+    SegmentedControl, Select, Sidebar, Slider, Stepper, Switch, Table, Tabs, Text, TextInput,
+    Textarea, Timeline, Title, TitleBar, ToastLayer, Tooltip, Tree,
 };
 
 use super::{
     AccordionOverrides, ActionIconOverrides, AppShellOverrides, BadgeOverrides,
     BreadcrumbsOverrides, ButtonOverrides, CheckboxOverrides, ChipOverrides, DividerOverrides,
-    DrawerOverrides, HoverCardOverrides, LoadingOverlayOverrides, MenuOverrides, ModalOverrides,
-    NumberInputOverrides, OverlayOverrides, PaginationOverrides, PaperOverrides, PopoverOverrides,
-    ProgressOverrides, RadioOverrides, RangeSliderOverrides, RatingOverrides, ScrollAreaOverrides,
-    SegmentedControlOverrides, SelectOverrides, SliderOverrides, StepperOverrides, SwitchOverrides,
-    TableOverrides, TabsOverrides, TextOverrides, TextareaOverrides, TimelineOverrides,
-    TreeOverrides,
+    DrawerOverrides, HoverCardOverrides, LoadingOverlayOverrides, MarkdownOverrides, MenuOverrides,
+    ModalOverrides, NumberInputOverrides, OverlayOverrides, PaginationOverrides, PaperOverrides,
+    PopoverOverrides, ProgressOverrides, RadioOverrides, RangeSliderOverrides, RatingOverrides,
+    ScrollAreaOverrides, SegmentedControlOverrides, SelectOverrides, SidebarOverrides,
+    SliderOverrides, StepperOverrides, SwitchOverrides, TableOverrides, TabsOverrides,
+    TextOverrides, TextareaOverrides, TimelineOverrides, TitleBarOverrides, TreeOverrides,
 };
 
 crate::impl_themable!(Button, button, ButtonOverrides);
@@ -50,6 +50,9 @@ crate::impl_themable!(Divider, divider, DividerOverrides);
 crate::impl_themable!(ScrollArea, scroll_area, ScrollAreaOverrides);
 crate::impl_themable!(Drawer, drawer, DrawerOverrides);
 crate::impl_themable!(AppShell, app_shell, AppShellOverrides);
+crate::impl_themable!(Sidebar, sidebar, SidebarOverrides);
+crate::impl_themable!(TitleBar, title_bar, TitleBarOverrides);
+crate::impl_themable!(Markdown, markdown, MarkdownOverrides);
 crate::impl_themable!(Text, text, TextOverrides);
 crate::impl_themable!(Title, title, super::TitleOverrides);
 crate::impl_themable!(Paper, paper, PaperOverrides);

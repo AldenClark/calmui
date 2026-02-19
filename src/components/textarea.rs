@@ -20,6 +20,7 @@ use crate::style::{FieldLayout, Radius, Size, Variant};
 
 use super::Stack;
 use super::control;
+use super::field_variant::FieldVariantRuntime;
 use super::text_input_actions::{
     CopySelection, CutSelection, DeleteBackward, DeleteForward, InsertNewline, MoveDown, MoveEnd,
     MoveHome, MoveLeft, MoveRight, MoveUp, PasteClipboard, SelectAll, SelectDown, SelectEnd,
@@ -56,6 +57,7 @@ struct TextareaImeHandler {
     line_height: f32,
     vertical_padding: f32,
     horizontal_padding: f32,
+    content_width_fallback: f32,
     font_size: f32,
 }
 
@@ -333,7 +335,11 @@ impl InputHandler for TextareaImeHandler {
     ) -> Option<Bounds<gpui::Pixels>> {
         let value = self.current_value();
         let range = Self::char_range_from_utf16(&value, range_utf16);
-        let content_width = Textarea::content_width_for_box(&self.id, self.horizontal_padding);
+        let content_width = Textarea::content_width_for_box(
+            &self.id,
+            self.horizontal_padding,
+            self.content_width_fallback,
+        );
         let wrapped_lines =
             Textarea::wrapped_lines_for_width(&value, content_width, window, self.font_size);
         let (start_line, start_col) = Textarea::caret_visual_position(&wrapped_lines, range.start);
@@ -379,6 +385,7 @@ impl InputHandler for TextareaImeHandler {
             self.line_height,
             self.vertical_padding,
             self.horizontal_padding,
+            self.content_width_fallback,
         );
         Some(Self::utf16_from_char(&value, char_index))
     }
@@ -776,6 +783,7 @@ impl Textarea {
         line_height: f32,
         vertical_padding: f32,
         horizontal_padding: f32,
+        content_width_fallback: f32,
     ) -> usize {
         let (box_origin_x, box_origin_y, _width, _height) = Self::box_geometry(id);
         let (content_origin_x, content_origin_y, content_width, _content_height) =
@@ -788,7 +796,7 @@ impl Textarea {
         let content_width = if has_content_metrics {
             content_width.max(1.0)
         } else {
-            Self::content_width_for_box(id, horizontal_padding)
+            Self::content_width_for_box(id, horizontal_padding, content_width_fallback)
         };
         let wrapped_lines = Self::wrapped_lines_for_width(value, content_width, window, font_size);
 
@@ -937,7 +945,7 @@ impl Textarea {
         )
     }
 
-    fn content_width_for_box(id: &str, horizontal_padding: f32) -> f32 {
+    fn content_width_for_box(id: &str, horizontal_padding: f32, fallback_width: f32) -> f32 {
         let measured_width = control::f32_state(id, "content-width", None, 0.0);
         if measured_width > 0.0 {
             return measured_width.max(1.0);
@@ -945,7 +953,7 @@ impl Textarea {
 
         let (_, _, width, _) = Self::box_geometry(id);
         if width <= 0.0 {
-            return 240.0;
+            return fallback_width.max(1.0);
         }
         let border = 1.0f32;
         (width - (horizontal_padding + border) * 2.0).max(1.0)
@@ -1153,8 +1161,10 @@ impl Textarea {
         let line_height = self.line_height_px();
         let vertical_padding = self.vertical_padding_px();
         let horizontal_padding = self.horizontal_padding_px();
+        let content_width_fallback = f32::from(tokens.content_width_fallback);
         let font_size = self.font_size_px();
-        let content_width = Self::content_width_for_box(&self.id, horizontal_padding);
+        let content_width =
+            Self::content_width_for_box(&self.id, horizontal_padding, content_width_fallback);
         let wrapped_lines =
             Self::wrapped_lines_for_width(&current_value, content_width, window, font_size);
         let (rows, should_scroll) = self.resolved_rows(wrapped_lines.len());
@@ -1193,20 +1203,29 @@ impl Textarea {
             .gap_0()
             .w_full()
             .h(px(box_height))
-            .bg(resolve_hsla(&self.theme, &tokens.bg))
+            .bg(FieldVariantRuntime::control_bg(
+                resolve_hsla(&self.theme, &tokens.bg),
+                self.variant,
+            ))
             .text_color(resolve_hsla(&self.theme, &tokens.fg))
             .border(super::utils::quantized_stroke_px(window, 1.0));
 
         input = apply_field_size(input, tokens.sizes.for_size(self.size));
         input = apply_radius(&self.theme, input, self.radius);
 
-        let border = if self.error.is_some() {
+        let base_border = if self.error.is_some() {
             resolve_hsla(&self.theme, &tokens.border_error)
         } else if is_focused {
             resolve_hsla(&self.theme, &tokens.border_focus)
         } else {
             resolve_hsla(&self.theme, &tokens.border)
         };
+        let border = FieldVariantRuntime::control_border(
+            base_border,
+            self.variant,
+            is_focused,
+            self.error.is_some(),
+        );
         input = input.border_color(border);
 
         if should_scroll {
@@ -1284,6 +1303,8 @@ impl Textarea {
         let vertical_padding_for_mouse_move = vertical_padding;
         let horizontal_padding_for_click = horizontal_padding;
         let horizontal_padding_for_mouse_move = horizontal_padding;
+        let content_width_fallback_for_click = content_width_fallback;
+        let content_width_fallback_for_mouse_move = content_width_fallback;
         let font_size_for_click = font_size;
         let font_size_for_mouse_move = font_size;
         let value_controlled_for_mouse = self.value_controlled;
@@ -1306,6 +1327,7 @@ impl Textarea {
                     line_height_for_click,
                     vertical_padding_for_click,
                     horizontal_padding_for_click,
+                    content_width_fallback_for_click,
                 );
                 let len = current_value_for_click.chars().count();
                 let current_caret =
@@ -1349,6 +1371,7 @@ impl Textarea {
                 line_height_for_mouse_move,
                 vertical_padding_for_mouse_move,
                 horizontal_padding_for_mouse_move,
+                content_width_fallback_for_mouse_move,
             );
             let anchor = control::usize_state(&id_for_mouse_move, "selection-anchor", None, caret);
             control::set_usize_state(&id_for_mouse_move, "caret-index", caret);
@@ -1646,8 +1669,11 @@ impl Textarea {
                             rendered_value.clone(),
                         );
                         let mut state = Self::editor_state_for(&input_id, &current_value);
-                        let content_width =
-                            Self::content_width_for_box(&input_id, horizontal_padding);
+                        let content_width = Self::content_width_for_box(
+                            &input_id,
+                            horizontal_padding,
+                            content_width_fallback,
+                        );
                         let wrapped_lines = Self::wrapped_lines_for_width(
                             &current_value,
                             content_width,
@@ -1694,8 +1720,11 @@ impl Textarea {
                             rendered_value.clone(),
                         );
                         let mut state = Self::editor_state_for(&input_id, &current_value);
-                        let content_width =
-                            Self::content_width_for_box(&input_id, horizontal_padding);
+                        let content_width = Self::content_width_for_box(
+                            &input_id,
+                            horizontal_padding,
+                            content_width_fallback,
+                        );
                         let wrapped_lines = Self::wrapped_lines_for_width(
                             &current_value,
                             content_width,
@@ -1741,8 +1770,11 @@ impl Textarea {
                             rendered_value.clone(),
                         );
                         let mut state = Self::editor_state_for(&input_id, &current_value);
-                        let content_width =
-                            Self::content_width_for_box(&input_id, horizontal_padding);
+                        let content_width = Self::content_width_for_box(
+                            &input_id,
+                            horizontal_padding,
+                            content_width_fallback,
+                        );
                         let wrapped_lines = Self::wrapped_lines_for_width(
                             &current_value,
                             content_width,
@@ -1788,8 +1820,11 @@ impl Textarea {
                             rendered_value.clone(),
                         );
                         let mut state = Self::editor_state_for(&input_id, &current_value);
-                        let content_width =
-                            Self::content_width_for_box(&input_id, horizontal_padding);
+                        let content_width = Self::content_width_for_box(
+                            &input_id,
+                            horizontal_padding,
+                            content_width_fallback,
+                        );
                         let wrapped_lines = Self::wrapped_lines_for_width(
                             &current_value,
                             content_width,
@@ -1992,6 +2027,7 @@ impl Textarea {
                 line_height,
                 vertical_padding,
                 horizontal_padding,
+                content_width_fallback,
                 font_size,
             },
             cx,
@@ -2009,8 +2045,7 @@ impl Textarea {
             let mut content = Stack::vertical().w_full().gap_0();
             let (caret_line, caret_col) =
                 Self::caret_visual_position(&wrapped_lines, current_caret);
-            let selection_bg =
-                resolve_hsla(&self.theme, &self.theme.semantic.focus_ring).alpha(0.28);
+            let selection_bg = resolve_hsla(&self.theme, &tokens.selection_bg);
             for line in &wrapped_lines {
                 if let Some((selection_start, selection_end)) = selection {
                     let seg_start = selection_start.clamp(line.start_char, line.end_char);
@@ -2113,7 +2148,7 @@ impl Textarea {
                     .flex_none()
                     .w(super::utils::quantized_stroke_px(window, 1.5))
                     .h(px(self.caret_height_px()))
-                    .bg(resolve_hsla(&self.theme, &tokens.fg))
+                    .bg(resolve_hsla(&self.theme, &tokens.caret))
                     .rounded_sm()
                     .with_animation(
                         self.id.slot("caret-blink"),

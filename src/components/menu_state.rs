@@ -6,6 +6,8 @@ pub struct MenuStateInput<'a> {
     pub opened: Option<bool>,
     pub default_opened: bool,
     pub disabled: bool,
+    pub dropdown_width_fallback: f32,
+    pub dropdown_min_width: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -29,9 +31,9 @@ impl MenuState {
             opened: popup_state.opened,
             controlled: popup_state.controlled,
             dropdown_width_px: if width >= 1.0 {
-                width.max(180.0)
+                width.max(input.dropdown_min_width)
             } else {
-                220.0
+                input.dropdown_width_fallback.max(input.dropdown_min_width)
             },
         }
     }

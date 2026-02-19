@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
-    Window, div, px,
+    InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div,
+    px,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable};
@@ -10,28 +10,37 @@ use crate::id::ComponentId;
 use crate::motion::{MotionConfig, MotionLevel, TransitionPreset};
 use crate::style::{Radius, Size, Variant};
 
+use super::interaction_adapter::{ActivateHandler, PressAdapter, bind_press_adapter};
 use super::selection_state;
 use super::transition::{TransitionExt, TransitionStage};
 use super::utils::{
-    InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles, apply_radius,
-    interaction_style, resolve_hsla, wire_pressable,
+    InteractionStyles, apply_interaction_styles, apply_radius, interaction_style, resolve_hsla,
 };
 
 type ChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
 
 pub struct SegmentedControlItem {
     pub value: SharedString,
-    pub label: SharedString,
+    pub label: Option<SharedString>,
     pub disabled: bool,
 }
 
 impl SegmentedControlItem {
-    pub fn new(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+    pub fn new(value: impl Into<SharedString>) -> Self {
         Self {
             value: value.into(),
-            label: label.into(),
+            label: None,
             disabled: false,
         }
+    }
+
+    pub fn labeled(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+        Self::new(value).label(label)
+    }
+
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
     }
 
     pub fn disabled(mut self, value: bool) -> Self {
@@ -133,24 +142,12 @@ impl SegmentedControl {
         .map(SharedString::from)
     }
 
-    fn apply_item_size<T: Styled>(size: Size, node: T) -> T {
-        match size {
-            Size::Xs => node.text_xs().py_1().px_2(),
-            Size::Sm => node.text_sm().py_1().px_2p5(),
-            Size::Md => node.text_base().py_1p5().px_3(),
-            Size::Lg => node.text_lg().py_2().px_3p5(),
-            Size::Xl => node.text_xl().py_2p5().px_4(),
-        }
-    }
-
-    fn indicator_inset_px(size: Size) -> f32 {
-        match size {
-            Size::Xs => 0.5,
-            Size::Sm => 1.0,
-            Size::Md => 1.0,
-            Size::Lg => 1.5,
-            Size::Xl => 1.5,
-        }
+    fn size_preset(&self) -> crate::theme::SegmentedControlSizePreset {
+        self.theme
+            .components
+            .segmented_control
+            .sizes
+            .for_size(self.size)
     }
 
     fn active_bg(&self) -> gpui::Hsla {
@@ -203,8 +200,8 @@ impl RenderOnce for SegmentedControl {
         let tokens = self.theme.components.segmented_control.clone();
         let selected = self.resolved_value();
         let active_bg = self.active_bg();
-        let size = self.size;
-        let _full_width = self.full_width;
+        let size_preset = self.size_preset();
+        let full_width = self.full_width;
         let theme = self.theme.clone();
         let on_change = self.on_change.clone();
         let controlled = self.value_controlled;
@@ -215,7 +212,7 @@ impl RenderOnce for SegmentedControl {
         let divider = resolve_hsla(&theme, &tokens.border).alpha(0.6);
         let divider_width = super::utils::quantized_stroke_px(window, 1.0);
         let transparent = resolve_hsla(&theme, &gpui::transparent_black());
-        let indicator_inset = Self::indicator_inset_px(size);
+        let indicator_inset = f32::from(size_preset.indicator_inset);
         let selected_index = selected.as_ref().and_then(|value| {
             self.items
                 .iter()
@@ -223,13 +220,7 @@ impl RenderOnce for SegmentedControl {
         });
         let previous_index =
             selection_state::resolve_optional_usize(&self.id, "prev-index", None, None);
-        let divider_height = match size {
-            Size::Xs => 12.0,
-            Size::Sm => 14.0,
-            Size::Md => 16.0,
-            Size::Lg => 18.0,
-            Size::Xl => 20.0,
-        };
+        let divider_height = size_preset.divider_height;
 
         let items = self
             .items
@@ -263,6 +254,10 @@ impl RenderOnce for SegmentedControl {
                     } else {
                         resolve_hsla(&theme, &tokens.item_fg)
                     })
+                    .text_size(size_preset.font_size)
+                    .line_height(size_preset.line_height)
+                    .py(size_preset.padding_y)
+                    .px(size_preset.padding_x)
                     .bg(transparent);
 
                 if is_active {
@@ -308,18 +303,18 @@ impl RenderOnce for SegmentedControl {
                             .bottom_0()
                             .flex()
                             .items_center()
-                            .child(
-                                div()
-                                    .w(divider_width)
-                                    .h(gpui::px(divider_height))
-                                    .bg(divider),
-                            ),
+                            .child(div().w(divider_width).h(divider_height).bg(divider)),
                     );
                 }
 
-                segment = segment.child(div().relative().truncate().child(item.label.clone()));
+                if let Some(label) = item.label.clone() {
+                    segment = segment.child(div().relative().truncate().child(label));
+                }
 
-                segment = Self::apply_item_size(size, segment);
+                if full_width {
+                    segment = segment.flex_1();
+                }
+
                 segment = apply_radius(&self.theme, segment, self.radius);
 
                 if is_active {
@@ -338,7 +333,7 @@ impl RenderOnce for SegmentedControl {
                     } else {
                         hover_bg
                     };
-                    let click_handler: PressHandler = Rc::new(move |_: &ClickEvent, window, cx| {
+                    let activate_handler: ActivateHandler = Rc::new(move |window, cx| {
                         let _ = selection_state::apply_optional_usize(
                             &id,
                             "prev-index",
@@ -367,9 +362,10 @@ impl RenderOnce for SegmentedControl {
                     }
                     segment =
                         apply_interaction_styles(segment.cursor_pointer(), interaction_styles);
-                    segment = wire_pressable(
+                    segment = bind_press_adapter(
                         segment,
-                        PressableBehavior::new().on_click(Some(click_handler)),
+                        PressAdapter::new(self.id.slot_index("item", index.to_string()))
+                            .on_activate(Some(activate_handler)),
                     );
                 } else {
                     segment = segment.opacity(0.5).cursor_default();
@@ -383,20 +379,26 @@ impl RenderOnce for SegmentedControl {
             .id(root_id.slot("track"))
             .flex()
             .items_center()
-            .gap_0()
-            .p_0p5()
+            .gap(tokens.item_gap)
+            .p(tokens.track_padding)
             .bg(resolve_hsla(&theme, &tokens.bg))
             .children(items);
+        if full_width {
+            track = track.w_full();
+        }
 
         track = apply_radius(&self.theme, track, self.radius);
 
-        div()
+        let mut root = div()
             .id(root_id)
             .flex()
             .items_center()
             .justify_start()
-            .child(track)
-            .with_enter_transition(enter_id.slot("enter"), motion)
+            .child(track);
+        if full_width {
+            root = root.w_full();
+        }
+        root.with_enter_transition(enter_id.slot("enter"), motion)
     }
 }
 

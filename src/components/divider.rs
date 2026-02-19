@@ -1,6 +1,5 @@
 use gpui::{
     InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div,
-    px,
 };
 
 use crate::id::ComponentId;
@@ -93,12 +92,12 @@ impl RenderOnce for Divider {
                     };
 
                     let left_line = if left_flex == 0.0 {
-                        div().w(px(16.0)).h(line_thickness).bg(line)
+                        div().w(tokens.edge_span).h(line_thickness).bg(line)
                     } else {
                         div().flex_1().h(line_thickness).bg(line)
                     };
                     let right_line = if right_flex == 0.0 {
-                        div().w(px(16.0)).h(line_thickness).bg(line)
+                        div().w(tokens.edge_span).h(line_thickness).bg(line)
                     } else {
                         div().flex_1().h(line_thickness).bg(line)
                     };
@@ -109,9 +108,14 @@ impl RenderOnce for Divider {
                         .flex()
                         .flex_row()
                         .items_center()
-                        .gap_2()
+                        .gap(tokens.label_gap)
                         .child(left_line)
-                        .child(div().text_xs().text_color(label_color).child(label))
+                        .child(
+                            div()
+                                .text_size(tokens.label_size)
+                                .text_color(label_color)
+                                .child(label),
+                        )
                         .child(right_line)
                 } else {
                     div().id(self.id).w_full().h(line_thickness).bg(line)

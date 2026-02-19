@@ -11,11 +11,12 @@ use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
 use super::icon::Icon;
+use super::interaction_adapter::{PressAdapter, bind_press_adapter};
 use super::loader::{Loader, LoaderVariant};
 use super::transition::TransitionExt;
 use super::utils::{
-    PressHandler, PressableBehavior, apply_interaction_styles, apply_radius,
-    default_pressable_surface_styles, resolve_hsla, wire_pressable,
+    PressHandler, apply_interaction_styles, apply_radius, default_pressable_surface_styles,
+    resolve_hsla,
 };
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
@@ -118,24 +119,8 @@ impl ActionIcon {
         }
     }
 
-    fn box_size_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 22.0,
-            Size::Sm => 26.0,
-            Size::Md => 30.0,
-            Size::Lg => 36.0,
-            Size::Xl => 42.0,
-        }
-    }
-
-    fn icon_size_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 12.0,
-            Size::Sm => 14.0,
-            Size::Md => 16.0,
-            Size::Lg => 18.0,
-            Size::Xl => 20.0,
-        }
+    fn size_preset(&self) -> crate::theme::ActionIconSizePreset {
+        self.theme.components.action_icon.sizes.for_size(self.size)
     }
 }
 
@@ -176,11 +161,12 @@ impl RenderOnce for ActionIcon {
         let (bg_token, fg_token, border_token) = self.variant_tokens();
         let bg = resolve_hsla(&self.theme, &bg_token);
         let fg = resolve_hsla(&self.theme, &fg_token);
-        let size_px = self.box_size_px();
+        let size_preset = self.size_preset();
+        let size_px = f32::from(size_preset.box_size);
 
         let fallback = Icon::named("dots")
             .with_id(self.id.slot("fallback"))
-            .size(self.icon_size_px())
+            .size(f32::from(size_preset.icon_size))
             .color(fg)
             .into_any_element();
 
@@ -226,9 +212,9 @@ impl RenderOnce for ActionIcon {
                     resolve_hsla(&self.theme, &self.theme.semantic.focus_ring),
                 ),
             );
-            root = wire_pressable(
+            root = bind_press_adapter(
                 root,
-                PressableBehavior::new()
+                PressAdapter::new(self.id.clone())
                     .on_click(self.on_click.clone())
                     .focus_handle(self.focus_handle.clone()),
             );

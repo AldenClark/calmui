@@ -485,7 +485,7 @@ impl ModalLayer {
 
         let mut panel = div()
             .id(self.id.slot("modal-panel"))
-            .w(px(entry.width_px()))
+            .w(px(entry.resolved_width_px(modal_tokens)))
             .max_w_full()
             .bg(panel_bg)
             .border(super::utils::quantized_stroke_px(window, 1.0))

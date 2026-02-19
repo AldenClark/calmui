@@ -101,22 +101,8 @@ impl Timeline {
         self
     }
 
-    fn bullet_size_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 14.0,
-            Size::Sm => 16.0,
-            Size::Md => 18.0,
-            Size::Lg => 22.0,
-            Size::Xl => 26.0,
-        }
-    }
-
-    fn line_width_px(&self) -> f32 {
-        match self.size {
-            Size::Xs | Size::Sm => 1.0,
-            Size::Md => 2.0,
-            Size::Lg | Size::Xl => 3.0,
-        }
+    fn size_preset(&self) -> crate::theme::TimelineSizePreset {
+        self.theme.components.timeline.sizes.for_size(self.size)
     }
 
     fn active_bullet_bg(&self) -> gpui::Hsla {
@@ -169,9 +155,10 @@ impl RenderOnce for Timeline {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = self.theme.components.timeline.clone();
+        let size_preset = self.size_preset();
         let theme = self.theme.clone();
-        let bullet_size = self.bullet_size_px();
-        let line_width = self.line_width_px();
+        let bullet_size = f32::from(size_preset.bullet_size);
+        let line_width = f32::from(size_preset.line_width);
         let active_bullet_bg = self.active_bullet_bg();
         let total_items = self.items.len();
         let active = self.active.min(total_items.saturating_sub(1));
@@ -188,7 +175,10 @@ impl RenderOnce for Timeline {
                 .with_enter_transition(self.id.slot("enter"), self.motion);
         }
 
-        let mut rows = Stack::vertical().id(self.id.clone()).w_full().gap_0();
+        let mut rows = Stack::vertical()
+            .id(self.id.clone())
+            .w_full()
+            .gap(tokens.root_gap);
         for (index, mut item) in self.items.into_iter().enumerate() {
             let is_done = index < active;
             let is_current = index == active;
@@ -241,7 +231,7 @@ impl RenderOnce for Timeline {
             let mut left_col = div()
                 .w(px(bullet_size))
                 .h_full()
-                .min_h(px(bullet_size + 8.0))
+                .min_h(px(bullet_size + f32::from(tokens.line_extra_height)))
                 .flex()
                 .flex_col()
                 .items_center()
@@ -252,7 +242,7 @@ impl RenderOnce for Timeline {
                         .mt(px(0.0))
                         .w(px(line_width))
                         .flex_1()
-                        .min_h(px(24.0))
+                        .min_h(tokens.line_min_height)
                         .bg(if is_done {
                             resolve_hsla(&theme, &tokens.line_active)
                         } else {
@@ -263,10 +253,11 @@ impl RenderOnce for Timeline {
 
             let mut right_col =
                 Stack::vertical()
-                    .gap_1()
+                    .gap(tokens.content_gap)
                     .min_w_0()
                     .child(div().children(item.title.map(|title| {
                         div()
+                            .text_size(size_preset.title_size)
                             .text_color(if is_current {
                                 resolve_hsla(&theme, &tokens.title_active)
                             } else {
@@ -282,15 +273,15 @@ impl RenderOnce for Timeline {
             if let Some(body) = item.body {
                 right_col = right_col.child(
                     div()
-                        .text_sm()
+                        .text_size(size_preset.body_size)
                         .text_color(resolve_hsla(&theme, &tokens.body))
                         .child(body),
                 );
             }
             if let Some(content) = item.content.take() {
                 let mut content_wrap = div()
-                    .mt_1()
-                    .p_2()
+                    .mt(tokens.card_margin_top)
+                    .p(size_preset.card_padding)
                     .border(super::utils::quantized_stroke_px(window, 1.0))
                     .border_color(resolve_hsla(&theme, &tokens.card_border))
                     .bg(resolve_hsla(&theme, &tokens.card_bg))
@@ -303,8 +294,8 @@ impl RenderOnce for Timeline {
                 Stack::horizontal()
                     .id(self.id.slot_index("item", index.to_string()))
                     .items_start()
-                    .gap_2()
-                    .py(px(0.0))
+                    .gap(tokens.row_gap)
+                    .py(tokens.row_padding_y)
                     .w_full()
                     .child(left_col)
                     .child(right_col),

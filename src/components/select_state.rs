@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use gpui::{ClickEvent, Window, px};
+use gpui::Window;
 
 use super::control;
 use super::popup_state::{self, PopupStateInput, PopupStateValue};
@@ -103,49 +103,52 @@ pub fn apply_single_option_commit(
     refresh
 }
 
-pub fn on_trigger_toggle(
-    id: &str,
-    opened_controlled: bool,
-    next_opened: bool,
-    event: &ClickEvent,
-    window: &Window,
-) -> bool {
-    if next_opened {
-        capture_dropdown_metrics(id, event, window);
-    }
-    apply_opened(id, opened_controlled, next_opened)
-}
-
 pub fn set_dropdown_width(id: &str, width_px: f32) {
     control::set_text_state(id, "dropdown-width-px", format!("{width_px:.2}"));
 }
 
-pub fn dropdown_width_px(id: &str) -> f32 {
-    let width = control::f32_state(id, "dropdown-width-px", None, 0.0);
-    if width >= 1.0 { width } else { 220.0 }
+pub fn set_trigger_metrics(id: &str, origin_y: f32, height: f32) {
+    control::set_f32_state(id, "trigger-origin-y", origin_y);
+    control::set_f32_state(id, "trigger-height", height);
 }
 
-pub fn capture_dropdown_metrics(id: &str, event: &ClickEvent, window: &Window) {
+pub fn dropdown_width_px(id: &str, fallback_width: f32) -> f32 {
+    let width = control::f32_state(id, "dropdown-width-px", None, 0.0);
+    if width >= 1.0 { width } else { fallback_width }
+}
+
+pub fn capture_dropdown_metrics_without_click(id: &str, window: &Window, preferred_height: f32) {
     control::set_bool_state(
         id,
         "dropdown-upward",
-        should_open_dropdown_upward(event, window),
+        should_open_dropdown_upward_from_trigger(id, window, preferred_height),
     );
-    if let ClickEvent::Keyboard(keyboard) = event {
-        control::set_f32_state(
-            id,
-            "dropdown-width-px",
-            f32::from(keyboard.bounds.size.width),
-        );
-    }
 }
 
-fn should_open_dropdown_upward(event: &ClickEvent, window: &Window) -> bool {
-    let click_y = event.position().y;
-    let viewport_height = window.viewport_size().height;
-    let space_above = click_y;
-    let space_below = viewport_height - click_y;
-    let preferred_height = px(260.0);
+pub fn on_trigger_toggle_without_click(
+    id: &str,
+    opened_controlled: bool,
+    next_opened: bool,
+    window: &Window,
+    preferred_height: f32,
+) -> bool {
+    if next_opened {
+        capture_dropdown_metrics_without_click(id, window, preferred_height);
+    }
+    apply_opened(id, opened_controlled, next_opened)
+}
+
+fn should_open_dropdown_upward_from_trigger(
+    id: &str,
+    window: &Window,
+    preferred_height: f32,
+) -> bool {
+    let trigger_origin_y = control::f32_state(id, "trigger-origin-y", None, 0.0);
+    let trigger_height = control::f32_state(id, "trigger-height", None, 0.0);
+    let anchor_y = trigger_origin_y + (trigger_height * 0.5);
+    let viewport_height = f32::from(window.viewport_size().height);
+    let space_above = anchor_y.max(0.0);
+    let space_below = (viewport_height - anchor_y).max(0.0);
 
     space_below < preferred_height && space_above > space_below
 }

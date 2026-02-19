@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, Styled, Window, div,
+    AnyElement, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
+    Window, div,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable};
@@ -11,11 +11,11 @@ use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
 use super::Stack;
+use super::interaction_adapter::{ActivateHandler, PressAdapter, bind_press_adapter};
 use super::selection_state;
 use super::transition::TransitionExt;
 use super::utils::{
-    InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles, apply_radius,
-    interaction_style, resolve_hsla, wire_pressable,
+    InteractionStyles, apply_interaction_styles, apply_radius, interaction_style, resolve_hsla,
 };
 
 type ChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
@@ -23,19 +23,28 @@ type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 
 pub struct TabItem {
     pub value: SharedString,
-    pub label: SharedString,
+    pub label: Option<SharedString>,
     pub disabled: bool,
     panel: Option<SlotRenderer>,
 }
 
 impl TabItem {
-    pub fn new(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+    pub fn new(value: impl Into<SharedString>) -> Self {
         Self {
             value: value.into(),
-            label: label.into(),
+            label: None,
             disabled: false,
             panel: None,
         }
+    }
+
+    pub fn labeled(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+        Self::new(value).label(label)
+    }
+
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
     }
 
     pub fn disabled(mut self, value: bool) -> Self {
@@ -209,6 +218,7 @@ impl RenderOnce for Tabs {
         let mut triggers: Vec<AnyElement> = Vec::new();
 
         for (index, mut item) in self.items.into_iter().enumerate() {
+            let tab_id = self.id.slot_index("tab", index.to_string());
             let is_active = selected
                 .as_ref()
                 .is_some_and(|value| value.as_ref() == item.value.as_ref());
@@ -222,7 +232,7 @@ impl RenderOnce for Tabs {
             }
 
             let mut trigger = div()
-                .id(self.id.slot_index("tab", index.to_string()))
+                .id(tab_id.clone())
                 .min_w_0()
                 .cursor_pointer()
                 .border(super::utils::quantized_stroke_px(window, 1.0))
@@ -242,8 +252,10 @@ impl RenderOnce for Tabs {
                     active_bg
                 } else {
                     resolve_hsla(&theme, &gpui::transparent_black())
-                })
-                .child(item.label.clone());
+                });
+            if let Some(label) = item.label.clone() {
+                trigger = trigger.child(label);
+            }
 
             trigger = Self::apply_tab_size(size, trigger);
             trigger = apply_radius(&self.theme, trigger, self.radius);
@@ -263,7 +275,7 @@ impl RenderOnce for Tabs {
                     hover_bg
                 };
                 let focus_ring = resolve_hsla(&theme, &theme.semantic.focus_ring);
-                let click_handler: PressHandler = Rc::new(move |_: &ClickEvent, window, cx| {
+                let activate_handler: ActivateHandler = Rc::new(move |window, cx| {
                     if selection_state::apply_optional_text(
                         &id,
                         "value",
@@ -288,9 +300,9 @@ impl RenderOnce for Tabs {
                 }
 
                 trigger = apply_interaction_styles(trigger.cursor_pointer(), interaction_styles);
-                trigger = wire_pressable(
+                trigger = bind_press_adapter(
                     trigger,
-                    PressableBehavior::new().on_click(Some(click_handler)),
+                    PressAdapter::new(tab_id.clone()).on_activate(Some(activate_handler)),
                 );
             } else {
                 trigger = trigger.opacity(0.55).cursor_default();
@@ -309,8 +321,8 @@ impl RenderOnce for Tabs {
         let mut list = Stack::horizontal()
             .id(self.id.slot("list"))
             .w_full()
-            .gap_0p5()
-            .p_0p5()
+            .gap(tokens.list_gap)
+            .p(tokens.list_padding)
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .bg(resolve_hsla(&theme, &tokens.list_bg))
             .border_color(resolve_hsla(&theme, &tokens.list_border))
@@ -324,14 +336,14 @@ impl RenderOnce for Tabs {
             .border_color(resolve_hsla(&theme, &tokens.panel_border))
             .bg(resolve_hsla(&theme, &tokens.panel_bg))
             .text_color(resolve_hsla(&theme, &tokens.panel_fg))
-            .p_4()
+            .p(tokens.panel_padding)
             .child(panel_content);
         panel = apply_radius(&self.theme, panel, self.radius);
 
         Stack::vertical()
             .id(self.id.clone())
             .w_full()
-            .gap_2()
+            .gap(tokens.root_gap)
             .child(list)
             .child(panel)
             .with_enter_transition(self.id.slot("enter"), motion)

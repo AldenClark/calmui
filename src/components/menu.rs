@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, Styled, Window, canvas, div, px,
+    AnyElement, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
+    Window, canvas, div, px,
 };
 
 use crate::contracts::MotionAware;
@@ -11,13 +11,11 @@ use crate::motion::MotionConfig;
 
 use super::Stack;
 use super::icon::Icon;
+use super::interaction_adapter::{ActivateHandler, PressAdapter, bind_press_adapter};
 use super::menu_state::{self, MenuState, MenuStateInput};
 use super::popup::{PopupPlacement, anchored_host};
 use super::transition::TransitionExt;
-use super::utils::{
-    InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles,
-    interaction_style, resolve_hsla, wire_pressable,
-};
+use super::utils::{InteractionStyles, apply_interaction_styles, interaction_style, resolve_hsla};
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 type ItemClickHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
@@ -26,19 +24,28 @@ type OpenChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MenuItem {
     pub value: SharedString,
-    pub label: SharedString,
+    pub label: Option<SharedString>,
     pub disabled: bool,
     pub left_icon: Option<SharedString>,
 }
 
 impl MenuItem {
-    pub fn new(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+    pub fn new(value: impl Into<SharedString>) -> Self {
         Self {
             value: value.into(),
-            label: label.into(),
+            label: None,
             disabled: false,
             left_icon: None,
         }
+    }
+
+    pub fn labeled(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+        Self::new(value).label(label)
+    }
+
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
     }
 
     pub fn disabled(mut self, value: bool) -> Self {
@@ -169,32 +176,31 @@ impl Menu {
             .iter()
             .cloned()
             .map(|item| {
+                let row_id = self.id.slot_index("item", item.value.to_string());
                 let mut row = div()
-                    .id(self.id.slot_index("item", (item.value).to_string()))
+                    .id(row_id.clone())
                     .flex()
                     .items_center()
-                    .gap_2()
-                    .px(px(10.0))
-                    .py(px(8.0))
-                    .rounded_sm()
-                    .text_sm()
+                    .gap(tokens.item_gap)
+                    .px(tokens.item_padding_x)
+                    .py(tokens.item_padding_y)
+                    .rounded(tokens.item_radius)
+                    .text_size(tokens.item_size)
                     .text_color(resolve_hsla(&self.theme, &tokens.item_fg));
 
                 if let Some(icon) = item.left_icon.clone() {
                     row = row.child(
                         Icon::named(icon.to_string())
                             .with_id(self.id.slot_index("item-icon", (item.value).to_string()))
-                            .size(14.0)
+                            .size(f32::from(tokens.item_icon_size))
                             .color(resolve_hsla(&self.theme, &tokens.icon)),
                     );
                 }
-                row = row.child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .child(item.label.clone()),
-                );
+                let mut label_node = div().flex_1().min_w_0().truncate();
+                if let Some(label) = item.label.clone() {
+                    label_node = label_node.child(label);
+                }
+                row = row.child(label_node);
 
                 if item.disabled {
                     row = row
@@ -208,8 +214,8 @@ impl Menu {
                     let menu_id = menu_id.clone();
                     let hover_bg = resolve_hsla(&self.theme, &tokens.item_hover_bg);
                     let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
-                    let click_handler: PressHandler = Rc::new(
-                        move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
+                    let activate_handler: ActivateHandler =
+                        Rc::new(move |window: &mut Window, cx: &mut gpui::App| {
                             if let Some(handler) = on_item_click.as_ref() {
                                 (handler)(value.clone(), window, cx);
                             }
@@ -226,8 +232,7 @@ impl Menu {
                                     (handler)(false, window, cx);
                                 }
                             }
-                        },
-                    );
+                        });
                     row = apply_interaction_styles(
                         row.cursor_pointer(),
                         InteractionStyles::new()
@@ -235,8 +240,10 @@ impl Menu {
                             .active(interaction_style(move |style| style.bg(press_bg)))
                             .focus(interaction_style(move |style| style.bg(hover_bg))),
                     );
-                    row =
-                        wire_pressable(row, PressableBehavior::new().on_click(Some(click_handler)));
+                    row = bind_press_adapter(
+                        row,
+                        PressAdapter::new(row_id.clone()).on_activate(Some(activate_handler)),
+                    );
                 }
 
                 row
@@ -247,9 +254,9 @@ impl Menu {
             .id(self.id.slot("dropdown"))
             .w(px(dropdown_width_px))
             .max_w_full()
-            .p_1p5()
-            .gap_1()
-            .rounded_md()
+            .p(tokens.dropdown_padding)
+            .gap(tokens.dropdown_gap)
+            .rounded(tokens.dropdown_radius)
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.dropdown_border))
             .bg(resolve_hsla(&self.theme, &tokens.dropdown_bg))
@@ -298,11 +305,14 @@ impl MotionAware for Menu {
 impl RenderOnce for Menu {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
+        let tokens = &self.theme.components.menu;
         let state = MenuState::resolve(MenuStateInput {
             id: &self.id,
             opened: self.opened,
             default_opened: self.default_opened,
             disabled: self.disabled,
+            dropdown_width_fallback: f32::from(tokens.dropdown_width_fallback),
+            dropdown_min_width: f32::from(tokens.dropdown_min_width),
         });
         let opened = state.opened;
         let is_controlled = state.controlled;
@@ -333,36 +343,32 @@ impl RenderOnce for Menu {
         if self.disabled {
             trigger = trigger.opacity(0.55).cursor_default();
         } else {
-            let click_handler = if let Some(handler) = self.on_open_change.clone() {
+            let activate_handler = if let Some(handler) = self.on_open_change.clone() {
                 let id = self.id.clone();
                 let next = !opened;
-                Some(Rc::new(
-                    move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
-                        if menu_state::on_trigger_toggle(&id, is_controlled, next) {
-                            window.refresh();
-                        }
-                        (handler)(next, window, cx);
-                    },
-                ) as PressHandler)
+                Some(Rc::new(move |window: &mut Window, cx: &mut gpui::App| {
+                    if menu_state::on_trigger_toggle(&id, is_controlled, next) {
+                        window.refresh();
+                    }
+                    (handler)(next, window, cx);
+                }) as ActivateHandler)
             } else if !is_controlled {
                 let id = self.id.clone();
                 let next = !opened;
-                Some(Rc::new(
-                    move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
-                        if menu_state::on_trigger_toggle(&id, false, next) {
-                            window.refresh();
-                        }
-                    },
-                ) as PressHandler)
+                Some(Rc::new(move |window: &mut Window, _cx: &mut gpui::App| {
+                    if menu_state::on_trigger_toggle(&id, false, next) {
+                        window.refresh();
+                    }
+                }) as ActivateHandler)
             } else {
                 None
             };
 
-            if let Some(click_handler) = click_handler {
+            if let Some(activate_handler) = activate_handler {
                 trigger = trigger.cursor_pointer();
-                trigger = wire_pressable(
+                trigger = bind_press_adapter(
                     trigger,
-                    PressableBehavior::new().on_click(Some(click_handler)),
+                    PressAdapter::new(self.id.slot("trigger")).on_activate(Some(activate_handler)),
                 );
             } else {
                 trigger = trigger.cursor_default();

@@ -32,7 +32,7 @@ pub struct Modal {
     default_opened: bool,
     title: Option<SharedString>,
     body: Option<SharedString>,
-    width_px: f32,
+    width_px: Option<f32>,
     kind: ModalKind,
     close_button: bool,
     close_on_click_outside: bool,
@@ -61,7 +61,7 @@ impl Modal {
             default_opened: false,
             title: None,
             body: None,
-            width_px: 560.0,
+            width_px: None,
             kind: ModalKind::Custom,
             close_button: true,
             close_on_click_outside: true,
@@ -136,7 +136,7 @@ impl Modal {
     }
 
     pub fn width(mut self, value: f32) -> Self {
-        self.width_px = value.max(240.0);
+        self.width_px = Some(value.max(0.0));
         self
     }
 
@@ -232,8 +232,10 @@ impl Modal {
         self.body.as_ref()
     }
 
-    pub(crate) fn width_px(&self) -> f32 {
+    pub(crate) fn resolved_width_px(&self, tokens: &crate::theme::ModalTokens) -> f32 {
         self.width_px
+            .unwrap_or_else(|| f32::from(tokens.default_width))
+            .max(f32::from(tokens.min_width))
     }
 
     pub(crate) fn close_button_enabled(&self) -> bool {
@@ -395,6 +397,7 @@ impl Modal {
 
         let is_controlled = self.opened.is_some();
         let tokens = &self.theme.components.modal;
+        let panel_width = self.resolved_width_px(tokens);
         let close_on_click_outside = self.close_on_click_outside;
         let id_for_overlay = self.id.clone();
         let close_callbacks_for_overlay = self.on_close.clone();
@@ -464,7 +467,7 @@ impl Modal {
 
         let mut panel = div()
             .id(self.id.slot("panel"))
-            .w(px(self.width_px))
+            .w(px(panel_width))
             .max_w_full()
             .rounded(tokens.panel_radius)
             .border(super::utils::quantized_stroke_px(window, 1.0))

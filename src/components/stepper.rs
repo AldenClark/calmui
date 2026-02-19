@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window, div, px,
+    AnyElement, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
+    Window, div, px,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable};
@@ -11,6 +11,7 @@ use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
 
 use super::Stack;
+use super::interaction_adapter::{ActivateHandler, PressAdapter, bind_press_adapter};
 use super::selection_state;
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
@@ -150,32 +151,8 @@ impl Stepper {
         .min(max_index)
     }
 
-    fn indicator_size_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 18.0,
-            Size::Sm => 20.0,
-            Size::Md => 24.0,
-            Size::Lg => 28.0,
-            Size::Xl => 32.0,
-        }
-    }
-
-    fn line_thickness_px(&self) -> f32 {
-        match self.size {
-            Size::Xs | Size::Sm => 1.0,
-            Size::Md => 2.0,
-            Size::Lg | Size::Xl => 3.0,
-        }
-    }
-
-    fn connector_span_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 20.0,
-            Size::Sm => 24.0,
-            Size::Md => 28.0,
-            Size::Lg => 32.0,
-            Size::Xl => 36.0,
-        }
+    fn size_preset(&self) -> crate::theme::StepperSizePreset {
+        self.theme.components.stepper.sizes.for_size(self.size)
     }
 
     fn active_bg(&self) -> gpui::Hsla {
@@ -231,11 +208,12 @@ impl RenderOnce for Stepper {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = self.theme.components.stepper.clone();
+        let size_preset = self.size_preset();
         let theme = self.theme.clone();
         let active = self.resolved_active();
-        let indicator_size = self.indicator_size_px();
-        let connector_thickness = self.line_thickness_px();
-        let connector_span = self.connector_span_px();
+        let indicator_size = f32::from(size_preset.indicator_size);
+        let connector_thickness = f32::from(size_preset.connector_thickness);
+        let connector_span = f32::from(size_preset.connector_span);
         let on_change = self.on_change.clone();
         let active_bg = self.active_bg();
         let controlled = self.active_controlled;
@@ -306,23 +284,23 @@ impl RenderOnce for Stepper {
                     .child(indicator_text);
                 indicator = apply_radius(&self.theme, indicator, Radius::Pill);
 
-                let mut text_block =
-                    Stack::vertical()
-                        .gap_0p5()
-                        .child(div().children(step.label.clone().map(|label| {
-                            div()
-                                .text_color(resolve_hsla(&theme, &tokens.label))
-                                .font_weight(if is_active {
-                                    gpui::FontWeight::SEMIBOLD
-                                } else {
-                                    gpui::FontWeight::NORMAL
-                                })
-                                .child(label)
-                        })));
+                let mut text_block = Stack::vertical().gap(tokens.text_gap).child(div().children(
+                    step.label.clone().map(|label| {
+                        div()
+                            .text_size(size_preset.label_size)
+                            .text_color(resolve_hsla(&theme, &tokens.label))
+                            .font_weight(if is_active {
+                                gpui::FontWeight::SEMIBOLD
+                            } else {
+                                gpui::FontWeight::NORMAL
+                            })
+                            .child(label)
+                    }),
+                ));
                 if let Some(description) = step.description.clone() {
                     text_block = text_block.child(
                         div()
-                            .text_sm()
+                            .text_size(size_preset.description_size)
                             .text_color(resolve_hsla(&theme, &tokens.description))
                             .child(description),
                     );
@@ -333,8 +311,8 @@ impl RenderOnce for Stepper {
                         StepperContentPosition::Below => Stack::vertical()
                             .id(self.id.slot_index("step", index.to_string()))
                             .items_center()
-                            .gap_1()
-                            .p_1()
+                            .gap(size_preset.item_gap_vertical)
+                            .p(size_preset.item_padding)
                             .flex_1()
                             .min_w_0()
                             .child(indicator)
@@ -342,8 +320,8 @@ impl RenderOnce for Stepper {
                         StepperContentPosition::Right => Stack::horizontal()
                             .id(self.id.slot_index("step", index.to_string()))
                             .items_center()
-                            .gap_2()
-                            .p_1()
+                            .gap(size_preset.item_gap_horizontal)
+                            .p(size_preset.item_padding)
                             .flex_1()
                             .min_w_0()
                             .child(indicator)
@@ -352,8 +330,8 @@ impl RenderOnce for Stepper {
                     GroupOrientation::Vertical => Stack::horizontal()
                         .id(self.id.slot_index("step", index.to_string()))
                         .items_start()
-                        .gap_2()
-                        .p_1()
+                        .gap(size_preset.item_gap_horizontal)
+                        .p(size_preset.item_padding)
                         .w_full()
                         .child(indicator)
                         .child(text_block),
@@ -367,17 +345,20 @@ impl RenderOnce for Stepper {
                     let id = stepper_id.clone();
                     let step_value = step.value.clone();
                     let hover_bg = resolve_hsla(&theme, &tokens.step_bg).alpha(0.6);
-                    item = item
-                        .cursor_pointer()
-                        .hover(move |style| style.bg(hover_bg))
-                        .on_click(move |_: &ClickEvent, window, cx| {
-                            if selection_state::apply_usize(&id, "active", controlled, index) {
-                                window.refresh();
-                            }
-                            if let Some(handler) = on_change.as_ref() {
-                                (handler)(index, step_value.clone(), window, cx);
-                            }
-                        });
+                    let activate_handler: ActivateHandler = Rc::new(move |window, cx| {
+                        if selection_state::apply_usize(&id, "active", controlled, index) {
+                            window.refresh();
+                        }
+                        if let Some(handler) = on_change.as_ref() {
+                            (handler)(index, step_value.clone(), window, cx);
+                        }
+                    });
+                    item = item.cursor_pointer().hover(move |style| style.bg(hover_bg));
+                    item = bind_press_adapter(
+                        item,
+                        PressAdapter::new(self.id.slot_index("step", index.to_string()))
+                            .on_activate(Some(activate_handler)),
+                    );
                 }
 
                 item
@@ -414,7 +395,7 @@ impl RenderOnce for Stepper {
                 let mut col = Stack::vertical()
                     .id(self.id.slot("steps-col"))
                     .w_full()
-                    .gap_1p5();
+                    .gap(tokens.steps_gap_vertical);
                 for (index, node) in step_nodes.into_iter().enumerate() {
                     col = col.child(node);
                     if index < step_count.saturating_sub(1) {
@@ -446,8 +427,8 @@ impl RenderOnce for Stepper {
         let mut panel = div()
             .id(self.id.slot("panel"))
             .w_full()
-            .mt_2()
-            .p_3()
+            .mt(tokens.panel_margin_top)
+            .p(size_preset.panel_padding)
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&theme, &tokens.panel_border))
             .bg(resolve_hsla(&theme, &tokens.panel_bg))
@@ -455,15 +436,19 @@ impl RenderOnce for Stepper {
         panel = apply_radius(&self.theme, panel, self.radius);
         panel = panel.child(panel_content.unwrap_or_else(|| {
             if let Some((label, description)) = active_step_meta.clone() {
-                let mut fallback = Stack::vertical().gap_1();
+                let mut fallback = Stack::vertical().gap(tokens.text_gap);
                 if let Some(label) = label {
-                    fallback =
-                        fallback.child(div().font_weight(gpui::FontWeight::MEDIUM).child(label));
+                    fallback = fallback.child(
+                        div()
+                            .text_size(size_preset.label_size)
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .child(label),
+                    );
                 }
                 if let Some(description) = description {
                     fallback = fallback.child(
                         div()
-                            .text_sm()
+                            .text_size(size_preset.description_size)
                             .text_color(resolve_hsla(&theme, &tokens.description))
                             .child(description),
                     );
@@ -480,7 +465,7 @@ impl RenderOnce for Stepper {
         Stack::vertical()
             .id(self.id.clone())
             .w_full()
-            .gap_1p5()
+            .gap(tokens.root_gap)
             .child(steps_view)
             .child(panel)
             .with_enter_transition(self.id.slot("enter"), self.motion)

@@ -40,7 +40,7 @@ pub struct Progress {
     show_value: bool,
     striped: bool,
     animated: bool,
-    width_px: f32,
+    width_px: Option<f32>,
     variant: Variant,
     size: Size,
     radius: Radius,
@@ -60,7 +60,7 @@ impl Progress {
             show_value: false,
             striped: false,
             animated: false,
-            width_px: 260.0,
+            width_px: None,
             variant: Variant::Filled,
             size: Size::Md,
             radius: Radius::Pill,
@@ -111,7 +111,7 @@ impl Progress {
     }
 
     pub fn width(mut self, width_px: f32) -> Self {
-        self.width_px = width_px.max(80.0);
+        self.width_px = Some(width_px.max(0.0));
         self
     }
 
@@ -335,6 +335,10 @@ impl RenderOnce for Progress {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.progress;
+        let track_width = self
+            .width_px
+            .unwrap_or_else(|| f32::from(tokens.default_width))
+            .max(f32::from(tokens.min_width));
         let track_bg = resolve_hsla(&self.theme, &tokens.track_bg);
         let default_fill = self.variant_fill_color();
         let sections = self.resolved_sections();
@@ -346,7 +350,7 @@ impl RenderOnce for Progress {
         let mut track = div()
             .id(self.id.slot("track"))
             .relative()
-            .w(px(self.width_px))
+            .w(px(track_width))
             .h(px(bar_height))
             .overflow_hidden()
             .bg(track_bg);
@@ -357,7 +361,7 @@ impl RenderOnce for Progress {
             if section.value <= 0.0 {
                 continue;
             }
-            let width = self.width_px * (section.value / 100.0);
+            let width = track_width * (section.value / 100.0);
             let fill_color = section
                 .color
                 .as_ref()
@@ -396,7 +400,7 @@ impl RenderOnce for Progress {
             let mut header = Stack::horizontal()
                 .justify_between()
                 .items_center()
-                .w(px(self.width_px))
+                .w(px(track_width))
                 .text_sm()
                 .text_color(resolve_hsla(&self.theme, &tokens.label));
 

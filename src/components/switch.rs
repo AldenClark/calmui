@@ -33,6 +33,7 @@ pub struct Switch {
     checked: Option<bool>,
     default_checked: bool,
     disabled: bool,
+    variant: Variant,
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
@@ -52,6 +53,7 @@ impl Switch {
             checked: None,
             default_checked: false,
             disabled: false,
+            variant: Variant::Default,
             size: Size::Md,
             radius: Radius::Pill,
             theme: crate::theme::LocalTheme::default(),
@@ -112,6 +114,25 @@ impl Switch {
     fn resolved_checked(&self) -> bool {
         control::bool_state(&self.id, "checked", self.checked, self.default_checked)
     }
+
+    fn variant_track_color(&self, base: gpui::Hsla) -> gpui::Hsla {
+        match self.variant {
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.85),
+            Variant::Subtle => base.alpha(0.72),
+            Variant::Outline => base.alpha(0.9),
+            Variant::Ghost => base.alpha(0.6),
+        }
+    }
+
+    fn variant_inactive_track_color(&self, base: gpui::Hsla) -> gpui::Hsla {
+        match self.variant {
+            Variant::Outline | Variant::Ghost => gpui::transparent_black(),
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.85),
+            Variant::Subtle => base.alpha(0.72),
+        }
+    }
 }
 
 impl Switch {
@@ -122,7 +143,8 @@ impl Switch {
 }
 
 impl VariantConfigurable for Switch {
-    fn with_variant(self, _value: Variant) -> Self {
+    fn with_variant(mut self, value: Variant) -> Self {
+        self.variant = value;
         self
     }
 
@@ -161,8 +183,9 @@ impl RenderOnce for Switch {
         };
 
         let tokens = &self.theme.components.switch;
-        let active = resolve_hsla(&self.theme, &tokens.track_on_bg);
-        let inactive = resolve_hsla(&self.theme, &tokens.track_off_bg);
+        let active = self.variant_track_color(resolve_hsla(&self.theme, &tokens.track_on_bg));
+        let inactive =
+            self.variant_inactive_track_color(resolve_hsla(&self.theme, &tokens.track_off_bg));
         let track_bg = if checked { active } else { inactive };
         let label_fg = resolve_hsla(&self.theme, &tokens.label);
         let description_fg = resolve_hsla(&self.theme, &tokens.description);
@@ -186,7 +209,7 @@ impl RenderOnce for Switch {
             .h(px(track_h))
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(if is_focused {
-                resolve_hsla(&self.theme, &tokens.track_focus_border)
+                self.variant_track_color(resolve_hsla(&self.theme, &tokens.track_focus_border))
             } else {
                 track_bg
             })
@@ -194,7 +217,8 @@ impl RenderOnce for Switch {
             .child(thumb);
         track = apply_radius(&self.theme, track, self.radius);
         if !self.disabled {
-            let hover_border = resolve_hsla(&self.theme, &tokens.track_hover_border);
+            let hover_border =
+                self.variant_track_color(resolve_hsla(&self.theme, &tokens.track_hover_border));
             track = track.hover(move |style| style.border_color(hover_border));
         }
 

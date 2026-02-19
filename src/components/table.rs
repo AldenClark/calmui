@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    ScrollHandle, SharedString, StatefulInteractiveElement, Styled, canvas, div, point, px,
+    AnyElement, InteractiveElement, IntoElement, ParentElement, RenderOnce, ScrollHandle,
+    SharedString, StatefulInteractiveElement, Styled, canvas, div, point, px,
 };
 
 use crate::contracts::MotionAware;
@@ -11,13 +11,14 @@ use crate::motion::MotionConfig;
 use crate::style::{Radius, Size};
 
 use super::Stack;
+use super::interaction_adapter::{ActivateHandler, PressAdapter, bind_press_adapter};
 use super::pagination::Pagination;
 use super::scroll_area::{ScrollArea, ScrollDirection};
 use super::table_state::{self, TableState, TableStateInput};
 use super::transition::TransitionExt;
 use super::utils::{
-    InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles, apply_radius,
-    hairline_px, interaction_style, resolve_hsla, wire_pressable,
+    InteractionStyles, apply_interaction_styles, apply_radius, hairline_px, interaction_style,
+    resolve_hsla,
 };
 
 type CellRenderer = Box<dyn FnOnce() -> AnyElement>;
@@ -240,7 +241,7 @@ impl Table {
     }
 
     pub fn max_height(mut self, value: f32) -> Self {
-        self.max_height_px = Some(value.max(80.0));
+        self.max_height_px = Some(value.max(0.0));
         self
     }
 
@@ -452,7 +453,9 @@ impl RenderOnce for Table {
         let highlight_on_hover = self.highlight_on_hover;
         let with_column_borders = self.with_column_borders;
         let motion = self.motion;
-        let max_height_px = self.max_height_px;
+        let max_height_px = self
+            .max_height_px
+            .map(|value| value.max(f32::from(tokens.min_viewport_height)));
         let sticky_header = self.sticky_header;
         let filter_query = self
             .filter_query
@@ -684,15 +687,15 @@ impl RenderOnce for Table {
                     interaction_styles = interaction_styles
                         .hover(interaction_style(move |style| style.bg(hover_bg)));
                 }
-                let click_handler: PressHandler = Rc::new(
-                    move |_: &ClickEvent, window: &mut gpui::Window, cx: &mut gpui::App| {
-                        (on_row_click)(source_index, window, cx);
-                    },
-                );
+                let activate_handler: ActivateHandler =
+                    Rc::new(move |window: &mut gpui::Window, cx: &mut gpui::App| {
+                        (on_row_click)(source_index, window, cx)
+                    });
                 row_node = apply_interaction_styles(row_node.cursor_pointer(), interaction_styles);
-                row_node = wire_pressable(
+                row_node = bind_press_adapter(
                     row_node,
-                    PressableBehavior::new().on_click(Some(click_handler)),
+                    PressAdapter::new(table_id.slot_index("row", row_index.to_string()))
+                        .on_activate(Some(activate_handler)),
                 );
             } else if highlight_on_hover {
                 let hover_bg = resolve_hsla(&self.theme, &tokens.row_hover_bg);
@@ -822,8 +825,8 @@ impl RenderOnce for Table {
                         let hover_bg = resolve_hsla(&self.theme, &tokens.row_hover_bg);
                         let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
                         let focus_ring = resolve_hsla(&self.theme, &self.theme.semantic.focus_ring);
-                        let click_handler: PressHandler =
-                            Rc::new(move |_: &ClickEvent, window: &mut gpui::Window, cx| {
+                        let activate_handler: ActivateHandler =
+                            Rc::new(move |window: &mut gpui::Window, cx| {
                                 table_state::on_page_size_change(&table_id_for_page_size, option);
                                 window.refresh();
                                 if let Some(handler) = on_page_size_change.as_ref() {
@@ -839,9 +842,12 @@ impl RenderOnce for Table {
                                     style.border_color(focus_ring)
                                 })),
                         );
-                        item = wire_pressable(
+                        item = bind_press_adapter(
                             item,
-                            PressableBehavior::new().on_click(Some(click_handler)),
+                            PressAdapter::new(
+                                table_id.slot_index("page-size", format!("{option}-{suffix}")),
+                            )
+                            .on_activate(Some(activate_handler)),
                         );
                     } else {
                         item = item.cursor_default();

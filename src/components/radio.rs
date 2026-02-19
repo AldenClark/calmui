@@ -5,7 +5,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::contracts::{MotionAware, Radiused, Sized, VariantConfigurable};
+use crate::contracts::{MotionAware, Radiused, Sized, VariantConfigurable, Varianted};
 use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
@@ -29,6 +29,7 @@ pub struct Radio {
     checked: Option<bool>,
     default_checked: bool,
     disabled: bool,
+    variant: Variant,
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
@@ -48,6 +49,7 @@ impl Radio {
             checked: None,
             default_checked: false,
             disabled: false,
+            variant: Variant::Default,
             size: Size::Md,
             radius: Radius::Pill,
             theme: crate::theme::LocalTheme::default(),
@@ -119,6 +121,35 @@ impl Radio {
     fn resolved_checked(&self) -> bool {
         control::bool_state(&self.id, "checked", self.checked, self.default_checked)
     }
+
+    fn variant_accent_color(&self, base: gpui::Hsla) -> gpui::Hsla {
+        match self.variant {
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.9),
+            Variant::Subtle => base.alpha(0.75),
+            Variant::Outline => base.alpha(0.9),
+            Variant::Ghost => base.alpha(0.64),
+        }
+    }
+
+    fn variant_border_color(&self, base: gpui::Hsla) -> gpui::Hsla {
+        match self.variant {
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.9),
+            Variant::Subtle => base.alpha(0.78),
+            Variant::Outline => base,
+            Variant::Ghost => base.alpha(0.58),
+        }
+    }
+
+    fn variant_surface_color(&self, base: gpui::Hsla) -> gpui::Hsla {
+        match self.variant {
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.92),
+            Variant::Subtle => base.alpha(0.8),
+            Variant::Outline | Variant::Ghost => gpui::transparent_black(),
+        }
+    }
 }
 
 impl Radio {
@@ -129,7 +160,8 @@ impl Radio {
 }
 
 impl VariantConfigurable for Radio {
-    fn with_variant(self, _value: Variant) -> Self {
+    fn with_variant(mut self, value: Variant) -> Self {
+        self.variant = value;
         self
     }
 
@@ -160,12 +192,15 @@ impl RenderOnce for Radio {
         let dot_size = self.control_size_px();
         let indicator_size = (dot_size * 0.45).max(4.0);
         let is_focused = control::focused_state(&self.id, None, false);
+        let base_border = resolve_hsla(&self.theme, &tokens.border);
+        let base_checked_border = resolve_hsla(&self.theme, &tokens.border_checked);
+        let base_focus_border = resolve_hsla(&self.theme, &tokens.border_focus);
         let border = if is_focused {
-            resolve_hsla(&self.theme, &tokens.border_focus)
+            self.variant_accent_color(base_focus_border)
         } else if checked {
-            resolve_hsla(&self.theme, &tokens.border_checked)
+            self.variant_accent_color(base_checked_border)
         } else {
-            resolve_hsla(&self.theme, &tokens.border)
+            self.variant_border_color(base_border)
         };
         let fg = resolve_hsla(&self.theme, &tokens.label);
         let muted = resolve_hsla(&self.theme, &tokens.description);
@@ -179,7 +214,7 @@ impl RenderOnce for Radio {
             .rounded_full()
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(border)
-            .bg(resolve_hsla(&self.theme, &tokens.control_bg));
+            .bg(self.variant_surface_color(resolve_hsla(&self.theme, &tokens.control_bg)));
         if !self.disabled {
             let hover_border = resolve_hsla(&self.theme, &tokens.border_hover);
             control = control.hover(move |style| style.border_color(hover_border));
@@ -190,7 +225,7 @@ impl RenderOnce for Radio {
                     .w(px(indicator_size))
                     .h(px(indicator_size))
                     .rounded_full()
-                    .bg(resolve_hsla(&self.theme, &tokens.indicator)),
+                    .bg(self.variant_accent_color(resolve_hsla(&self.theme, &tokens.indicator))),
             );
         }
 
@@ -239,19 +274,28 @@ impl RenderOnce for Radio {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RadioOption {
     pub value: SharedString,
-    pub label: SharedString,
+    pub label: Option<SharedString>,
     pub description: Option<SharedString>,
     pub disabled: bool,
 }
 
 impl RadioOption {
-    pub fn new(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+    pub fn new(value: impl Into<SharedString>) -> Self {
         Self {
             value: value.into(),
-            label: label.into(),
+            label: None,
             description: None,
             disabled: false,
         }
+    }
+
+    pub fn labeled(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+        Self::new(value).label(label)
+    }
+
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
     }
 
     pub fn description(mut self, description: impl Into<SharedString>) -> Self {
@@ -273,6 +317,7 @@ pub struct RadioGroup {
     value_controlled: bool,
     default_value: Option<SharedString>,
     orientation: GroupOrientation,
+    variant: Variant,
     size: Size,
     radius: Radius,
     theme: crate::theme::LocalTheme,
@@ -291,6 +336,7 @@ impl RadioGroup {
             value_controlled: false,
             default_value: None,
             orientation: GroupOrientation::Vertical,
+            variant: Variant::Default,
             size: Size::Md,
             radius: Radius::Pill,
             theme: crate::theme::LocalTheme::default(),
@@ -360,7 +406,8 @@ impl RadioGroup {
 }
 
 impl VariantConfigurable for RadioGroup {
-    fn with_variant(self, _value: Variant) -> Self {
+    fn with_variant(mut self, value: Variant) -> Self {
+        self.variant = value;
         self
     }
 
@@ -396,13 +443,16 @@ impl RenderOnce for RadioGroup {
                     .as_ref()
                     .is_some_and(|current| current.as_ref() == option.value.as_ref());
                 let mut radio = Radio::new()
-                    .label(option.label.clone())
                     .with_id(self.id.slot_index("option", index.to_string()))
                     .value(option.value.clone())
                     .checked(checked)
                     .disabled(option.disabled);
+                if let Some(label) = option.label.clone() {
+                    radio = radio.label(label);
+                }
                 radio = Sized::with_size(radio, self.size);
                 radio = Radiused::with_radius(radio, self.radius);
+                radio = Varianted::with_variant(radio, self.variant);
                 radio = radio.motion(self.motion);
 
                 if let Some(description) = option.description {

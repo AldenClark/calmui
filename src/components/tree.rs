@@ -1,8 +1,8 @@
 use std::{collections::BTreeSet, rc::Rc};
 
 use gpui::{
-    AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window, div, px,
+    AnyElement, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
+    StatefulInteractiveElement, Styled, Window, div, px,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable};
@@ -12,6 +12,7 @@ use crate::style::{Radius, Size, Variant};
 
 use super::Stack;
 use super::icon::Icon;
+use super::interaction_adapter::{ActivateHandler, PressAdapter, bind_press_adapter};
 use super::transition::TransitionExt;
 use super::tree_state::{self, TreeVisibleNode};
 use super::utils::{apply_radius, resolve_hsla};
@@ -22,21 +23,30 @@ type ExpandedChangeHandler = Rc<dyn Fn(Vec<SharedString>, &mut Window, &mut gpui
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TreeNode {
     pub value: SharedString,
-    pub label: SharedString,
+    pub label: Option<SharedString>,
     pub children: Vec<TreeNode>,
     pub disabled: bool,
     pub default_expanded: bool,
 }
 
 impl TreeNode {
-    pub fn new(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+    pub fn new(value: impl Into<SharedString>) -> Self {
         Self {
             value: value.into(),
-            label: label.into(),
+            label: None,
             children: Vec::new(),
             disabled: false,
             default_expanded: false,
         }
+    }
+
+    pub fn labeled(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+        Self::new(value).label(label)
+    }
+
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
     }
 
     pub fn child(mut self, node: TreeNode) -> Self {
@@ -344,29 +354,33 @@ impl TreeRenderCtx {
                 let controlled = self.expanded_controlled;
                 let on_expanded_change = self.on_expanded_change.clone();
                 let expanded_snapshot = self.expanded_values.clone();
-                toggle = toggle
-                    .cursor_pointer()
-                    .on_click(move |_: &ClickEvent, window, cx| {
-                        let current = tree_state::resolve_expanded(
-                            &tree_id,
-                            controlled,
-                            expanded_snapshot.clone(),
-                            expanded_snapshot.clone(),
+                let activate_handler: ActivateHandler = Rc::new(move |window, cx| {
+                    let current = tree_state::resolve_expanded(
+                        &tree_id,
+                        controlled,
+                        expanded_snapshot.clone(),
+                        expanded_snapshot.clone(),
+                    );
+                    let next = tree_state::toggled_values(current, value.as_ref());
+                    let should_refresh =
+                        tree_state::apply_expanded(&tree_id, controlled, next.clone());
+                    if let Some(handler) = on_expanded_change.as_ref() {
+                        (handler)(
+                            next.into_iter().map(SharedString::from).collect(),
+                            window,
+                            cx,
                         );
-                        let next = tree_state::toggled_values(current, value.as_ref());
-                        let should_refresh =
-                            tree_state::apply_expanded(&tree_id, controlled, next.clone());
-                        if let Some(handler) = on_expanded_change.as_ref() {
-                            (handler)(
-                                next.into_iter().map(SharedString::from).collect(),
-                                window,
-                                cx,
-                            );
-                        }
-                        if should_refresh {
-                            window.refresh();
-                        }
-                    });
+                    }
+                    if should_refresh {
+                        window.refresh();
+                    }
+                });
+                toggle = toggle.cursor_pointer();
+                toggle = bind_press_adapter(
+                    toggle,
+                    PressAdapter::new(self.tree_id.slot_index("toggle", path.clone()))
+                        .on_activate(Some(activate_handler)),
+                );
             }
         }
 
@@ -388,7 +402,7 @@ impl TreeRenderCtx {
             .min_w_0()
             .text_size(self.size_preset.label_size)
             .truncate()
-            .child(node.label.clone());
+            .children(node.label.clone());
 
         if let Some(connector) = connector {
             row = row.child(connector);
@@ -405,18 +419,22 @@ impl TreeRenderCtx {
             let value = node.value.clone();
             let controlled = self.selected_controlled;
             let on_select = self.on_select.clone();
-            row = row
-                .cursor_pointer()
-                .on_click(move |_: &ClickEvent, window, cx| {
-                    let should_refresh =
-                        tree_state::apply_selected(&tree_id, controlled, Some(value.to_string()));
-                    if let Some(handler) = on_select.as_ref() {
-                        (handler)(Some(value.clone()), window, cx);
-                    }
-                    if should_refresh {
-                        window.refresh();
-                    }
-                });
+            let activate_handler: ActivateHandler = Rc::new(move |window, cx| {
+                let should_refresh =
+                    tree_state::apply_selected(&tree_id, controlled, Some(value.to_string()));
+                if let Some(handler) = on_select.as_ref() {
+                    (handler)(Some(value.clone()), window, cx);
+                }
+                if should_refresh {
+                    window.refresh();
+                }
+            });
+            row = row.cursor_pointer();
+            row = bind_press_adapter(
+                row,
+                PressAdapter::new(self.tree_id.slot_index("row", path.clone()))
+                    .on_activate(Some(activate_handler)),
+            );
         } else {
             row = row.opacity(0.55).cursor_default();
         }

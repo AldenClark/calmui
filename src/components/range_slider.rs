@@ -54,7 +54,7 @@ pub struct RangeSlider {
     label: Option<SharedString>,
     show_value: bool,
     disabled: bool,
-    width_px: f32,
+    width_px: Option<f32>,
     orientation: RangeSliderOrientation,
     variant: Variant,
     size: Size,
@@ -79,7 +79,7 @@ impl RangeSlider {
             label: None,
             show_value: true,
             disabled: false,
-            width_px: 260.0,
+            width_px: None,
             orientation: RangeSliderOrientation::Horizontal,
             variant: Variant::Filled,
             size: Size::Md,
@@ -144,7 +144,7 @@ impl RangeSlider {
     }
 
     pub fn width(mut self, width_px: f32) -> Self {
-        self.width_px = width_px.max(140.0);
+        self.width_px = Some(width_px.max(0.0));
         self
     }
 
@@ -252,18 +252,21 @@ impl RenderOnce for RangeSlider {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.range_slider;
         let size_preset = tokens.sizes.for_size(self.size);
+        let track_len = self
+            .width_px
+            .unwrap_or_else(|| f32::from(tokens.default_width))
+            .max(f32::from(tokens.min_width));
         let values = self.resolved_values();
         let left_ratio = self.ratio(values.0);
         let right_ratio = self.ratio(values.1);
         let track_height = f32::from(size_preset.track_thickness);
         let thumb_size = f32::from(size_preset.thumb_size);
         let track_top = ((thumb_size - track_height) * 0.5).max(0.0);
-        let left_thumb_x = ((self.width_px - thumb_size) * left_ratio).max(0.0);
-        let right_thumb_x = ((self.width_px - thumb_size) * right_ratio).max(0.0);
+        let left_thumb_x = ((track_len - thumb_size) * left_ratio).max(0.0);
+        let right_thumb_x = ((track_len - thumb_size) * right_ratio).max(0.0);
         let display_precision = if self.step < 1.0 { 2 } else { 0 };
         let is_controlled = self.values_controlled;
         let orientation = self.orientation;
-        let track_len = self.width_px;
 
         if orientation == RangeSliderOrientation::Vertical {
             let track_left = ((thumb_size - track_height) * 0.5).max(0.0);
@@ -348,7 +351,7 @@ impl RenderOnce for RangeSlider {
                             return;
                         }
 
-                        let geometry = Self::rail_geometry(&drag.slider_id, 260.0, 260.0);
+                        let geometry = Self::rail_geometry(&drag.slider_id, thumb_size, track_len);
                         let axis = SliderAxis::Vertical;
                         let local_y = axis
                             .local(
@@ -395,7 +398,7 @@ impl RenderOnce for RangeSlider {
                             return;
                         }
 
-                        let geometry = Self::rail_geometry(&drag.slider_id, 260.0, 260.0);
+                        let geometry = Self::rail_geometry(&drag.slider_id, thumb_size, track_len);
                         let axis = SliderAxis::Vertical;
                         let local_y = axis
                             .local(
@@ -474,7 +477,7 @@ impl RenderOnce for RangeSlider {
                 rail = rail
                     .cursor_pointer()
                     .on_click(move |event: &ClickEvent, window, cx| {
-                        let geometry = Self::rail_geometry(&id, 260.0, 260.0);
+                        let geometry = Self::rail_geometry(&id, thumb_size, track_len);
                         let axis = SliderAxis::Vertical;
                         let local_y = axis
                             .local(
@@ -550,7 +553,7 @@ impl RenderOnce for RangeSlider {
             .absolute()
             .top(px(track_top))
             .left_0()
-            .w(px(self.width_px))
+            .w(px(track_len))
             .h(px(track_height))
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.track_bg))
@@ -622,7 +625,7 @@ impl RenderOnce for RangeSlider {
                         return;
                     }
 
-                    let geometry = Self::rail_geometry(&drag.slider_id, 260.0, 260.0);
+                    let geometry = Self::rail_geometry(&drag.slider_id, track_len, thumb_size);
                     let axis = SliderAxis::Horizontal;
                     let local_x = axis
                         .local(
@@ -674,7 +677,7 @@ impl RenderOnce for RangeSlider {
                         return;
                     }
 
-                    let geometry = Self::rail_geometry(&drag.slider_id, 260.0, 260.0);
+                    let geometry = Self::rail_geometry(&drag.slider_id, track_len, thumb_size);
                     let axis = SliderAxis::Horizontal;
                     let local_x = axis
                         .local(
@@ -720,7 +723,7 @@ impl RenderOnce for RangeSlider {
         let mut rail = div()
             .id(self.id.slot("rail"))
             .relative()
-            .w(px(self.width_px))
+            .w(px(track_len))
             .h(px(thumb_size))
             .child(track)
             .child(fill)
@@ -759,7 +762,7 @@ impl RenderOnce for RangeSlider {
             rail = rail
                 .cursor_pointer()
                 .on_click(move |event: &ClickEvent, window, cx| {
-                    let geometry = Self::rail_geometry(&id, 260.0, 260.0);
+                    let geometry = Self::rail_geometry(&id, track_len, thumb_size);
                     let axis = SliderAxis::Horizontal;
                     let local_x = axis
                         .local(
@@ -802,7 +805,7 @@ impl RenderOnce for RangeSlider {
             let mut header = Stack::horizontal()
                 .justify_between()
                 .items_center()
-                .w(px(self.width_px))
+                .w(px(track_len))
                 .gap(tokens.header_gap_horizontal);
 
             if let Some(label) = self.label {
