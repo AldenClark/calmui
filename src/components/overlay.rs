@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, ClickEvent, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    StatefulInteractiveElement, Styled, Window, backdrop, canvas, div, px,
+    StatefulInteractiveElement, Styled, Window, div,
 };
 
 use crate::contracts::MotionAware;
@@ -170,51 +170,53 @@ impl RenderOnce for Overlay {
             .unwrap_or_else(|| self.theme.components.overlay.bg.clone());
         let raw_bg = resolve_hsla(&self.theme, &token);
         let resolved_material = match self.material_mode {
-            OverlayMaterialMode::Auto | OverlayMaterialMode::SystemPreferred => {
-                if self.frosted {
-                    OverlayMaterialMode::RendererBlur
-                } else {
-                    OverlayMaterialMode::TintOnly
-                }
-            }
-            value => value,
+            OverlayMaterialMode::TintOnly => OverlayMaterialMode::TintOnly,
+            OverlayMaterialMode::Auto
+            | OverlayMaterialMode::SystemPreferred
+            | OverlayMaterialMode::RendererBlur => OverlayMaterialMode::TintOnly,
         };
-        let use_backdrop_blur = matches!(
-            resolved_material,
-            OverlayMaterialMode::RendererBlur | OverlayMaterialMode::SystemPreferred
-        ) && self.frosted;
+        let use_matte_film =
+            self.frosted || !matches!(resolved_material, OverlayMaterialMode::TintOnly);
 
         let opacity = self.opacity.clamp(0.0, 1.0);
         let blur_strength = self.blur_strength.clamp(0.0, 2.0);
         let readability = self.readability_boost.clamp(0.0, 1.0);
-        let neutral_target = match self.theme.color_scheme {
+        let (readability_scrim_floor, readability_scrim_span, veil_base, veil_span, film_base) =
+            match self.theme.color_scheme {
+                crate::theme::ColorScheme::Light => (0.12, 0.26, 0.09, 0.18, 0.03),
+                crate::theme::ColorScheme::Dark => (0.18, 0.28, 0.08, 0.14, 0.05),
+            };
+        let inverse_matte_target = match self.theme.color_scheme {
             crate::theme::ColorScheme::Light => gpui::white(),
             crate::theme::ColorScheme::Dark => gpui::black(),
         };
 
-        // Keep overlay component lightweight: it only tunes blur/tint parameters for renderer pass.
-        let base_scrim_alpha =
-            ((0.07 + (0.15 * readability)) * (0.34 + (0.66 * opacity))).clamp(0.06, 0.24);
-        let fallback_scrim = if self.restore_window_background {
-            raw_bg.opacity(base_scrim_alpha)
+        // Component-layer matte strategy: increase neutralization and edge diffusion
+        // so top-layer content remains readable even on transparent surfaces.
+        let matte_strength = ((0.30 + (0.22 * blur_strength) + (0.45 * readability))
+            * (0.42 + (0.58 * opacity)))
+            .clamp(0.12, 1.0);
+        let scrim_alpha =
+            (readability_scrim_floor + (readability_scrim_span * matte_strength)).clamp(0.10, 0.56);
+        let scrim_color = if self.restore_window_background {
+            raw_bg
         } else {
-            neutral_target.opacity(base_scrim_alpha)
+            raw_bg.grayscale()
         };
-
-        let blur_radius =
-            px((22.0 + (70.0 * blur_strength) + (16.0 * readability)).clamp(22.0, 128.0));
-        let tint_base = raw_bg.grayscale().blend(neutral_target.opacity(0.18));
-        let backdrop_tint_alpha =
-            ((0.03 + (0.08 * blur_strength)) * (0.30 + (0.70 * opacity))).clamp(0.02, 0.16);
-        let backdrop_tint = tint_base.opacity(backdrop_tint_alpha);
+        let fallback_scrim = scrim_color.opacity(scrim_alpha);
 
         let veil_alpha =
-            ((0.10 + (0.18 * readability)) * (0.36 + (0.64 * opacity))).clamp(0.08, 0.30);
-        let neutral_veil = if use_backdrop_blur {
-            neutral_target.opacity(veil_alpha)
+            ((veil_base + (veil_span * readability)) * (0.45 + (0.55 * opacity))).clamp(0.07, 0.33);
+        let neutral_veil = gpui::black().opacity(veil_alpha);
+        let matte_film_alpha = if use_matte_film {
+            ((film_base + (0.08 * blur_strength)) * (0.55 + (0.45 * opacity))).clamp(0.02, 0.16)
         } else {
-            raw_bg.opacity((veil_alpha * 0.8).clamp(0.04, 0.26))
+            0.0
         };
+        let matte_film = raw_bg
+            .grayscale()
+            .blend(inverse_matte_target.opacity(0.10))
+            .opacity(matte_film_alpha);
 
         let mut root = div().id(self.id.clone()).relative().bg(fallback_scrim);
 
@@ -232,24 +234,8 @@ impl RenderOnce for Overlay {
             });
         }
 
-        if use_backdrop_blur {
-            root = root.child(
-                canvas(
-                    move |bounds, _, _| bounds,
-                    move |bounds, _, window, _cx| {
-                        window.paint_backdrop(backdrop(
-                            bounds,
-                            gpui::Corners::default(),
-                            blur_radius,
-                            backdrop_tint,
-                        ));
-                    },
-                )
-                .absolute()
-                .top_0()
-                .left_0()
-                .size_full(),
-            );
+        if use_matte_film {
+            root = root.child(div().absolute().top_0().left_0().size_full().bg(matte_film));
         }
         root = root.child(
             div()
@@ -263,6 +249,8 @@ impl RenderOnce for Overlay {
         if let Some(content) = self.content {
             root = root.child(content());
         }
+
+        gpui::Refineable::refine(gpui::Styled::style(&mut root), &self.style);
 
         root.with_enter_transition(self.id.slot("enter"), self.motion)
             .into_any_element()

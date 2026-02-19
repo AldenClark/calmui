@@ -406,8 +406,11 @@ impl Modal {
         let overlay = Overlay::new()
             .with_id(self.id.slot("overlay"))
             .coverage(OverlayCoverage::Window)
-            .material_mode(OverlayMaterialMode::Auto)
+            .material_mode(OverlayMaterialMode::TintOnly)
+            .frosted(false)
             .color(tokens.overlay_bg.clone())
+            .opacity(1.0)
+            .readability_boost(0.86)
             .on_click(
                 move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
                     if close_on_click_outside {
@@ -423,47 +426,50 @@ impl Modal {
                 },
             );
 
-        let mut close_action: AnyElement = div().into_any_element();
-        if self.close_button {
+        let close_action = if self.close_button {
             let id_for_close = self.id.clone();
             let close_callbacks_for_close = self.on_close.clone();
             let state_change_for_close = self.on_state_change.clone();
-            close_action = div()
-                .id(self.id.slot("close"))
-                .w(tokens.close_size)
-                .h(tokens.close_size)
-                .rounded_full()
-                .border(super::utils::quantized_stroke_px(window, 1.0))
-                .border_color(resolve_hsla(
-                    &self.theme,
-                    &self.theme.semantic.border_subtle,
-                ))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .text_color(resolve_hsla(&self.theme, &tokens.title))
-                .hover(|style| style.opacity(0.8))
-                .child(
-                    Icon::named("x")
-                        .with_id(self.id.slot("close-icon"))
-                        .size(f32::from(tokens.close_icon_size))
-                        .color(resolve_hsla(&self.theme, &tokens.title)),
-                )
-                .on_click(
-                    move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
-                        if popup_state::on_close_request(&id_for_close, is_controlled) {
-                            window.refresh();
-                        }
-                        Self::close_from_callbacks(
-                            &close_callbacks_for_close,
-                            &state_change_for_close,
-                            ModalCloseReason::CloseButton,
-                        );
-                    },
-                )
-                .into_any_element();
-        }
+            Some(
+                div()
+                    .id(self.id.slot("close"))
+                    .w(tokens.close_size)
+                    .h(tokens.close_size)
+                    .rounded_full()
+                    .border(super::utils::quantized_stroke_px(window, 1.0))
+                    .border_color(resolve_hsla(
+                        &self.theme,
+                        &self.theme.semantic.border_subtle,
+                    ))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .cursor_pointer()
+                    .text_color(resolve_hsla(&self.theme, &tokens.title))
+                    .hover(|style| style.opacity(0.8))
+                    .child(
+                        Icon::named("x")
+                            .with_id(self.id.slot("close-icon"))
+                            .size(f32::from(tokens.close_icon_size))
+                            .color(resolve_hsla(&self.theme, &tokens.title)),
+                    )
+                    .on_click(
+                        move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
+                            if popup_state::on_close_request(&id_for_close, is_controlled) {
+                                window.refresh();
+                            }
+                            Self::close_from_callbacks(
+                                &close_callbacks_for_close,
+                                &state_change_for_close,
+                                ModalCloseReason::CloseButton,
+                            );
+                        },
+                    )
+                    .into_any_element(),
+            )
+        } else {
+            None
+        };
 
         let mut panel = div()
             .id(self.id.slot("panel"))
@@ -492,7 +498,7 @@ impl Modal {
             } else {
                 header = header.child(div().flex_1());
             }
-            panel = panel.child(header.child(close_action));
+            panel = panel.child(header.children(close_action));
         }
 
         if let Some(body) = self.body.clone() {

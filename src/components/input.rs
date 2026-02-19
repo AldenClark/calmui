@@ -1592,9 +1592,9 @@ impl TextInput {
             .into_any_element()
     }
 
-    fn render_label_block(&self) -> AnyElement {
+    fn render_label_block(&self) -> Option<AnyElement> {
         if self.label.is_none() && self.description.is_none() && self.error.is_none() {
-            return div().into_any_element();
+            return None;
         }
 
         let tokens = &self.theme.components.input;
@@ -1638,7 +1638,7 @@ impl TextInput {
             );
         }
 
-        block.into_any_element()
+        Some(block.into_any_element())
     }
 }
 
@@ -1687,21 +1687,29 @@ impl RenderOnce for TextInput {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         match self.layout {
-            FieldLayout::Vertical => Stack::vertical()
-                .id(self.id.clone())
-                .gap(self.theme.components.input.layout_gap_vertical)
-                .child(self.render_label_block())
-                .child(self.render_input_box(window, _cx)),
-            FieldLayout::Horizontal => Stack::horizontal()
-                .id(self.id.clone())
-                .items_start()
-                .gap(self.theme.components.input.layout_gap_horizontal)
-                .child(
-                    div()
-                        .w(self.theme.components.input.horizontal_label_width)
-                        .child(self.render_label_block()),
-                )
-                .child(div().flex_1().child(self.render_input_box(window, _cx))),
+            FieldLayout::Vertical => {
+                let mut container = Stack::vertical()
+                    .id(self.id.clone())
+                    .gap(self.theme.components.input.layout_gap_vertical);
+                if let Some(label_block) = self.render_label_block() {
+                    container = container.child(label_block);
+                }
+                container.child(self.render_input_box(window, _cx))
+            }
+            FieldLayout::Horizontal => {
+                let mut row = Stack::horizontal()
+                    .id(self.id.clone())
+                    .items_start()
+                    .gap(self.theme.components.input.layout_gap_horizontal);
+                if let Some(label_block) = self.render_label_block() {
+                    row = row.child(
+                        div()
+                            .w(self.theme.components.input.horizontal_label_width)
+                            .child(label_block),
+                    );
+                }
+                row.child(div().flex_1().child(self.render_input_box(window, _cx)))
+            }
         }
     }
 }

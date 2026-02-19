@@ -285,9 +285,9 @@ impl Select {
             .and_then(|option| option.label.clone())
     }
 
-    fn render_label_block(&self) -> AnyElement {
+    fn render_label_block(&self) -> Option<AnyElement> {
         if self.label.is_none() && self.description.is_none() && self.error.is_none() {
-            return div().into_any_element();
+            return None;
         }
 
         let tokens = &self.theme.components.select;
@@ -329,7 +329,7 @@ impl Select {
             );
         }
 
-        block.into_any_element()
+        Some(block.into_any_element())
     }
 
     fn render_control(&mut self, window: &gpui::Window) -> AnyElement {
@@ -729,8 +729,10 @@ impl RenderOnce for Select {
             .relative()
             .w_full();
 
-        if self.layout == FieldLayout::Vertical {
-            container = container.child(self.render_label_block());
+        if self.layout == FieldLayout::Vertical
+            && let Some(label_block) = self.render_label_block()
+        {
+            container = container.child(label_block);
         }
 
         let mut field = Stack::vertical().gap(label_block_gap);
@@ -773,16 +775,16 @@ impl RenderOnce for Select {
 
         match self.layout {
             FieldLayout::Vertical => container.child(field),
-            FieldLayout::Horizontal => Stack::horizontal()
-                .id(self.id.clone())
-                .items_start()
-                .gap(layout_gap_horizontal)
-                .child(
-                    div()
-                        .w(horizontal_label_width)
-                        .child(self.render_label_block()),
-                )
-                .child(div().flex_1().child(field)),
+            FieldLayout::Horizontal => {
+                let mut row = Stack::horizontal()
+                    .id(self.id.clone())
+                    .items_start()
+                    .gap(layout_gap_horizontal);
+                if let Some(label_block) = self.render_label_block() {
+                    row = row.child(div().w(horizontal_label_width).child(label_block));
+                }
+                row.child(div().flex_1().child(field))
+            }
         }
     }
 }
@@ -989,9 +991,9 @@ impl MultiSelect {
         .opened
     }
 
-    fn render_label_block(&self) -> AnyElement {
+    fn render_label_block(&self) -> Option<AnyElement> {
         if self.label.is_none() && self.description.is_none() && self.error.is_none() {
-            return div().into_any_element();
+            return None;
         }
 
         let tokens = &self.theme.components.select;
@@ -1034,7 +1036,7 @@ impl MultiSelect {
             );
         }
 
-        block.into_any_element()
+        Some(block.into_any_element())
     }
 
     fn render_control(&mut self, window: &gpui::Window) -> AnyElement {
@@ -1454,8 +1456,10 @@ impl RenderOnce for MultiSelect {
             .gap(layout_gap_vertical)
             .relative()
             .w_full();
-        if self.layout == FieldLayout::Vertical {
-            container = container.child(self.render_label_block());
+        if self.layout == FieldLayout::Vertical
+            && let Some(label_block) = self.render_label_block()
+        {
+            container = container.child(label_block);
         }
 
         let mut field = Stack::vertical().gap(label_block_gap);
@@ -1498,16 +1502,16 @@ impl RenderOnce for MultiSelect {
 
         match self.layout {
             FieldLayout::Vertical => container.child(field),
-            FieldLayout::Horizontal => Stack::horizontal()
-                .id(self.id.clone())
-                .items_start()
-                .gap(layout_gap_horizontal)
-                .child(
-                    div()
-                        .w(horizontal_label_width)
-                        .child(self.render_label_block()),
-                )
-                .child(div().flex_1().child(field)),
+            FieldLayout::Horizontal => {
+                let mut row = Stack::horizontal()
+                    .id(self.id.clone())
+                    .items_start()
+                    .gap(layout_gap_horizontal);
+                if let Some(label_block) = self.render_label_block() {
+                    row = row.child(div().w(horizontal_label_width).child(label_block));
+                }
+                row.child(div().flex_1().child(field))
+            }
         }
     }
 }

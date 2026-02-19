@@ -433,8 +433,11 @@ impl ModalLayer {
         let overlay = Overlay::new()
             .with_id(self.id.slot("overlay"))
             .coverage(OverlayCoverage::Window)
-            .material_mode(OverlayMaterialMode::Auto)
+            .material_mode(OverlayMaterialMode::TintOnly)
+            .frosted(false)
             .color(self.theme.components.modal.overlay_bg.clone())
+            .opacity(1.0)
+            .readability_boost(0.84)
             .on_click(
                 move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
                     if close_on_click_outside {
@@ -468,31 +471,34 @@ impl ModalLayer {
             header_title = header_title.child(div().flex_1());
         }
 
-        let mut close_action: AnyElement = div().into_any_element();
-        if entry.close_button_enabled() {
-            close_action = div()
-                .id(self.id.slot_index("modal-close", (id.0).to_string()))
-                .w(modal_tokens.close_size)
-                .h(modal_tokens.close_size)
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .child(
-                    Icon::named("x")
-                        .with_id(self.id.slot_index("modal-close-icon", (id.0).to_string()))
-                        .size(f32::from(modal_tokens.close_icon_size))
-                        .color(title_color)
-                        .registry(icons.clone()),
-                )
-                .on_click(
-                    move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
-                        manager_for_close.close_with_reason(id, ModalCloseReason::CloseButton);
-                        window.refresh();
-                    },
-                )
-                .into_any_element();
-        }
+        let close_action = if entry.close_button_enabled() {
+            Some(
+                div()
+                    .id(self.id.slot_index("modal-close", (id.0).to_string()))
+                    .w(modal_tokens.close_size)
+                    .h(modal_tokens.close_size)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .cursor_pointer()
+                    .child(
+                        Icon::named("x")
+                            .with_id(self.id.slot_index("modal-close-icon", (id.0).to_string()))
+                            .size(f32::from(modal_tokens.close_icon_size))
+                            .color(title_color)
+                            .registry(icons.clone()),
+                    )
+                    .on_click(
+                        move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
+                            manager_for_close.close_with_reason(id, ModalCloseReason::CloseButton);
+                            window.refresh();
+                        },
+                    )
+                    .into_any_element(),
+            )
+        } else {
+            None
+        };
 
         let mut panel = div()
             .id(self.id.slot("modal-panel"))
@@ -513,7 +519,7 @@ impl ModalLayer {
                     .items_center()
                     .mb(modal_tokens.header_margin_bottom)
                     .child(header_title)
-                    .child(close_action),
+                    .children(close_action),
             );
         }
 

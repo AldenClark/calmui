@@ -161,8 +161,11 @@ impl RenderOnce for Drawer {
         let overlay = Overlay::new()
             .with_id(self.id.slot("overlay"))
             .coverage(OverlayCoverage::Window)
-            .material_mode(OverlayMaterialMode::Auto)
+            .material_mode(OverlayMaterialMode::TintOnly)
+            .frosted(false)
             .color(tokens.overlay_bg.clone())
+            .opacity(1.0)
+            .readability_boost(0.84)
             .on_click(
                 move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
                     if close_on_click_outside {

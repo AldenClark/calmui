@@ -61,6 +61,13 @@ mod tree;
 mod tree_state;
 mod utils;
 
+#[cfg(test)]
+mod test_contract_matrix;
+#[cfg(test)]
+mod test_layout_depth_budget;
+#[cfg(test)]
+mod test_state_logic;
+
 pub use accordion::{Accordion, AccordionItem, AccordionItemMeta};
 pub use action_icon::ActionIcon;
 pub use alert::{Alert, AlertKind};

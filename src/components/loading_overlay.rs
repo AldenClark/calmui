@@ -1,6 +1,6 @@
 use gpui::{
     AnyElement, ElementId, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, Styled, div,
+    SharedString, Styled, div, px,
 };
 
 use crate::contracts::MotionAware;
@@ -158,21 +158,43 @@ impl RenderOnce for LoadingOverlay {
             content = content.child(div().text_size(tokens.label_size).child(label));
         }
 
+        let (content_panel_bg, content_panel_border) = match self.theme.color_scheme {
+            crate::theme::ColorScheme::Light => {
+                (gpui::black().opacity(0.34), gpui::white().opacity(0.20))
+            }
+            crate::theme::ColorScheme::Dark => {
+                (gpui::black().opacity(0.48), gpui::white().opacity(0.16))
+            }
+        };
+
         let overlay = Overlay::new()
             .with_id(self.id.slot("mask"))
-            .material_mode(OverlayMaterialMode::Auto)
+            .material_mode(OverlayMaterialMode::TintOnly)
+            .frosted(false)
             .motion(self.motion)
             .color(tokens.bg.clone())
             .opacity(self.overlay_opacity)
             .blur_strength(self.overlay_blur_strength)
-            .readability_boost(self.overlay_readability_boost)
+            .readability_boost((self.overlay_readability_boost + 0.08).clamp(0.0, 1.0))
             .content(
                 div()
                     .size_full()
+                    .px(px(16.0))
                     .flex()
                     .items_center()
                     .justify_center()
-                    .child(content),
+                    .child(
+                        div()
+                            .id(self.id.slot("content-panel"))
+                            .rounded(px(14.0))
+                            .bg(content_panel_bg)
+                            .border(px(1.0))
+                            .border_color(content_panel_border)
+                            .shadow_sm()
+                            .px(px(20.0))
+                            .py(px(14.0))
+                            .child(content),
+                    ),
             );
 
         root.child(overlay)
