@@ -2734,6 +2734,7 @@ pub struct TreeTokens {
 pub struct LayoutTokens {
     pub gap: GapSizeScale,
     pub space: GapSizeScale,
+    pub popup_snap_margin: Pixels,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -4246,6 +4247,7 @@ impl ComponentTokens {
                 layout: LayoutTokens {
                     gap: default_layout_gap_scale(),
                     space: default_layout_space_scale(),
+                    popup_snap_margin: px(8.0),
                 },
             },
             ColorScheme::Dark => Self {
@@ -5781,6 +5783,7 @@ impl ComponentTokens {
                 layout: LayoutTokens {
                     gap: default_layout_gap_scale(),
                     space: default_layout_space_scale(),
+                    popup_snap_margin: px(8.0),
                 },
             },
         }
@@ -8782,6 +8785,7 @@ impl TreeOverrides {
 pub struct LayoutOverrides {
     pub gap: Option<GapSizeScale>,
     pub space: Option<GapSizeScale>,
+    pub popup_snap_margin: Option<Pixels>,
 }
 
 impl LayoutOverrides {
@@ -8791,6 +8795,9 @@ impl LayoutOverrides {
         }
         if let Some(value) = self.space {
             current.space = value;
+        }
+        if let Some(value) = self.popup_snap_margin {
+            current.popup_snap_margin = value;
         }
         current
     }

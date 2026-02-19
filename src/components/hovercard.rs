@@ -364,6 +364,7 @@ impl RenderOnce for HoverCard {
                 "anchor-host",
                 placement,
                 self.offset_px,
+                self.theme.components.layout.popup_snap_margin,
                 card,
                 26,
                 matches!(self.placement, HoverCardPlacement::Bottom),

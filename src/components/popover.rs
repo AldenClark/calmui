@@ -223,6 +223,7 @@ impl RenderOnce for Popover {
                 "anchor-host",
                 placement,
                 self.offset_px,
+                self.theme.components.layout.popup_snap_margin,
                 panel,
                 20,
                 matches!(self.placement, PopoverPlacement::Bottom),

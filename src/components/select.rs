@@ -714,6 +714,7 @@ impl RenderOnce for Select {
         let dropdown_anchor_offset = self.theme.components.select.dropdown_anchor_offset;
         let layout_gap_horizontal = self.theme.components.select.layout_gap_horizontal;
         let horizontal_label_width = self.theme.components.select.horizontal_label_width;
+        let popup_snap_margin = self.theme.components.layout.popup_snap_margin;
         let state = SelectState::resolve(SelectStateInput {
             id: &self.id,
             opened_controlled: self.opened_controlled,
@@ -747,6 +748,7 @@ impl RenderOnce for Select {
                     "anchor-host",
                     PopupPlacement::Top,
                     f32::from(dropdown_anchor_offset),
+                    popup_snap_margin,
                     floating,
                     24,
                     true,
@@ -758,6 +760,7 @@ impl RenderOnce for Select {
                     "anchor-host",
                     PopupPlacement::Bottom,
                     f32::from(dropdown_anchor_offset),
+                    popup_snap_margin,
                     floating,
                     24,
                     true,
@@ -1437,6 +1440,7 @@ impl RenderOnce for MultiSelect {
         let dropdown_anchor_offset = self.theme.components.select.dropdown_anchor_offset;
         let layout_gap_horizontal = self.theme.components.select.layout_gap_horizontal;
         let horizontal_label_width = self.theme.components.select.horizontal_label_width;
+        let popup_snap_margin = self.theme.components.layout.popup_snap_margin;
         let state = SelectState::resolve(SelectStateInput {
             id: &self.id,
             opened_controlled: self.opened_controlled,
@@ -1469,6 +1473,7 @@ impl RenderOnce for MultiSelect {
                     "anchor-host",
                     PopupPlacement::Top,
                     f32::from(dropdown_anchor_offset),
+                    popup_snap_margin,
                     floating,
                     24,
                     true,
@@ -1480,6 +1485,7 @@ impl RenderOnce for MultiSelect {
                     "anchor-host",
                     PopupPlacement::Bottom,
                     f32::from(dropdown_anchor_offset),
+                    popup_snap_margin,
                     floating,
                     24,
                     true,

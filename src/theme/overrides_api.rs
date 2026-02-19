@@ -765,6 +765,7 @@ impl_option_overrides_methods!(TreeOverrides {
 impl_option_overrides_methods!(LayoutOverrides {
     gap: GapSizeScale,
     space: GapSizeScale,
+    popup_snap_margin: Pixels,
 });
 
 impl_nested_overrides_methods!(ComponentOverrides {

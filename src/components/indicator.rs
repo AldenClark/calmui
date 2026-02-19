@@ -179,7 +179,7 @@ impl RenderOnce for Indicator {
             .px(px((self.size_px * 0.25).max(2.0)))
             .bg(bg)
             .text_color(fg)
-            .text_xs()
+            .text_size(self.theme.components.text.sizes.xs.font_size)
             .font_weight(gpui::FontWeight::SEMIBOLD);
 
         if self.with_border {

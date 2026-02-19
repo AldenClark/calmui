@@ -33,6 +33,7 @@ pub fn anchored_host(
     slot: &str,
     placement: PopupPlacement,
     offset_px: f32,
+    snap_margin: gpui::Pixels,
     floating: AnyElement,
     priority: usize,
     snap_to_window: bool,
@@ -51,7 +52,7 @@ pub fn anchored_host(
         anchored()
             .anchor(anchor_corner)
             .offset(offset)
-            .snap_to_window_with_margin(px(8.0))
+            .snap_to_window_with_margin(snap_margin)
             .child(floating)
     } else {
         anchored()

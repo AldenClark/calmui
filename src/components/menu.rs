@@ -382,6 +382,7 @@ impl RenderOnce for Menu {
                 "anchor-host",
                 PopupPlacement::Bottom,
                 self.offset_px,
+                self.theme.components.layout.popup_snap_margin,
                 dropdown,
                 22,
                 true,

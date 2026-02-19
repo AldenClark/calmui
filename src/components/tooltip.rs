@@ -223,6 +223,7 @@ impl RenderOnce for Tooltip {
                 "anchor-host",
                 placement,
                 self.offset_px,
+                self.theme.components.layout.popup_snap_margin,
                 bubble,
                 24,
                 matches!(self.placement, TooltipPlacement::Bottom),
