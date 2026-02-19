@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    canvas, div, px, AnyElement, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window,
+    AnyElement, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
+    StatefulInteractiveElement, Styled, Window, canvas, div, px,
 };
 
 use crate::contracts::{FieldLike, MotionAware, VariantConfigurable};
@@ -11,17 +11,17 @@ use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
 use crate::theme::{SelectTokens, Theme};
 
+use super::Stack;
 use super::field_variant::FieldVariantRuntime;
 use super::icon::Icon;
-use super::interaction_adapter::{bind_press_adapter, ActivateHandler, PressAdapter};
-use super::popup::{anchored_host, PopupPlacement};
+use super::interaction_adapter::{ActivateHandler, PressAdapter, bind_press_adapter};
+use super::popup::{PopupPlacement, anchored_host};
 use super::select_state::{self, SelectState, SelectStateInput};
 use super::transition::TransitionExt;
 use super::utils::{
-    apply_field_size, apply_interaction_styles, apply_radius, interaction_style, resolve_hsla,
-    InteractionStyles,
+    InteractionStyles, apply_field_size, apply_interaction_styles, apply_radius, interaction_style,
+    resolve_hsla,
 };
-use super::Stack;
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 type SelectChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
