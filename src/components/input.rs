@@ -1393,21 +1393,41 @@ impl TextInput {
             }
         }
 
-        window.handle_input(
-            &focus_handle,
-            TextInputImeHandler {
-                id: self.id.to_string(),
-                value_controlled: self.value_controlled,
-                rendered_value: current_value.clone(),
-                max_length: self.max_length,
-                disabled: self.disabled,
-                read_only: self.read_only,
-                masked: self.masked,
-                mask_reveal_ms: self.mask_reveal_ms,
-                font_size,
-                on_change: self.on_change.clone(),
-            },
-            cx,
+        let focus_handle_for_ime = focus_handle.clone();
+        let ime_id = self.id.to_string();
+        let ime_value_controlled = self.value_controlled;
+        let ime_rendered_value = current_value.clone();
+        let ime_max_length = self.max_length;
+        let ime_disabled = self.disabled;
+        let ime_read_only = self.read_only;
+        let ime_masked = self.masked;
+        let ime_mask_reveal_ms = self.mask_reveal_ms;
+        let ime_font_size = font_size;
+        let ime_on_change = self.on_change.clone();
+        input = input.child(
+            canvas(
+                |_, _, _| (),
+                move |_, (), window, cx| {
+                    window.handle_input(
+                        &focus_handle_for_ime,
+                        TextInputImeHandler {
+                            id: ime_id.clone(),
+                            value_controlled: ime_value_controlled,
+                            rendered_value: ime_rendered_value.clone(),
+                            max_length: ime_max_length,
+                            disabled: ime_disabled,
+                            read_only: ime_read_only,
+                            masked: ime_masked,
+                            mask_reveal_ms: ime_mask_reveal_ms,
+                            font_size: ime_font_size,
+                            on_change: ime_on_change.clone(),
+                        },
+                        cx,
+                    );
+                },
+            )
+            .absolute()
+            .size_full(),
         );
 
         if let Some(left_slot) = self.left_slot.take() {

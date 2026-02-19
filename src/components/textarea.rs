@@ -2013,23 +2013,45 @@ impl Textarea {
             }
         }
 
-        window.handle_input(
-            &focus_handle,
-            TextareaImeHandler {
-                id: self.id.to_string(),
-                value_controlled: self.value_controlled,
-                rendered_value: current_value.clone(),
-                max_length: self.max_length,
-                disabled: self.disabled,
-                read_only: self.read_only,
-                on_change: self.on_change.clone(),
-                line_height,
-                vertical_padding,
-                horizontal_padding,
-                content_width_fallback,
-                font_size,
-            },
-            cx,
+        let focus_handle_for_ime = focus_handle.clone();
+        let ime_id = self.id.to_string();
+        let ime_value_controlled = self.value_controlled;
+        let ime_rendered_value = current_value.clone();
+        let ime_max_length = self.max_length;
+        let ime_disabled = self.disabled;
+        let ime_read_only = self.read_only;
+        let ime_on_change = self.on_change.clone();
+        let ime_line_height = line_height;
+        let ime_vertical_padding = vertical_padding;
+        let ime_horizontal_padding = horizontal_padding;
+        let ime_content_width_fallback = content_width_fallback;
+        let ime_font_size = font_size;
+        input = input.child(
+            canvas(
+                |_, _, _| (),
+                move |_, (), window, cx| {
+                    window.handle_input(
+                        &focus_handle_for_ime,
+                        TextareaImeHandler {
+                            id: ime_id.clone(),
+                            value_controlled: ime_value_controlled,
+                            rendered_value: ime_rendered_value.clone(),
+                            max_length: ime_max_length,
+                            disabled: ime_disabled,
+                            read_only: ime_read_only,
+                            on_change: ime_on_change.clone(),
+                            line_height: ime_line_height,
+                            vertical_padding: ime_vertical_padding,
+                            horizontal_padding: ime_horizontal_padding,
+                            content_width_fallback: ime_content_width_fallback,
+                            font_size: ime_font_size,
+                        },
+                        cx,
+                    );
+                },
+            )
+            .absolute()
+            .size_full(),
         );
 
         if current_value.is_empty() && !is_focused {
