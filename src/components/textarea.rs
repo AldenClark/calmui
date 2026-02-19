@@ -2051,7 +2051,7 @@ impl Textarea {
                 },
             )
             .absolute()
-            .size_full(),
+            .size(px(0.0)),
         );
 
         if current_value.is_empty() && !is_focused {

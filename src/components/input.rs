@@ -1427,7 +1427,7 @@ impl TextInput {
                 },
             )
             .absolute()
-            .size_full(),
+            .size(px(0.0)),
         );
 
         if let Some(left_slot) = self.left_slot.take() {
