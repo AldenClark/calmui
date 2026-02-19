@@ -101,16 +101,6 @@ impl Switch {
         self
     }
 
-    fn switch_dimensions(&self) -> (f32, f32) {
-        match self.size {
-            Size::Xs => (26.0, 14.0),
-            Size::Sm => (30.0, 16.0),
-            Size::Md => (36.0, 20.0),
-            Size::Lg => (42.0, 24.0),
-            Size::Xl => (48.0, 28.0),
-        }
-    }
-
     fn resolved_checked(&self) -> bool {
         control::bool_state(&self.id, "checked", self.checked, self.default_checked)
     }
@@ -172,17 +162,19 @@ impl RenderOnce for Switch {
         let checked = self.resolved_checked();
         let is_controlled = self.checked.is_some();
         let is_focused = control::focused_state(&self.id, None, false);
-        let (track_w, track_h) = self.switch_dimensions();
-        let thumb_size = (track_h - 4.0).max(8.0);
-        let thumb_inset = ((track_h - thumb_size) / 2.0).max(1.0);
-        let thumb_top = (thumb_inset - 0.5).max(0.0);
+        let tokens = &self.theme.components.switch;
+        let size_preset = tokens.sizes.for_size(self.size);
+        let track_w = f32::from(size_preset.track_width);
+        let track_h = f32::from(size_preset.track_height);
+        let thumb_size = f32::from(size_preset.thumb_size);
+        let thumb_inset = ((track_h - thumb_size) * 0.5).max(0.0);
+        let thumb_top = thumb_inset;
         let thumb_left = if checked {
             track_w - thumb_size - thumb_inset
         } else {
             thumb_inset
         };
 
-        let tokens = &self.theme.components.switch;
         let active = self.variant_track_color(resolve_hsla(&self.theme, &tokens.track_on_bg));
         let inactive =
             self.variant_inactive_track_color(resolve_hsla(&self.theme, &tokens.track_off_bg));
@@ -191,7 +183,7 @@ impl RenderOnce for Switch {
         let description_fg = resolve_hsla(&self.theme, &tokens.description);
         let description_indent = match self.label_position {
             SwitchLabelPosition::Left => 0.0,
-            SwitchLabelPosition::Right => track_w + 8.0,
+            SwitchLabelPosition::Right => track_w + f32::from(size_preset.description_indent_gap),
         };
 
         let mut thumb = div()
@@ -225,22 +217,24 @@ impl RenderOnce for Switch {
         let switch_with_label = match self.label_position {
             SwitchLabelPosition::Left => Stack::horizontal()
                 .items_center()
-                .gap_2()
-                .children(
-                    self.label
-                        .clone()
-                        .map(|label| div().text_color(label_fg).child(label)),
-                )
+                .gap(size_preset.label_gap)
+                .children(self.label.clone().map(|label| {
+                    div()
+                        .text_size(size_preset.label_size)
+                        .text_color(label_fg)
+                        .child(label)
+                }))
                 .child(track),
             SwitchLabelPosition::Right => Stack::horizontal()
                 .items_center()
-                .gap_2()
+                .gap(size_preset.label_gap)
                 .child(track)
-                .children(
-                    self.label
-                        .clone()
-                        .map(|label| div().text_color(label_fg).child(label)),
-                ),
+                .children(self.label.clone().map(|label| {
+                    div()
+                        .text_size(size_preset.label_size)
+                        .text_color(label_fg)
+                        .child(label)
+                })),
         };
 
         let mut row = Stack::horizontal()
@@ -249,12 +243,12 @@ impl RenderOnce for Switch {
             .cursor_pointer()
             .child(
                 Stack::vertical()
-                    .gap_0p5()
+                    .gap(tokens.label_description_gap)
                     .child(switch_with_label)
                     .children(self.description.map(|description| {
                         div()
                             .ml(px(description_indent))
-                            .text_sm()
+                            .text_size(size_preset.description_size)
                             .text_color(description_fg)
                             .child(description)
                     })),

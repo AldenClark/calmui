@@ -12,10 +12,11 @@ use crate::style::{GroupOrientation, Radius, Size, Variant};
 
 use super::Stack;
 use super::control;
+use super::icon::Icon;
 use super::selection_state;
 use super::toggle::{ToggleConfig, wire_toggle_handlers};
 use super::transition::TransitionExt;
-use super::utils::{apply_button_size, apply_radius, resolve_hsla, variant_text_weight};
+use super::utils::{apply_radius, resolve_hsla, variant_text_weight};
 
 type ChipChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
 type ChipGroupChangeHandler = Rc<dyn Fn(Vec<SharedString>, &mut Window, &mut gpui::App)>;
@@ -194,6 +195,7 @@ impl RenderOnce for Chip {
         let is_controlled = self.checked.is_some();
         let is_focused = control::focused_state(&self.id, None, false);
         let tokens = &self.theme.components.chip;
+        let size_preset = tokens.sizes.for_size(self.size);
         let (bg_token, fg_token, border_token) = self.color_tokens();
         let bg = resolve_hsla(&self.theme, &bg_token);
         let fg = resolve_hsla(&self.theme, &fg_token);
@@ -207,18 +209,23 @@ impl RenderOnce for Chip {
             .id(self.id.clone())
             .focusable()
             .items_center()
-            .gap_1()
+            .gap(tokens.content_gap)
             .cursor_pointer()
             .text_color(fg)
             .bg(bg)
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(border)
             .child({
-                let mut content = Stack::horizontal().items_center().gap_1();
+                let mut content = Stack::horizontal().items_center().gap(tokens.content_gap);
                 if checked {
-                    content = content.child(div().text_sm().child("✓"));
+                    content = content.child(
+                        Icon::named("check")
+                            .with_id(self.id.slot("indicator"))
+                            .size(f32::from(tokens.indicator_size))
+                            .color(fg),
+                    );
                 }
-                if let Some(label) = self.label {
+                if let Some(label) = self.label.clone() {
                     content = content.child(
                         div()
                             .font_weight(variant_text_weight(self.variant))
@@ -228,7 +235,11 @@ impl RenderOnce for Chip {
                 content
             });
 
-        chip = apply_button_size(chip, self.size);
+        chip = chip
+            .text_size(size_preset.font_size)
+            .line_height(size_preset.line_height)
+            .py(size_preset.padding_y)
+            .px(size_preset.padding_x);
         chip = apply_radius(&self.theme, chip, self.radius);
 
         if self.disabled {
@@ -460,6 +471,8 @@ impl MotionAware for ChipGroup {
 impl RenderOnce for ChipGroup {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
+        let group_gap_horizontal = self.theme.components.chip.group_gap_horizontal;
+        let group_gap_vertical = self.theme.components.chip.group_gap_vertical;
         let selected_values = self.resolved_selected_values();
         let single_controlled = self.value_controlled;
         let multiple_controlled = self.values_controlled;
@@ -579,14 +592,14 @@ impl RenderOnce for ChipGroup {
                 .id(self.id.clone())
                 .group(self.id.clone())
                 .tab_group()
-                .gap_2()
+                .gap(group_gap_horizontal)
                 .flex_wrap()
                 .children(chips),
             GroupOrientation::Vertical => Stack::vertical()
                 .id(self.id.clone())
                 .group(self.id.clone())
                 .tab_group()
-                .gap_2()
+                .gap(group_gap_vertical)
                 .children(chips),
         }
     }

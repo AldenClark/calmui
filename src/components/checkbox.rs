@@ -108,16 +108,6 @@ impl Checkbox {
         self
     }
 
-    fn control_size_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 12.0,
-            Size::Sm => 14.0,
-            Size::Md => 16.0,
-            Size::Lg => 18.0,
-            Size::Xl => 20.0,
-        }
-    }
-
     fn resolved_checked(&self) -> bool {
         control::bool_state(&self.id, "checked", self.checked, self.default_checked)
     }
@@ -189,7 +179,8 @@ impl RenderOnce for Checkbox {
         let checked = self.resolved_checked();
         let is_controlled = self.checked.is_some();
         let tokens = &self.theme.components.checkbox;
-        let size = self.control_size_px();
+        let size_preset = tokens.sizes.for_size(self.size);
+        let size = f32::from(size_preset.control_size);
         let is_focused = control::focused_state(&self.id, None, false);
         let base_border = resolve_hsla(&self.theme, &tokens.border);
         let base_checked_border = resolve_hsla(&self.theme, &tokens.border_checked);
@@ -227,7 +218,7 @@ impl RenderOnce for Checkbox {
         if checked {
             control = control.child(
                 div()
-                    .text_sm()
+                    .text_size(size_preset.indicator_size)
                     .text_color(
                         self.variant_accent_color(resolve_hsla(&self.theme, &tokens.indicator)),
                     )
@@ -241,18 +232,26 @@ impl RenderOnce for Checkbox {
             .cursor_pointer()
             .child(
                 Stack::vertical()
-                    .gap_0p5()
+                    .gap(tokens.label_description_gap)
                     .child({
-                        let mut content = Stack::horizontal().items_center().gap_2().child(control);
+                        let mut content = Stack::horizontal()
+                            .items_center()
+                            .gap(size_preset.content_gap)
+                            .child(control);
                         if let Some(label) = self.label {
-                            content = content.child(div().text_color(fg).child(label));
+                            content = content.child(
+                                div()
+                                    .text_size(size_preset.label_size)
+                                    .text_color(fg)
+                                    .child(label),
+                            );
                         }
                         content
                     })
                     .children(self.description.map(|description| {
                         div()
-                            .ml(px(size + 8.0))
-                            .text_sm()
+                            .ml(px(size + f32::from(size_preset.description_indent_gap)))
+                            .text_size(size_preset.description_size)
                             .text_color(muted)
                             .child(description)
                     })),
@@ -455,6 +454,7 @@ impl MotionAware for CheckboxGroup {
 impl RenderOnce for CheckboxGroup {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
+        let tokens = &self.theme.components.checkbox;
         let values = self.resolved_values();
         let is_controlled = self.values_controlled;
         let items = self
@@ -510,14 +510,14 @@ impl RenderOnce for CheckboxGroup {
                 .flex()
                 .flex_row()
                 .items_start()
-                .gap_3()
+                .gap(tokens.group_gap_horizontal)
                 .flex_wrap()
                 .children(items),
             GroupOrientation::Vertical => Stack::vertical()
                 .id(self.id.clone())
                 .group(self.id.clone())
                 .tab_group()
-                .gap_2()
+                .gap(tokens.group_gap_vertical)
                 .children(items),
         }
     }

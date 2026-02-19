@@ -1,6 +1,6 @@
 use gpui::{
     AnyElement, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
-    Styled, div, px,
+    Styled, div,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable};
@@ -125,6 +125,7 @@ impl RenderOnce for Badge {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let (bg_token, fg_token, border_token) = self.variant_tokens();
+        let size_preset = self.theme.components.badge.sizes.for_size(self.size);
         let bg = resolve_hsla(&self.theme, &bg_token);
         let fg = resolve_hsla(&self.theme, &fg_token);
 
@@ -133,19 +134,14 @@ impl RenderOnce for Badge {
             .flex()
             .flex_row()
             .items_center()
-            .gap_1()
+            .gap(size_preset.gap)
             .bg(bg)
             .text_color(fg)
+            .text_size(size_preset.font_size)
+            .py(size_preset.padding_y)
+            .px(size_preset.padding_x)
             .border(super::utils::quantized_stroke_px(window, 1.0));
         root = apply_radius(&self.theme, root, self.radius);
-
-        root = match self.size {
-            Size::Xs => root.text_xs().py(px(1.0)).px(px(6.0)),
-            Size::Sm => root.text_xs().py(px(2.0)).px(px(8.0)),
-            Size::Md => root.text_sm().py(px(3.0)).px(px(10.0)),
-            Size::Lg => root.text_base().py(px(4.0)).px(px(12.0)),
-            Size::Xl => root.text_lg().py(px(5.0)).px(px(14.0)),
-        };
 
         if let Some(border_token) = border_token {
             root = root.border_color(resolve_hsla(&self.theme, &border_token));

@@ -150,12 +150,12 @@ impl RenderOnce for LoadingOverlay {
 
         let mut content = Stack::vertical()
             .items_center()
-            .gap_2()
+            .gap(tokens.content_gap)
             .child(loader)
             .text_color(resolve_hsla(&self.theme, &tokens.label));
 
         if let Some(label) = self.label {
-            content = content.child(div().text_sm().child(label));
+            content = content.child(div().text_size(tokens.label_size).child(label));
         }
 
         let overlay = Overlay::new()

@@ -80,16 +80,6 @@ impl Grid {
             .extend(children.into_iter().map(IntoElement::into_any_element));
         self
     }
-
-    fn apply_gap<T: Styled>(node: T, gap: Size) -> T {
-        match gap {
-            Size::Xs => node.gap_1(),
-            Size::Sm => node.gap_1p5(),
-            Size::Md => node.gap_2(),
-            Size::Lg => node.gap_3(),
-            Size::Xl => node.gap_4(),
-        }
-    }
 }
 
 impl ParentElement for Grid {
@@ -110,6 +100,7 @@ impl RenderOnce for Grid {
         self.theme.sync_from_provider(_cx);
         let gap_x = self.gap_x;
         let gap_y = self.gap_y;
+        let gap_scale = self.theme.components.layout.gap;
         let columns = self.columns.max(1);
         let mut rows = Vec::new();
 
@@ -118,7 +109,7 @@ impl RenderOnce for Grid {
             current_row.push(child);
             if current_row.len() == columns {
                 let mut row = div().flex().flex_row().w_full();
-                row = Self::apply_gap(row, gap_x);
+                row = row.gap(gap_scale.for_size(gap_x));
                 let items = current_row
                     .drain(..)
                     .map(|item| div().flex_1().min_w_0().child(item))
@@ -129,7 +120,7 @@ impl RenderOnce for Grid {
 
         if !current_row.is_empty() {
             let mut row = div().flex().flex_row().w_full();
-            row = Self::apply_gap(row, gap_x);
+            row = row.gap(gap_scale.for_size(gap_x));
             while current_row.len() < columns {
                 current_row.push(div().w_full().h_full().into_any_element());
             }
@@ -140,7 +131,12 @@ impl RenderOnce for Grid {
             rows.push(row.children(items));
         }
 
-        Self::apply_gap(div().id(self.id).flex().flex_col().w_full(), gap_y)
+        div()
+            .id(self.id)
+            .flex()
+            .flex_col()
+            .w_full()
+            .gap(gap_scale.for_size(gap_y))
             .text_color(self.theme.resolve_hsla(&self.theme.semantic.text_primary))
             .children(rows)
     }
@@ -224,6 +220,9 @@ pub struct Space {
     id: ComponentId,
     width_px: Option<f32>,
     height_px: Option<f32>,
+    width_size: Option<Size>,
+    height_size: Option<Size>,
+    theme: crate::theme::LocalTheme,
 }
 
 impl Space {
@@ -233,33 +232,41 @@ impl Space {
             id: ComponentId::default(),
             width_px: None,
             height_px: None,
+            width_size: None,
+            height_size: None,
+            theme: crate::theme::LocalTheme::default(),
         }
     }
 
     pub fn w(mut self, value: Size) -> Self {
-        self.width_px = Some(Self::size_to_px(value));
+        self.width_size = Some(value);
+        self.width_px = None;
         self
     }
 
     pub fn h(mut self, value: Size) -> Self {
-        self.height_px = Some(Self::size_to_px(value));
+        self.height_size = Some(value);
+        self.height_px = None;
         self
     }
 
     pub fn with_size(mut self, value: Size) -> Self {
-        let size_px = Self::size_to_px(value);
-        self.width_px = Some(size_px);
-        self.height_px = Some(size_px);
+        self.width_size = Some(value);
+        self.height_size = Some(value);
+        self.width_px = None;
+        self.height_px = None;
         self
     }
 
     pub fn w_px(mut self, value: f32) -> Self {
         self.width_px = Some(value.max(0.0));
+        self.width_size = None;
         self
     }
 
     pub fn h_px(mut self, value: f32) -> Self {
         self.height_px = Some(value.max(0.0));
+        self.height_size = None;
         self
     }
 
@@ -267,17 +274,9 @@ impl Space {
         let size_px = value.max(0.0);
         self.width_px = Some(size_px);
         self.height_px = Some(size_px);
+        self.width_size = None;
+        self.height_size = None;
         self
-    }
-
-    fn size_to_px(value: Size) -> f32 {
-        match value {
-            Size::Xs => 4.0,
-            Size::Sm => 6.0,
-            Size::Md => 8.0,
-            Size::Lg => 12.0,
-            Size::Xl => 16.0,
-        }
     }
 }
 
@@ -289,12 +288,20 @@ impl Space {
 }
 
 impl RenderOnce for Space {
-    fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
+        let scale = self.theme.components.layout.space;
         let mut node = div().id(self.id);
-        if let Some(width_px) = self.width_px {
+        let width_px = self
+            .width_px
+            .or_else(|| self.width_size.map(|size| f32::from(scale.for_size(size))));
+        let height_px = self
+            .height_px
+            .or_else(|| self.height_size.map(|size| f32::from(scale.for_size(size))));
+        if let Some(width_px) = width_px {
             node = node.w(px(width_px));
         }
-        if let Some(height_px) = self.height_px {
+        if let Some(height_px) = height_px {
             node = node.h(px(height_px));
         }
         node
@@ -304,6 +311,18 @@ impl RenderOnce for Space {
 crate::impl_sized_via_method!(Space);
 
 impl crate::contracts::ComponentThemeOverridable for Grid {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        &mut self.theme
+    }
+}
+
+impl crate::contracts::ComponentThemeOverridable for SimpleGrid {
+    fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
+        self.inner.local_theme_mut()
+    }
+}
+
+impl crate::contracts::ComponentThemeOverridable for Space {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
     }

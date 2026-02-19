@@ -68,16 +68,6 @@ impl Paper {
             .extend(values.into_iter().map(IntoElement::into_any_element));
         self
     }
-
-    fn apply_padding<T: Styled>(padding: Size, node: T) -> T {
-        match padding {
-            Size::Xs => node.p_1(),
-            Size::Sm => node.p_2(),
-            Size::Md => node.p_3(),
-            Size::Lg => node.p_4(),
-            Size::Xl => node.p_5(),
-        }
-    }
 }
 
 impl Paper {
@@ -98,13 +88,13 @@ impl RenderOnce for Paper {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.paper;
         let root_id = self.id.clone();
-        let padding = self.padding;
+        let padding = tokens.padding.for_size(self.padding);
         let mut root = div()
             .id(root_id)
             .bg(resolve_hsla(&self.theme, &tokens.bg))
             .w_full();
         root = apply_radius(&self.theme, root, self.radius);
-        root = Self::apply_padding(padding, root);
+        root = root.p(padding);
 
         if self.bordered {
             root = root

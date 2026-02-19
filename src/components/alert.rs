@@ -177,6 +177,7 @@ impl RenderOnce for Alert {
         }
 
         let (bg, fg) = self.colors();
+        let tokens = &self.theme.components.toast;
         let icon = self.icon.unwrap_or_else(|| Self::default_icon(self.kind));
         let icon_registry = self.icons.clone();
         let show_right_actions = self.closable || self.right_slot.is_some();
@@ -186,8 +187,8 @@ impl RenderOnce for Alert {
         let icon_badge = div()
             .id(self.id.slot("icon"))
             .flex_none()
-            .w(gpui::px(24.0))
-            .h(gpui::px(24.0))
+            .w(tokens.icon_box_size)
+            .h(tokens.icon_box_size)
             .mt_0p5()
             .flex()
             .items_center()
@@ -195,7 +196,7 @@ impl RenderOnce for Alert {
             .child(
                 Icon::new(icon)
                     .with_id(self.id.slot("kind-icon"))
-                    .size(17.0)
+                    .size(f32::from(tokens.icon_size))
                     .color(fg)
                     .registry(icon_registry.clone()),
             );
@@ -203,8 +204,8 @@ impl RenderOnce for Alert {
         let close_button = div()
             .id(self.id.slot("close"))
             .flex_none()
-            .w(gpui::px(24.0))
-            .h(gpui::px(24.0))
+            .w(tokens.close_button_size)
+            .h(tokens.close_button_size)
             .flex()
             .items_center()
             .justify_center()
@@ -219,7 +220,7 @@ impl RenderOnce for Alert {
             .child(
                 Icon::named("x")
                     .with_id(self.id.slot("close-icon"))
-                    .size(13.0)
+                    .size(f32::from(tokens.close_icon_size))
                     .color(fg)
                     .registry(icon_registry),
             )
@@ -233,7 +234,7 @@ impl RenderOnce for Alert {
                 },
             );
 
-        let mut right = div().flex_none().flex().items_center().gap_2();
+        let mut right = div().flex_none().flex().items_center().gap(tokens.row_gap);
         if let Some(slot) = self.right_slot.take() {
             right = right.child(slot());
         }
@@ -245,7 +246,7 @@ impl RenderOnce for Alert {
             .id(self.id.clone())
             .w_full()
             .max_w_full()
-            .p_3()
+            .p(tokens.card_padding)
             .rounded_md()
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(deepened_surface_border(bg))
@@ -256,15 +257,16 @@ impl RenderOnce for Alert {
                     .flex()
                     .flex_row()
                     .items_start()
-                    .gap_2()
+                    .gap(tokens.row_gap)
                     .child(icon_badge)
                     .child(
                         div().flex_1().overflow_hidden().child(
                             Stack::vertical()
-                                .gap_1()
+                                .gap(tokens.content_gap)
                                 .children(self.title.map(|title| {
                                     div()
                                         .w_full()
+                                        .text_size(tokens.title_size)
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
                                         .truncate()
                                         .child(title)
@@ -272,7 +274,7 @@ impl RenderOnce for Alert {
                                 .children(self.message.map(|message| {
                                     div()
                                         .w_full()
-                                        .text_sm()
+                                        .text_size(tokens.body_size)
                                         .whitespace_normal()
                                         .line_clamp(4)
                                         .child(message)

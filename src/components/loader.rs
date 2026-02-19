@@ -85,35 +85,31 @@ impl Loader {
         self
     }
 
-    fn dot_size_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 5.0,
-            Size::Sm => 6.0,
-            Size::Md => 8.0,
-            Size::Lg => 10.0,
-            Size::Xl => 12.0,
+    fn size_preset(&self) -> crate::theme::LoaderSizePreset {
+        self.theme.components.loader.sizes.for_size(self.size)
+    }
+
+    fn resolved_loader_color(&self) -> Hsla {
+        if let Some(color) = self.color {
+            color
+        } else {
+            resolve_hsla(&self.theme, &self.theme.components.loader.color)
         }
     }
 
-    fn ring_size_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 14.0,
-            Size::Sm => 16.0,
-            Size::Md => 20.0,
-            Size::Lg => 24.0,
-            Size::Xl => 28.0,
+    fn resolved_label_color(&self) -> Hsla {
+        if let Some(color) = self.color {
+            color
+        } else {
+            resolve_hsla(&self.theme, &self.theme.components.loader.label)
         }
-    }
-
-    fn color_token(&self) -> Hsla {
-        self.color
-            .clone()
-            .unwrap_or_else(|| self.theme.components.button.filled_bg.clone())
     }
 
     fn render_dots(self) -> AnyElement {
-        let color = resolve_hsla(&self.theme, &self.color_token());
-        let dot = self.dot_size_px();
+        let size_preset = self.size_preset();
+        let color = self.resolved_loader_color();
+        let label_color = self.resolved_label_color();
+        let dot = f32::from(size_preset.dot_size);
         let cell_h = dot * 1.8;
         let baseline_top = (cell_h - dot).max(0.0);
 
@@ -151,18 +147,26 @@ impl Loader {
                 )
         });
 
-        let mut row = Stack::horizontal().items_center().gap_1().children(dots);
+        let mut row = Stack::horizontal()
+            .items_center()
+            .gap(size_preset.cluster_gap)
+            .children(dots);
         if let Some(label) = self.label {
-            row = row
-                .gap_2()
-                .child(div().text_sm().text_color(color).child(label));
+            row = row.gap(size_preset.label_gap).child(
+                div()
+                    .text_size(size_preset.label_size)
+                    .text_color(label_color)
+                    .child(label),
+            );
         }
         row.into_any_element()
     }
 
     fn render_pulse(self) -> AnyElement {
-        let color = resolve_hsla(&self.theme, &self.color_token());
-        let dot = self.dot_size_px() + 3.0;
+        let size_preset = self.size_preset();
+        let color = self.resolved_loader_color();
+        let label_color = self.resolved_label_color();
+        let dot = f32::from(size_preset.dot_size) + 3.0;
 
         let outer = div()
             .id(self.id.slot("pulse-outer"))
@@ -195,7 +199,7 @@ impl Loader {
                     .start_opacity_pct(20),
             );
 
-        let mut row = Stack::horizontal().gap_2().child(
+        let mut row = Stack::horizontal().gap(size_preset.cluster_gap).child(
             div()
                 .relative()
                 .w(px(dot + 4.0))
@@ -214,20 +218,22 @@ impl Loader {
                 ),
         );
         if let Some(label) = self.label {
-            row = row.child(div().text_sm().text_color(color).child(label));
+            row = row.gap(size_preset.label_gap).child(
+                div()
+                    .text_size(size_preset.label_size)
+                    .text_color(label_color)
+                    .child(label),
+            );
         }
         row.into_any_element()
     }
 
     fn render_bars(self) -> AnyElement {
-        let color = resolve_hsla(&self.theme, &self.color_token());
-        let (bar_w, bar_h_max) = match self.size {
-            Size::Xs => (3.0, 14.0),
-            Size::Sm => (4.0, 16.0),
-            Size::Md => (4.0, 18.0),
-            Size::Lg => (5.0, 20.0),
-            Size::Xl => (6.0, 22.0),
-        };
+        let size_preset = self.size_preset();
+        let color = self.resolved_loader_color();
+        let label_color = self.resolved_label_color();
+        let bar_w = f32::from(size_preset.bar_width);
+        let bar_h_max = f32::from(size_preset.bar_height_max);
         let bar_h_min = bar_h_max * 0.35;
 
         let bars = (0..3).map(|index| {
@@ -257,16 +263,26 @@ impl Loader {
             )
         });
 
-        let mut row = Stack::horizontal().items_end().gap_1().children(bars);
+        let mut row = Stack::horizontal()
+            .items_end()
+            .gap(size_preset.cluster_gap)
+            .children(bars);
         if let Some(label) = self.label {
-            row = row.child(div().text_sm().text_color(color).child(label));
+            row = row.gap(size_preset.label_gap).child(
+                div()
+                    .text_size(size_preset.label_size)
+                    .text_color(label_color)
+                    .child(label),
+            );
         }
         row.into_any_element()
     }
 
     fn render_oval(self) -> AnyElement {
-        let color = resolve_hsla(&self.theme, &self.color_token());
-        let ring = self.ring_size_px();
+        let size_preset = self.size_preset();
+        let color = self.resolved_loader_color();
+        let label_color = self.resolved_label_color();
+        let ring = f32::from(size_preset.ring_size);
         let segment_size = (ring * 0.17).max(2.0);
         let segment_count = 12usize;
         let radius = (ring - segment_size) * 0.5;
@@ -314,9 +330,17 @@ impl Loader {
                 .children(segments),
         );
 
-        let mut row = Stack::horizontal().gap_2().items_center().child(oval);
+        let mut row = Stack::horizontal()
+            .gap(size_preset.cluster_gap)
+            .items_center()
+            .child(oval);
         if let Some(label) = self.label {
-            row = row.child(div().text_sm().text_color(color).child(label));
+            row = row.gap(size_preset.label_gap).child(
+                div()
+                    .text_size(size_preset.label_size)
+                    .text_color(label_color)
+                    .child(label),
+            );
         }
         row.into_any_element()
     }

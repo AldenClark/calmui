@@ -70,16 +70,6 @@ impl Text {
         self
     }
 
-    fn line_height_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 14.0,
-            Size::Sm => 16.0,
-            Size::Md => 18.0,
-            Size::Lg => 22.0,
-            Size::Xl => 26.0,
-        }
-    }
-
     fn resolved_text_color(&self) -> gpui::Hsla {
         let tokens = &self.theme.components.text;
         let token = match self.tone {
@@ -107,15 +97,12 @@ impl RenderOnce for Text {
         self.theme.sync_from_provider(_cx);
         let id = self.id.clone();
         let color = self.resolved_text_color();
-        let mut node = div().id(id).text_color(color);
-
-        node = match self.size {
-            Size::Xs => node.text_xs(),
-            Size::Sm => node.text_sm(),
-            Size::Md => node.text_base(),
-            Size::Lg => node.text_lg(),
-            Size::Xl => node.text_xl(),
-        };
+        let size_preset = self.theme.components.text.sizes.for_size(self.size);
+        let mut node = div()
+            .id(id)
+            .text_color(color)
+            .text_size(size_preset.font_size)
+            .line_height(size_preset.line_height);
 
         if self.truncate {
             if self.with_ellipsis {
@@ -131,7 +118,7 @@ impl RenderOnce for Text {
             } else {
                 node = node
                     .overflow_hidden()
-                    .max_h(gpui::px(self.line_height_px() * lines as f32));
+                    .max_h(gpui::px(f32::from(size_preset.line_height) * lines as f32));
             }
         }
 

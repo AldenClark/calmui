@@ -222,19 +222,9 @@ impl RenderOnce for Accordion {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.accordion;
+        let size_preset = tokens.sizes.for_size(self.size);
         let active_value = self.resolved_value();
         let is_controlled = self.value_controlled;
-        let size_delta = match self.size {
-            Size::Xs => -2.0,
-            Size::Sm => -1.0,
-            Size::Md => 0.0,
-            Size::Lg => 2.0,
-            Size::Xl => 4.0,
-        };
-        let label_size = gpui::px((f32::from(tokens.label_size) + size_delta).max(10.0));
-        let description_size =
-            gpui::px((f32::from(tokens.description_size) + size_delta).max(10.0));
-        let content_size = gpui::px((f32::from(tokens.content_size) + size_delta).max(10.0));
         let item_bg = self.variant_surface_color(resolve_hsla(&self.theme, &tokens.item_bg));
         let item_border = self.variant_border_color(resolve_hsla(&self.theme, &tokens.item_border));
         let header_hover_bg = item_bg.blend(gpui::white().opacity(0.04));
@@ -269,14 +259,14 @@ impl RenderOnce for Accordion {
                     .justify_between()
                     .gap(tokens.header_gap)
                     .cursor_pointer()
-                    .px(tokens.header_padding_x)
-                    .py(tokens.header_padding_y);
+                    .px(size_preset.header_padding_x)
+                    .py(size_preset.header_padding_y);
                 if item.meta.label.is_some() || item.meta.description.is_some() {
                     let mut label_stack = Stack::vertical().gap(tokens.label_stack_gap);
                     if let Some(label) = item.meta.label.clone() {
                         label_stack = label_stack.child(
                             div()
-                                .text_size(label_size)
+                                .text_size(size_preset.label_size)
                                 .text_color(resolve_hsla(&self.theme, &tokens.label))
                                 .child(label),
                         );
@@ -284,7 +274,7 @@ impl RenderOnce for Accordion {
                     if let Some(description) = item.meta.description.clone() {
                         label_stack = label_stack.child(
                             div()
-                                .text_size(description_size)
+                                .text_size(size_preset.description_size)
                                 .text_color(resolve_hsla(&self.theme, &tokens.description))
                                 .child(description),
                         );
@@ -298,7 +288,7 @@ impl RenderOnce for Accordion {
                         "chevron-down"
                     })
                     .with_id(chevron_id)
-                    .size(f32::from(tokens.chevron_size))
+                    .size(f32::from(size_preset.chevron_size))
                     .color(resolve_hsla(&self.theme, &tokens.chevron)),
                 );
 
@@ -385,13 +375,13 @@ impl RenderOnce for Accordion {
                     let mut body = Stack::vertical()
                         .id(panel_id.clone())
                         .gap(tokens.panel_gap)
-                        .px(tokens.panel_padding_x)
-                        .pb(tokens.panel_padding_bottom)
-                        .pt(tokens.panel_padding_top)
+                        .px(size_preset.panel_padding_x)
+                        .pb(size_preset.panel_padding_bottom)
+                        .pt(size_preset.panel_padding_top)
                         .text_color(resolve_hsla(&self.theme, &tokens.content));
 
                     if let Some(text) = item.body.take() {
-                        body = body.child(div().text_size(content_size).child(text));
+                        body = body.child(div().text_size(size_preset.content_size).child(text));
                     }
                     if let Some(content) = item.content.take() {
                         body = body.child(content());

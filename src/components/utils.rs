@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use gpui::{ClickEvent, FontWeight, Hsla, Pixels, StatefulInteractiveElement, Styled, Window, px};
 
-use crate::style::{Radius, Size, Variant};
+use crate::style::{Radius, Variant};
 use crate::theme::{FieldSizePreset, ResolveWithTheme, SemanticRadiusToken, Theme};
 
 pub type PressHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)>;
@@ -88,16 +88,6 @@ where
 
 pub fn apply_radius<T: Styled>(theme: &Theme, div: T, radius: Radius) -> T {
     div.rounded(resolve_radius(theme, SemanticRadiusToken::from(radius)))
-}
-
-pub fn apply_button_size<T: Styled>(div: T, size: Size) -> T {
-    match size {
-        Size::Xs => div.text_xs().py(px(4.0)).px(px(8.0)),
-        Size::Sm => div.text_sm().py(px(6.0)).px(px(10.0)),
-        Size::Md => div.text_base().py(px(8.0)).px(px(12.0)),
-        Size::Lg => div.text_lg().py(px(10.0)).px(px(14.0)),
-        Size::Xl => div.text_xl().py(px(12.0)).px(px(16.0)),
-    }
 }
 
 pub fn apply_field_size<T: Styled>(div: T, preset: FieldSizePreset) -> T {

@@ -95,6 +95,7 @@ impl ToastLayer {
 
     fn render_toast_card(&self, entry: ToastEntry, window: &gpui::Window) -> AnyElement {
         let (bg, fg) = self.toast_colors(&entry);
+        let tokens = &self.theme.components.toast;
         let manager = self.manager.clone();
         let toast_id = entry.id;
         let toast_key = entry.id.map(|value| value.0).unwrap_or_default();
@@ -107,8 +108,8 @@ impl ToastLayer {
         let close_button = div()
             .id(self.id.slot_index("toast-close", (toast_key).to_string()))
             .flex_none()
-            .w(gpui::px(24.0))
-            .h(gpui::px(24.0))
+            .w(tokens.close_button_size)
+            .h(tokens.close_button_size)
             .flex()
             .items_center()
             .justify_center()
@@ -126,7 +127,7 @@ impl ToastLayer {
                         self.id
                             .slot_index("toast-close-icon", (toast_key).to_string()),
                     )
-                    .size(13.0)
+                    .size(f32::from(tokens.close_icon_size))
                     .color(fg)
                     .registry(icons.clone()),
             )
@@ -142,8 +143,8 @@ impl ToastLayer {
         let icon_badge = div()
             .id(self.id.slot_index("toast-icon", (toast_key).to_string()))
             .flex_none()
-            .w(gpui::px(24.0))
-            .h(gpui::px(24.0))
+            .w(tokens.icon_box_size)
+            .h(tokens.icon_box_size)
             .mt_0p5()
             .flex()
             .items_center()
@@ -154,16 +155,16 @@ impl ToastLayer {
                         self.id
                             .slot_index("toast-kind-icon", (toast_key).to_string()),
                     )
-                    .size(17.0)
+                    .size(f32::from(tokens.icon_size))
                     .color(fg)
                     .registry(icons),
             );
 
         div()
             .id(self.id.slot_index("toast", (toast_key).to_string()))
-            .w(gpui::px(360.0))
+            .w(tokens.card_width)
             .max_w_full()
-            .p_3()
+            .p(tokens.card_padding)
             .rounded_md()
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(deepened_surface_border(bg))
@@ -174,15 +175,16 @@ impl ToastLayer {
                     .flex()
                     .flex_row()
                     .items_start()
-                    .gap_2()
+                    .gap(tokens.row_gap)
                     .child(icon_badge)
                     .child(
                         div().flex_1().overflow_hidden().child(
                             Stack::vertical()
-                                .gap_1()
+                                .gap(tokens.content_gap)
                                 .child(
                                     div()
                                         .w_full()
+                                        .text_size(tokens.title_size)
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
                                         .truncate()
                                         .child(title),
@@ -190,7 +192,7 @@ impl ToastLayer {
                                 .child(
                                     div()
                                         .w_full()
-                                        .text_sm()
+                                        .text_size(tokens.body_size)
                                         .whitespace_normal()
                                         .line_clamp(3)
                                         .child(message),
@@ -206,22 +208,20 @@ impl ToastLayer {
             .into_any_element()
     }
 
-    fn anchor_for(position: ToastPosition) -> gpui::Div {
-        let top_offset = if cfg!(target_os = "macos") {
-            38.0
-        } else if cfg!(target_os = "windows") {
-            42.0
-        } else {
-            16.0
-        };
+    fn anchor_for(
+        position: ToastPosition,
+        top_offset: f32,
+        edge_offset: gpui::Pixels,
+        stack_gap: gpui::Pixels,
+    ) -> gpui::Div {
         match position {
             ToastPosition::TopLeft => div()
                 .absolute()
                 .top(px(top_offset))
-                .left_4()
+                .left(edge_offset)
                 .flex()
                 .flex_col()
-                .gap_2(),
+                .gap(stack_gap),
             ToastPosition::TopCenter => div()
                 .absolute()
                 .top(px(top_offset))
@@ -230,37 +230,37 @@ impl ToastLayer {
                 .flex()
                 .items_center()
                 .flex_col()
-                .gap_2(),
+                .gap(stack_gap),
             ToastPosition::TopRight => div()
                 .absolute()
                 .top(px(top_offset))
-                .right_4()
+                .right(edge_offset)
                 .flex()
                 .flex_col()
-                .gap_2(),
+                .gap(stack_gap),
             ToastPosition::BottomLeft => div()
                 .absolute()
-                .bottom_4()
-                .left_4()
+                .bottom(edge_offset)
+                .left(edge_offset)
                 .flex()
                 .flex_col()
-                .gap_2(),
+                .gap(stack_gap),
             ToastPosition::BottomCenter => div()
                 .absolute()
-                .bottom_4()
+                .bottom(edge_offset)
                 .left_0()
                 .right_0()
                 .flex()
                 .items_center()
                 .flex_col()
-                .gap_2(),
+                .gap(stack_gap),
             ToastPosition::BottomRight => div()
                 .absolute()
-                .bottom_4()
-                .right_4()
+                .bottom(edge_offset)
+                .right(edge_offset)
                 .flex()
                 .flex_col()
-                .gap_2(),
+                .gap(stack_gap),
         }
     }
 
@@ -304,6 +304,9 @@ impl ToastLayer {
 impl RenderOnce for ToastLayer {
     fn render(mut self, window: &mut gpui::Window, cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(cx);
+        let toast_tokens = &self.theme.components.toast;
+        let top_offset = f32::from(self.theme.components.title_bar.height)
+            + f32::from(toast_tokens.top_offset_extra);
         let positions = [
             ToastPosition::TopLeft,
             ToastPosition::TopCenter,
@@ -332,7 +335,15 @@ impl RenderOnce for ToastLayer {
                 cards.push(self.render_toast_card(entry, window));
             }
 
-            root = root.child(Self::anchor_for(position).children(cards));
+            root = root.child(
+                Self::anchor_for(
+                    position,
+                    top_offset,
+                    toast_tokens.edge_offset,
+                    toast_tokens.stack_gap,
+                )
+                .children(cards),
+            );
         }
 
         root
@@ -437,9 +448,9 @@ impl ModalLayer {
 
         if let Some(icon) = self.modal_kind_icon(entry.kind_ref()) {
             header_title = header_title.child(
-                div().mr_2().flex().child(
+                div().mr(modal_tokens.kind_icon_gap).flex().child(
                     Icon::new(icon)
-                        .size(16.0)
+                        .size(f32::from(modal_tokens.kind_icon_size))
                         .color(self.modal_kind_color(entry.kind_ref()))
                         .registry(self.icons.clone()),
                 ),

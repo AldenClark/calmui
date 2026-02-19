@@ -114,13 +114,25 @@ impl Rating {
         control::f32_state(&self.id, "value", controlled, default).clamp(0.0, max)
     }
 
-    fn icon_size_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 14.0,
-            Size::Sm => 16.0,
-            Size::Md => 18.0,
-            Size::Lg => 22.0,
-            Size::Xl => 26.0,
+    fn active_color(&self) -> gpui::Hsla {
+        let base = resolve_hsla(&self.theme, &self.theme.components.rating.active);
+        match self.variant {
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.78),
+            Variant::Subtle => base.alpha(0.62),
+            Variant::Outline => base.alpha(0.88),
+            Variant::Ghost => base.alpha(0.55),
+        }
+    }
+
+    fn inactive_color(&self) -> gpui::Hsla {
+        let base = resolve_hsla(&self.theme, &self.theme.components.rating.inactive);
+        match self.variant {
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.74),
+            Variant::Subtle => base.alpha(0.58),
+            Variant::Outline => base.alpha(0.68),
+            Variant::Ghost => base.alpha(0.45),
         }
     }
 }
@@ -160,10 +172,11 @@ impl RenderOnce for Rating {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.rating;
+        let size_preset = tokens.sizes.for_size(self.size);
         let value = self.resolved_value();
-        let icon_size = self.icon_size_px();
-        let active = resolve_hsla(&self.theme, &tokens.active);
-        let inactive = resolve_hsla(&self.theme, &tokens.inactive);
+        let icon_size = f32::from(size_preset.icon_size);
+        let active = self.active_color();
+        let inactive = self.inactive_color();
 
         let stars = (1..=self.max)
             .map(|index| {
@@ -290,7 +303,7 @@ impl RenderOnce for Rating {
         Stack::horizontal()
             .id(self.id.clone())
             .items_center()
-            .gap_1()
+            .gap(size_preset.gap)
             .children(stars)
             .with_enter_transition(self.id.slot("enter"), self.motion)
     }

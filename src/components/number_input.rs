@@ -2,7 +2,7 @@ use std::{rc::Rc, str::FromStr};
 
 use gpui::{
     AnyElement, ClickEvent, FocusHandle, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div, px,
+    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div,
 };
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
@@ -15,7 +15,7 @@ use crate::style::{FieldLayout, Radius, Size, Variant};
 use super::TextInput;
 use super::control;
 use super::icon::Icon;
-use super::utils::{apply_radius, resolve_hsla};
+use super::utils::{apply_radius, quantized_stroke_px, resolve_hsla};
 
 type ChangeHandler = Rc<dyn Fn(f64, &mut Window, &mut gpui::App)>;
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
@@ -392,7 +392,7 @@ impl NumberInput {
         }
     }
 
-    fn render_controls_slot(&self, fallback_text: String) -> AnyElement {
+    fn render_controls_slot(&self, fallback_text: String, window: &gpui::Window) -> AnyElement {
         let tokens = &self.theme.components.number_input;
         let controls_bg = resolve_hsla(&self.theme, &tokens.controls_bg);
         let controls_fg = resolve_hsla(&self.theme, &tokens.controls_fg);
@@ -407,7 +407,7 @@ impl NumberInput {
             .justify_center()
             .bg(controls_bg)
             .text_color(controls_fg)
-            .border(px(1.0))
+            .border(quantized_stroke_px(window, 1.0))
             .border_color(controls_border)
             .child(
                 Icon::named("chevron-up")
@@ -425,7 +425,7 @@ impl NumberInput {
             .justify_center()
             .bg(controls_bg)
             .text_color(controls_fg)
-            .border(px(1.0))
+            .border(quantized_stroke_px(window, 1.0))
             .border_color(controls_border)
             .child(
                 Icon::named("chevron-down")
@@ -509,7 +509,7 @@ impl NumberInput {
             down = down.opacity(0.55);
         }
 
-        let controls = super::Stack::vertical().gap_0().child(up).child(down);
+        let controls = super::Stack::vertical().child(up).child(down);
         apply_radius(&self.theme, controls, self.radius).into_any_element()
     }
 }
@@ -650,7 +650,7 @@ impl RenderOnce for NumberInput {
         let user_right_slot = self.right_slot.take().map(|slot| slot());
         let controls_slot = self
             .controls
-            .then(|| self.render_controls_slot(current_text.clone()));
+            .then(|| self.render_controls_slot(current_text.clone(), window));
         if let Some(right_slot) = Self::compose_right_slot(
             user_right_slot,
             controls_slot,

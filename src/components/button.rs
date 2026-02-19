@@ -497,6 +497,7 @@ impl MotionAware for ButtonGroup {
 impl RenderOnce for ButtonGroup {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
+        let group_gap = self.theme.components.button.sizes.for_size(self.size).content_gap;
         let selected_value = self.resolved_value();
         let is_controlled = self.value_controlled;
         let children = self
@@ -563,7 +564,7 @@ impl RenderOnce for ButtonGroup {
                 .id(self.id.clone())
                 .group(self.id.clone())
                 .tab_group()
-                .gap_1()
+                .gap(group_gap)
                 .children(children),
             GroupOrientation::Vertical => div()
                 .id(self.id.clone())
@@ -571,7 +572,7 @@ impl RenderOnce for ButtonGroup {
                 .tab_group()
                 .flex()
                 .flex_col()
-                .gap_1()
+                .gap(group_gap)
                 .children(children),
         };
         root

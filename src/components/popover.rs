@@ -110,16 +110,16 @@ impl Popover {
     }
 
     fn render_panel(&mut self, is_controlled: bool, window: &gpui::Window) -> AnyElement {
-        let tokens = &self.theme.components.popover;
+        let tokens = self.theme.components.popover.clone();
         let mut panel = Stack::vertical()
             .id(self.id.slot("panel"))
-            .gap_2()
+            .gap(tokens.gap)
             .bg(resolve_hsla(&self.theme, &tokens.bg))
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.border))
             .text_color(resolve_hsla(&self.theme, &tokens.body))
-            .rounded_md()
-            .p_3();
+            .rounded(tokens.radius)
+            .p(tokens.padding);
 
         if self.close_on_click_outside {
             if let Some(handler) = self.on_open_change.clone() {

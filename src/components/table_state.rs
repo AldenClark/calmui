@@ -19,6 +19,8 @@ pub struct TableStateInput<'a> {
     pub virtual_row_height_px: Option<f32>,
     pub default_row_height_px: f32,
     pub line_thickness_px: f32,
+    pub sticky_header_reserved_height_px: f32,
+    pub min_scroll_height_px: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -85,7 +87,8 @@ impl TableState {
 
         let resolved_scroll_height = input.max_height_px.map(|max_height| {
             if input.sticky_header && input.has_headers {
-                (max_height - 42.0).max(40.0)
+                (max_height - input.sticky_header_reserved_height_px)
+                    .max(input.min_scroll_height_px)
             } else {
                 max_height
             }

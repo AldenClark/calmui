@@ -119,16 +119,6 @@ impl Progress {
         value.clamp(0.0, 100.0)
     }
 
-    fn bar_height_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 4.0,
-            Size::Sm => 6.0,
-            Size::Md => 8.0,
-            Size::Lg => 12.0,
-            Size::Xl => 16.0,
-        }
-    }
-
     fn variant_fill_color(&self) -> gpui::Hsla {
         let base = resolve_hsla(&self.theme, &self.theme.components.progress.fill_bg);
         match self.variant {
@@ -335,6 +325,7 @@ impl RenderOnce for Progress {
     fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.progress;
+        let size_preset = tokens.sizes.for_size(self.size);
         let track_width = self
             .width_px
             .unwrap_or_else(|| f32::from(tokens.default_width))
@@ -342,7 +333,7 @@ impl RenderOnce for Progress {
         let track_bg = resolve_hsla(&self.theme, &tokens.track_bg);
         let default_fill = self.variant_fill_color();
         let sections = self.resolved_sections();
-        let bar_height = self.bar_height_px();
+        let bar_height = f32::from(size_preset.bar_height);
         let total_value = sections
             .iter()
             .fold(0.0_f32, |acc, section| acc + section.value);
@@ -394,14 +385,14 @@ impl RenderOnce for Progress {
             track = track.child(fill);
         }
 
-        let mut root = div().id(self.id.clone()).flex().flex_col().gap_1p5();
+        let mut root = Stack::vertical().id(self.id.clone()).gap(tokens.root_gap);
 
         if self.label.is_some() || self.show_value {
             let mut header = Stack::horizontal()
                 .justify_between()
                 .items_center()
                 .w(px(track_width))
-                .text_sm()
+                .text_size(size_preset.label_size)
                 .text_color(resolve_hsla(&self.theme, &tokens.label));
 
             if let Some(label) = self.label {

@@ -553,6 +553,9 @@ impl RenderOnce for Table {
             virtual_row_height_px: self.virtual_row_height_px,
             default_row_height_px: Self::default_row_height_px(table_size_preset),
             line_thickness_px,
+            sticky_header_reserved_height_px: f32::from(table_size_preset.row_height)
+                + line_thickness_px,
+            min_scroll_height_px: f32::from(tokens.min_viewport_height),
         });
         let page_size_options = state.page_size_options.clone();
         let page_count = state.page_count;

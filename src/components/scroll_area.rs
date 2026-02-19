@@ -90,16 +90,6 @@ impl ScrollArea {
             .extend(children.into_iter().map(IntoElement::into_any_element));
         self
     }
-
-    fn apply_padding<T: Styled>(node: T, padding: Size) -> T {
-        match padding {
-            Size::Xs => node.p_1(),
-            Size::Sm => node.p_2(),
-            Size::Md => node.p_3(),
-            Size::Lg => node.p_4(),
-            Size::Xl => node.p_5(),
-        }
-    }
 }
 
 impl ParentElement for ScrollArea {
@@ -119,6 +109,7 @@ impl RenderOnce for ScrollArea {
     fn render(mut self, window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.scroll_area;
+        let content_padding = tokens.padding.for_size(self.padding);
         let mut viewport = div().id(self.id.slot("viewport")).w_full().min_h_0();
 
         viewport = match self.direction {
@@ -141,7 +132,7 @@ impl RenderOnce for ScrollArea {
             viewport = viewport.scrollbar_width(px(0.0));
         }
 
-        viewport = Self::apply_padding(viewport, self.padding).children(self.children);
+        viewport = viewport.p(content_padding).children(self.children);
 
         let mut root = div()
             .id(self.id)

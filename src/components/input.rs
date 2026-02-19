@@ -1449,7 +1449,6 @@ impl TextInput {
             .min_w_0()
             .flex()
             .items_center()
-            .gap_0()
             .overflow_hidden()
             .whitespace_nowrap();
         value_container = value_container.child({
@@ -1586,17 +1585,15 @@ impl TextInput {
             return div().into_any_element();
         }
 
-        let mut block = Stack::vertical().gap_1();
+        let tokens = &self.theme.components.input;
+        let mut block = Stack::vertical().gap(tokens.label_block_gap);
 
         if let Some(label) = &self.label {
-            let mut label_row = Stack::horizontal().gap_1().child(
+            let mut label_row = Stack::horizontal().gap(tokens.label_row_gap).child(
                 div()
-                    .text_size(self.theme.components.input.label_size)
-                    .font_weight(self.theme.components.input.label_weight)
-                    .text_color(resolve_hsla(
-                        &self.theme,
-                        &self.theme.components.input.label,
-                    ))
+                    .text_size(tokens.label_size)
+                    .font_weight(tokens.label_weight)
+                    .text_color(resolve_hsla(&self.theme, &tokens.label))
                     .child(label.clone()),
             );
 
@@ -1615,10 +1612,7 @@ impl TextInput {
             block = block.child(
                 div()
                     .text_size(self.theme.components.input.description_size)
-                    .text_color(resolve_hsla(
-                        &self.theme,
-                        &self.theme.components.input.description,
-                    ))
+                    .text_color(resolve_hsla(&self.theme, &tokens.description))
                     .child(description.clone()),
             );
         }
@@ -1627,10 +1621,7 @@ impl TextInput {
             block = block.child(
                 div()
                     .text_size(self.theme.components.input.error_size)
-                    .text_color(resolve_hsla(
-                        &self.theme,
-                        &self.theme.components.input.error,
-                    ))
+                    .text_color(resolve_hsla(&self.theme, &tokens.error))
                     .child(error.clone()),
             );
         }
@@ -2130,7 +2121,7 @@ impl RenderOnce for PinInput {
             .id(self.id.clone())
             .focusable()
             .key_context(INPUT_KEY_CONTEXT)
-            .gap_2();
+            .gap(self.theme.components.input.pin_cells_gap);
 
         if self.disabled {
             root = root.cursor_default();
@@ -2428,11 +2419,11 @@ impl RenderOnce for PinInput {
         if let Some(error) = self.error {
             Stack::vertical()
                 .id(self.id.slot("field"))
-                .gap_1()
+                .gap(self.theme.components.input.pin_error_gap)
                 .child(field)
                 .child(
                     div()
-                        .text_sm()
+                        .text_size(self.theme.components.input.error_size)
                         .text_color(resolve_hsla(
                             &self.theme,
                             &self.theme.components.input.error,

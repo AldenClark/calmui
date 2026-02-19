@@ -635,6 +635,78 @@ fn default_field_size_scale() -> FieldSizeScale {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InsetSizeScale {
+    pub xs: Pixels,
+    pub sm: Pixels,
+    pub md: Pixels,
+    pub lg: Pixels,
+    pub xl: Pixels,
+}
+
+impl InsetSizeScale {
+    pub fn for_size(&self, size: Size) -> Pixels {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_inset_size_scale() -> InsetSizeScale {
+    InsetSizeScale {
+        xs: px(4.0),
+        sm: px(8.0),
+        md: px(12.0),
+        lg: px(16.0),
+        xl: px(20.0),
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GapSizeScale {
+    pub xs: Pixels,
+    pub sm: Pixels,
+    pub md: Pixels,
+    pub lg: Pixels,
+    pub xl: Pixels,
+}
+
+impl GapSizeScale {
+    pub fn for_size(&self, size: Size) -> Pixels {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_layout_gap_scale() -> GapSizeScale {
+    GapSizeScale {
+        xs: px(4.0),
+        sm: px(6.0),
+        md: px(8.0),
+        lg: px(12.0),
+        xl: px(16.0),
+    }
+}
+
+fn default_layout_space_scale() -> GapSizeScale {
+    GapSizeScale {
+        xs: px(4.0),
+        sm: px(6.0),
+        md: px(8.0),
+        lg: px(12.0),
+        xl: px(16.0),
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InputTokens {
     pub bg: Hsla,
@@ -652,12 +724,16 @@ pub struct InputTokens {
     pub description_size: Pixels,
     pub error: Hsla,
     pub error_size: Pixels,
+    pub label_block_gap: Pixels,
+    pub label_row_gap: Pixels,
     pub slot_fg: Hsla,
     pub slot_gap: Pixels,
     pub slot_min_width: Pixels,
     pub layout_gap_vertical: Pixels,
     pub layout_gap_horizontal: Pixels,
     pub horizontal_label_width: Pixels,
+    pub pin_cells_gap: Pixels,
+    pub pin_error_gap: Pixels,
     pub sizes: FieldSizeScale,
 }
 
@@ -671,6 +747,10 @@ pub struct RadioTokens {
     pub indicator: Hsla,
     pub label: Hsla,
     pub description: Hsla,
+    pub label_description_gap: Pixels,
+    pub group_gap_horizontal: Pixels,
+    pub group_gap_vertical: Pixels,
+    pub sizes: ChoiceControlSizeScale,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -684,6 +764,10 @@ pub struct CheckboxTokens {
     pub indicator: Hsla,
     pub label: Hsla,
     pub description: Hsla,
+    pub label_description_gap: Pixels,
+    pub group_gap_horizontal: Pixels,
+    pub group_gap_vertical: Pixels,
+    pub sizes: ChoiceControlSizeScale,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -695,6 +779,166 @@ pub struct SwitchTokens {
     pub thumb_bg: Hsla,
     pub label: Hsla,
     pub description: Hsla,
+    pub label_description_gap: Pixels,
+    pub sizes: SwitchSizeScale,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ChoiceControlSizePreset {
+    pub control_size: Pixels,
+    pub indicator_size: Pixels,
+    pub label_size: Pixels,
+    pub description_size: Pixels,
+    pub content_gap: Pixels,
+    pub description_indent_gap: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ChoiceControlSizeScale {
+    pub xs: ChoiceControlSizePreset,
+    pub sm: ChoiceControlSizePreset,
+    pub md: ChoiceControlSizePreset,
+    pub lg: ChoiceControlSizePreset,
+    pub xl: ChoiceControlSizePreset,
+}
+
+impl ChoiceControlSizeScale {
+    pub fn for_size(&self, size: Size) -> ChoiceControlSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_choice_control_size_scale() -> ChoiceControlSizeScale {
+    ChoiceControlSizeScale {
+        xs: ChoiceControlSizePreset {
+            control_size: px(12.0),
+            indicator_size: px(6.0),
+            label_size: px(12.0),
+            description_size: px(12.0),
+            content_gap: px(8.0),
+            description_indent_gap: px(8.0),
+        },
+        sm: ChoiceControlSizePreset {
+            control_size: px(14.0),
+            indicator_size: px(7.0),
+            label_size: px(13.0),
+            description_size: px(12.0),
+            content_gap: px(8.0),
+            description_indent_gap: px(8.0),
+        },
+        md: ChoiceControlSizePreset {
+            control_size: px(16.0),
+            indicator_size: px(8.0),
+            label_size: px(14.0),
+            description_size: px(13.0),
+            content_gap: px(8.0),
+            description_indent_gap: px(8.0),
+        },
+        lg: ChoiceControlSizePreset {
+            control_size: px(18.0),
+            indicator_size: px(9.0),
+            label_size: px(16.0),
+            description_size: px(14.0),
+            content_gap: px(10.0),
+            description_indent_gap: px(8.0),
+        },
+        xl: ChoiceControlSizePreset {
+            control_size: px(20.0),
+            indicator_size: px(10.0),
+            label_size: px(18.0),
+            description_size: px(15.0),
+            content_gap: px(10.0),
+            description_indent_gap: px(8.0),
+        },
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SwitchSizePreset {
+    pub track_width: Pixels,
+    pub track_height: Pixels,
+    pub thumb_size: Pixels,
+    pub label_size: Pixels,
+    pub description_size: Pixels,
+    pub label_gap: Pixels,
+    pub description_indent_gap: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SwitchSizeScale {
+    pub xs: SwitchSizePreset,
+    pub sm: SwitchSizePreset,
+    pub md: SwitchSizePreset,
+    pub lg: SwitchSizePreset,
+    pub xl: SwitchSizePreset,
+}
+
+impl SwitchSizeScale {
+    pub fn for_size(&self, size: Size) -> SwitchSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_switch_size_scale() -> SwitchSizeScale {
+    SwitchSizeScale {
+        xs: SwitchSizePreset {
+            track_width: px(26.0),
+            track_height: px(14.0),
+            thumb_size: px(10.0),
+            label_size: px(12.0),
+            description_size: px(12.0),
+            label_gap: px(8.0),
+            description_indent_gap: px(8.0),
+        },
+        sm: SwitchSizePreset {
+            track_width: px(30.0),
+            track_height: px(16.0),
+            thumb_size: px(12.0),
+            label_size: px(13.0),
+            description_size: px(12.0),
+            label_gap: px(8.0),
+            description_indent_gap: px(8.0),
+        },
+        md: SwitchSizePreset {
+            track_width: px(36.0),
+            track_height: px(20.0),
+            thumb_size: px(16.0),
+            label_size: px(14.0),
+            description_size: px(13.0),
+            label_gap: px(8.0),
+            description_indent_gap: px(8.0),
+        },
+        lg: SwitchSizePreset {
+            track_width: px(42.0),
+            track_height: px(24.0),
+            thumb_size: px(20.0),
+            label_size: px(16.0),
+            description_size: px(14.0),
+            label_gap: px(10.0),
+            description_indent_gap: px(8.0),
+        },
+        xl: SwitchSizePreset {
+            track_width: px(48.0),
+            track_height: px(28.0),
+            thumb_size: px(24.0),
+            label_size: px(18.0),
+            description_size: px(15.0),
+            label_gap: px(10.0),
+            description_indent_gap: px(8.0),
+        },
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -716,6 +960,11 @@ pub struct ChipTokens {
     pub default_border: Hsla,
     pub border_hover: Hsla,
     pub border_focus: Hsla,
+    pub content_gap: Pixels,
+    pub indicator_size: Pixels,
+    pub group_gap_horizontal: Pixels,
+    pub group_gap_vertical: Pixels,
+    pub sizes: ButtonSizeScale,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -731,6 +980,71 @@ pub struct BadgeTokens {
     pub default_bg: Hsla,
     pub default_fg: Hsla,
     pub default_border: Hsla,
+    pub sizes: BadgeSizeScale,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BadgeSizePreset {
+    pub font_size: Pixels,
+    pub padding_x: Pixels,
+    pub padding_y: Pixels,
+    pub gap: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BadgeSizeScale {
+    pub xs: BadgeSizePreset,
+    pub sm: BadgeSizePreset,
+    pub md: BadgeSizePreset,
+    pub lg: BadgeSizePreset,
+    pub xl: BadgeSizePreset,
+}
+
+impl BadgeSizeScale {
+    pub fn for_size(&self, size: Size) -> BadgeSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_badge_size_scale() -> BadgeSizeScale {
+    BadgeSizeScale {
+        xs: BadgeSizePreset {
+            font_size: px(12.0),
+            padding_x: px(6.0),
+            padding_y: px(1.0),
+            gap: px(4.0),
+        },
+        sm: BadgeSizePreset {
+            font_size: px(12.0),
+            padding_x: px(8.0),
+            padding_y: px(2.0),
+            gap: px(4.0),
+        },
+        md: BadgeSizePreset {
+            font_size: px(13.0),
+            padding_x: px(10.0),
+            padding_y: px(3.0),
+            gap: px(4.0),
+        },
+        lg: BadgeSizePreset {
+            font_size: px(14.0),
+            padding_x: px(12.0),
+            padding_y: px(4.0),
+            gap: px(6.0),
+        },
+        xl: BadgeSizePreset {
+            font_size: px(16.0),
+            padding_x: px(14.0),
+            padding_y: px(5.0),
+            gap: px(6.0),
+        },
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -738,22 +1052,108 @@ pub struct AccordionTokens {
     pub item_bg: Hsla,
     pub item_border: Hsla,
     pub label: Hsla,
-    pub label_size: Pixels,
     pub description: Hsla,
-    pub description_size: Pixels,
     pub content: Hsla,
-    pub content_size: Pixels,
     pub chevron: Hsla,
-    pub chevron_size: Pixels,
     pub stack_gap: Pixels,
     pub header_gap: Pixels,
     pub label_stack_gap: Pixels,
+    pub panel_gap: Pixels,
+    pub sizes: AccordionSizeScale,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AccordionSizePreset {
+    pub label_size: Pixels,
+    pub description_size: Pixels,
+    pub content_size: Pixels,
+    pub chevron_size: Pixels,
     pub header_padding_x: Pixels,
     pub header_padding_y: Pixels,
-    pub panel_gap: Pixels,
     pub panel_padding_x: Pixels,
     pub panel_padding_bottom: Pixels,
     pub panel_padding_top: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AccordionSizeScale {
+    pub xs: AccordionSizePreset,
+    pub sm: AccordionSizePreset,
+    pub md: AccordionSizePreset,
+    pub lg: AccordionSizePreset,
+    pub xl: AccordionSizePreset,
+}
+
+impl AccordionSizeScale {
+    pub fn for_size(&self, size: Size) -> AccordionSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_accordion_size_scale() -> AccordionSizeScale {
+    AccordionSizeScale {
+        xs: AccordionSizePreset {
+            label_size: px(12.0),
+            description_size: px(11.0),
+            content_size: px(12.0),
+            chevron_size: px(12.0),
+            header_padding_x: px(10.0),
+            header_padding_y: px(8.0),
+            panel_padding_x: px(10.0),
+            panel_padding_bottom: px(8.0),
+            panel_padding_top: px(1.0),
+        },
+        sm: AccordionSizePreset {
+            label_size: px(13.0),
+            description_size: px(12.0),
+            content_size: px(13.0),
+            chevron_size: px(13.0),
+            header_padding_x: px(11.0),
+            header_padding_y: px(9.0),
+            panel_padding_x: px(11.0),
+            panel_padding_bottom: px(9.0),
+            panel_padding_top: px(2.0),
+        },
+        md: AccordionSizePreset {
+            label_size: px(14.0),
+            description_size: px(13.0),
+            content_size: px(14.0),
+            chevron_size: px(14.0),
+            header_padding_x: px(12.0),
+            header_padding_y: px(10.0),
+            panel_padding_x: px(12.0),
+            panel_padding_bottom: px(10.0),
+            panel_padding_top: px(2.0),
+        },
+        lg: AccordionSizePreset {
+            label_size: px(16.0),
+            description_size: px(14.0),
+            content_size: px(16.0),
+            chevron_size: px(16.0),
+            header_padding_x: px(14.0),
+            header_padding_y: px(12.0),
+            panel_padding_x: px(14.0),
+            panel_padding_bottom: px(12.0),
+            panel_padding_top: px(3.0),
+        },
+        xl: AccordionSizePreset {
+            label_size: px(18.0),
+            description_size: px(15.0),
+            content_size: px(18.0),
+            chevron_size: px(18.0),
+            header_padding_x: px(16.0),
+            header_padding_y: px(14.0),
+            panel_padding_x: px(16.0),
+            panel_padding_bottom: px(14.0),
+            panel_padding_top: px(4.0),
+        },
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -784,6 +1184,60 @@ pub struct ProgressTokens {
     pub label: Hsla,
     pub default_width: Pixels,
     pub min_width: Pixels,
+    pub root_gap: Pixels,
+    pub sizes: ProgressSizeScale,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProgressSizePreset {
+    pub bar_height: Pixels,
+    pub label_size: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProgressSizeScale {
+    pub xs: ProgressSizePreset,
+    pub sm: ProgressSizePreset,
+    pub md: ProgressSizePreset,
+    pub lg: ProgressSizePreset,
+    pub xl: ProgressSizePreset,
+}
+
+impl ProgressSizeScale {
+    pub fn for_size(&self, size: Size) -> ProgressSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_progress_size_scale() -> ProgressSizeScale {
+    ProgressSizeScale {
+        xs: ProgressSizePreset {
+            bar_height: px(4.0),
+            label_size: px(12.0),
+        },
+        sm: ProgressSizePreset {
+            bar_height: px(6.0),
+            label_size: px(13.0),
+        },
+        md: ProgressSizePreset {
+            bar_height: px(8.0),
+            label_size: px(14.0),
+        },
+        lg: ProgressSizePreset {
+            bar_height: px(12.0),
+            label_size: px(16.0),
+        },
+        xl: ProgressSizePreset {
+            bar_height: px(16.0),
+            label_size: px(18.0),
+        },
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1025,10 +1479,101 @@ pub struct OverlayTokens {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LoaderTokens {
+    pub color: Hsla,
+    pub label: Hsla,
+    pub sizes: LoaderSizeScale,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LoaderSizePreset {
+    pub dot_size: Pixels,
+    pub ring_size: Pixels,
+    pub bar_width: Pixels,
+    pub bar_height_max: Pixels,
+    pub cluster_gap: Pixels,
+    pub label_size: Pixels,
+    pub label_gap: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LoaderSizeScale {
+    pub xs: LoaderSizePreset,
+    pub sm: LoaderSizePreset,
+    pub md: LoaderSizePreset,
+    pub lg: LoaderSizePreset,
+    pub xl: LoaderSizePreset,
+}
+
+impl LoaderSizeScale {
+    pub fn for_size(&self, size: Size) -> LoaderSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_loader_size_scale() -> LoaderSizeScale {
+    LoaderSizeScale {
+        xs: LoaderSizePreset {
+            dot_size: px(5.0),
+            ring_size: px(14.0),
+            bar_width: px(3.0),
+            bar_height_max: px(14.0),
+            cluster_gap: px(4.0),
+            label_size: px(12.0),
+            label_gap: px(6.0),
+        },
+        sm: LoaderSizePreset {
+            dot_size: px(6.0),
+            ring_size: px(16.0),
+            bar_width: px(4.0),
+            bar_height_max: px(16.0),
+            cluster_gap: px(4.0),
+            label_size: px(13.0),
+            label_gap: px(7.0),
+        },
+        md: LoaderSizePreset {
+            dot_size: px(8.0),
+            ring_size: px(20.0),
+            bar_width: px(4.0),
+            bar_height_max: px(18.0),
+            cluster_gap: px(6.0),
+            label_size: px(14.0),
+            label_gap: px(8.0),
+        },
+        lg: LoaderSizePreset {
+            dot_size: px(10.0),
+            ring_size: px(24.0),
+            bar_width: px(5.0),
+            bar_height_max: px(20.0),
+            cluster_gap: px(6.0),
+            label_size: px(16.0),
+            label_gap: px(9.0),
+        },
+        xl: LoaderSizePreset {
+            dot_size: px(12.0),
+            ring_size: px(28.0),
+            bar_width: px(6.0),
+            bar_height_max: px(22.0),
+            cluster_gap: px(8.0),
+            label_size: px(18.0),
+            label_gap: px(10.0),
+        },
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LoadingOverlayTokens {
     pub bg: Hsla,
     pub loader_color: Hsla,
     pub label: Hsla,
+    pub content_gap: Pixels,
+    pub label_size: Pixels,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1037,6 +1582,9 @@ pub struct PopoverTokens {
     pub border: Hsla,
     pub title: Hsla,
     pub body: Hsla,
+    pub padding: Pixels,
+    pub gap: Pixels,
+    pub radius: Pixels,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1091,6 +1639,8 @@ pub struct SelectTokens {
     pub description_size: Pixels,
     pub error: Hsla,
     pub error_size: Pixels,
+    pub label_block_gap: Pixels,
+    pub label_row_gap: Pixels,
     pub slot_gap: Pixels,
     pub slot_min_width: Pixels,
     pub layout_gap_vertical: Pixels,
@@ -1100,6 +1650,7 @@ pub struct SelectTokens {
     pub option_size: Pixels,
     pub option_padding_x: Pixels,
     pub option_padding_y: Pixels,
+    pub option_content_gap: Pixels,
     pub option_check_size: Pixels,
     pub dropdown_padding: Pixels,
     pub dropdown_gap: Pixels,
@@ -1109,7 +1660,9 @@ pub struct SelectTokens {
     pub tag_size: Pixels,
     pub tag_padding_x: Pixels,
     pub tag_padding_y: Pixels,
+    pub tag_gap: Pixels,
     pub tag_max_width: Pixels,
+    pub dropdown_anchor_offset: Pixels,
     pub sizes: FieldSizeScale,
 }
 
@@ -1123,6 +1676,8 @@ pub struct ModalTokens {
     pub title_size: Pixels,
     pub title_weight: FontWeight,
     pub body_size: Pixels,
+    pub kind_icon_size: Pixels,
+    pub kind_icon_gap: Pixels,
     pub panel_radius: Pixels,
     pub panel_padding: Pixels,
     pub header_margin_bottom: Pixels,
@@ -1145,6 +1700,19 @@ pub struct ToastTokens {
     pub warning_fg: Hsla,
     pub error_bg: Hsla,
     pub error_fg: Hsla,
+    pub card_width: Pixels,
+    pub card_padding: Pixels,
+    pub row_gap: Pixels,
+    pub content_gap: Pixels,
+    pub icon_box_size: Pixels,
+    pub icon_size: Pixels,
+    pub close_button_size: Pixels,
+    pub close_icon_size: Pixels,
+    pub title_size: Pixels,
+    pub body_size: Pixels,
+    pub stack_gap: Pixels,
+    pub edge_offset: Pixels,
+    pub top_offset_extra: Pixels,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1160,6 +1728,7 @@ pub struct DividerTokens {
 pub struct ScrollAreaTokens {
     pub bg: Hsla,
     pub border: Hsla,
+    pub padding: InsetSizeScale,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1205,6 +1774,7 @@ pub struct TitleBarTokens {
     pub border: Hsla,
     pub fg: Hsla,
     pub controls_bg: Hsla,
+    pub height: Pixels,
     pub title_size: Pixels,
     pub title_weight: FontWeight,
     pub windows_button_width: Pixels,
@@ -1220,6 +1790,16 @@ pub struct TitleBarTokens {
     pub platform_padding_right: Pixels,
     pub controls_slot_gap: Pixels,
     pub control_button_radius: Pixels,
+}
+
+fn default_title_bar_height_px() -> Pixels {
+    if cfg!(target_os = "macos") {
+        px(30.0)
+    } else if cfg!(target_os = "windows") {
+        px(32.0)
+    } else {
+        px(34.0)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1275,6 +1855,59 @@ pub struct TextTokens {
     pub success: Hsla,
     pub warning: Hsla,
     pub error: Hsla,
+    pub sizes: TextSizeScale,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TextSizePreset {
+    pub font_size: Pixels,
+    pub line_height: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TextSizeScale {
+    pub xs: TextSizePreset,
+    pub sm: TextSizePreset,
+    pub md: TextSizePreset,
+    pub lg: TextSizePreset,
+    pub xl: TextSizePreset,
+}
+
+impl TextSizeScale {
+    pub fn for_size(&self, size: Size) -> TextSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_text_size_scale() -> TextSizeScale {
+    TextSizeScale {
+        xs: TextSizePreset {
+            font_size: px(12.0),
+            line_height: px(14.0),
+        },
+        sm: TextSizePreset {
+            font_size: px(13.0),
+            line_height: px(16.0),
+        },
+        md: TextSizePreset {
+            font_size: px(14.0),
+            line_height: px(18.0),
+        },
+        lg: TextSizePreset {
+            font_size: px(16.0),
+            line_height: px(22.0),
+        },
+        xl: TextSizePreset {
+            font_size: px(18.0),
+            line_height: px(26.0),
+        },
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1317,6 +1950,7 @@ impl TitleTokens {
 pub struct PaperTokens {
     pub bg: Hsla,
     pub border: Hsla,
+    pub padding: InsetSizeScale,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1498,6 +2132,8 @@ pub struct TextareaTokens {
     pub description_size: Pixels,
     pub error: Hsla,
     pub error_size: Pixels,
+    pub label_block_gap: Pixels,
+    pub label_row_gap: Pixels,
     pub layout_gap_vertical: Pixels,
     pub layout_gap_horizontal: Pixels,
     pub horizontal_label_width: Pixels,
@@ -1551,6 +2187,59 @@ pub struct RangeSliderTokens {
 pub struct RatingTokens {
     pub active: Hsla,
     pub inactive: Hsla,
+    pub sizes: RatingSizeScale,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RatingSizePreset {
+    pub icon_size: Pixels,
+    pub gap: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RatingSizeScale {
+    pub xs: RatingSizePreset,
+    pub sm: RatingSizePreset,
+    pub md: RatingSizePreset,
+    pub lg: RatingSizePreset,
+    pub xl: RatingSizePreset,
+}
+
+impl RatingSizeScale {
+    pub fn for_size(&self, size: Size) -> RatingSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_rating_size_scale() -> RatingSizeScale {
+    RatingSizeScale {
+        xs: RatingSizePreset {
+            icon_size: px(14.0),
+            gap: px(4.0),
+        },
+        sm: RatingSizePreset {
+            icon_size: px(16.0),
+            gap: px(4.0),
+        },
+        md: RatingSizePreset {
+            icon_size: px(18.0),
+            gap: px(4.0),
+        },
+        lg: RatingSizePreset {
+            icon_size: px(22.0),
+            gap: px(6.0),
+        },
+        xl: RatingSizePreset {
+            icon_size: px(26.0),
+            gap: px(6.0),
+        },
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1569,6 +2258,71 @@ pub struct TabsTokens {
     pub list_gap: Pixels,
     pub list_padding: Pixels,
     pub panel_padding: Pixels,
+    pub sizes: TabsSizeScale,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TabsSizePreset {
+    pub font_size: Pixels,
+    pub line_height: Pixels,
+    pub padding_x: Pixels,
+    pub padding_y: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TabsSizeScale {
+    pub xs: TabsSizePreset,
+    pub sm: TabsSizePreset,
+    pub md: TabsSizePreset,
+    pub lg: TabsSizePreset,
+    pub xl: TabsSizePreset,
+}
+
+impl TabsSizeScale {
+    pub fn for_size(&self, size: Size) -> TabsSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_tabs_size_scale() -> TabsSizeScale {
+    TabsSizeScale {
+        xs: TabsSizePreset {
+            font_size: px(12.0),
+            line_height: px(16.0),
+            padding_x: px(8.0),
+            padding_y: px(2.0),
+        },
+        sm: TabsSizePreset {
+            font_size: px(13.0),
+            line_height: px(18.0),
+            padding_x: px(10.0),
+            padding_y: px(4.0),
+        },
+        md: TabsSizePreset {
+            font_size: px(14.0),
+            line_height: px(20.0),
+            padding_x: px(12.0),
+            padding_y: px(6.0),
+        },
+        lg: TabsSizePreset {
+            font_size: px(16.0),
+            line_height: px(22.0),
+            padding_x: px(14.0),
+            padding_y: px(8.0),
+        },
+        xl: TabsSizePreset {
+            font_size: px(18.0),
+            line_height: px(24.0),
+            padding_x: px(16.0),
+            padding_y: px(10.0),
+        },
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1977,6 +2731,12 @@ pub struct TreeTokens {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LayoutTokens {
+    pub gap: GapSizeScale,
+    pub space: GapSizeScale,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ComponentTokens {
     pub button: ButtonTokens,
     pub input: InputTokens,
@@ -1990,6 +2750,7 @@ pub struct ComponentTokens {
     pub progress: ProgressTokens,
     pub slider: SliderTokens,
     pub overlay: OverlayTokens,
+    pub loader: LoaderTokens,
     pub loading_overlay: LoadingOverlayTokens,
     pub popover: PopoverTokens,
     pub tooltip: TooltipTokens,
@@ -2020,6 +2781,7 @@ pub struct ComponentTokens {
     pub stepper: StepperTokens,
     pub timeline: TimelineTokens,
     pub tree: TreeTokens,
+    pub layout: LayoutTokens,
 }
 
 impl ComponentTokens {
@@ -2114,6 +2876,8 @@ impl ComponentTokens {
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                     error_size: px(13.0),
+                    label_block_gap: px(4.0),
+                    label_row_gap: px(4.0),
                     slot_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
@@ -2122,6 +2886,8 @@ impl ComponentTokens {
                     layout_gap_vertical: px(8.0),
                     layout_gap_horizontal: px(12.0),
                     horizontal_label_width: px(168.0),
+                    pin_cells_gap: px(8.0),
+                    pin_error_gap: px(4.0),
                     sizes: default_field_size_scale(),
                 },
                 radio: RadioTokens {
@@ -2151,6 +2917,10 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    label_description_gap: px(2.0),
+                    group_gap_horizontal: px(12.0),
+                    group_gap_vertical: px(8.0),
+                    sizes: default_choice_control_size_scale(),
                 },
                 checkbox: CheckboxTokens {
                     control_bg: white(),
@@ -2182,6 +2952,10 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    label_description_gap: px(2.0),
+                    group_gap_horizontal: px(12.0),
+                    group_gap_vertical: px(8.0),
+                    sizes: default_choice_control_size_scale(),
                 },
                 switch: SwitchTokens {
                     track_off_bg: (Rgba::try_from(
@@ -2211,6 +2985,8 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    label_description_gap: px(2.0),
+                    sizes: default_switch_size_scale(),
                 },
                 chip: ChipTokens {
                     unchecked_bg: (Rgba::try_from(
@@ -2280,6 +3056,11 @@ impl ComponentTokens {
                     border_focus: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    content_gap: px(4.0),
+                    indicator_size: px(12.0),
+                    group_gap_horizontal: px(8.0),
+                    group_gap_vertical: px(8.0),
+                    sizes: default_button_size_scale(),
                 },
                 badge: BadgeTokens {
                     filled_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
@@ -2323,6 +3104,7 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    sizes: default_badge_size_scale(),
                 },
                 accordion: AccordionTokens {
                     item_bg: white(),
@@ -2334,30 +3116,22 @@ impl ComponentTokens {
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
-                    label_size: px(14.0),
                     description: (Rgba::try_from(
                         PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
-                    description_size: px(13.0),
                     content: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
-                    content_size: px(14.0),
                     chevron: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
-                    chevron_size: px(14.0),
                     stack_gap: px(8.0),
                     header_gap: px(8.0),
                     label_stack_gap: px(2.0),
-                    header_padding_x: px(12.0),
-                    header_padding_y: px(10.0),
                     panel_gap: px(4.0),
-                    panel_padding_x: px(12.0),
-                    panel_padding_bottom: px(10.0),
-                    panel_padding_top: px(2.0),
+                    sizes: default_accordion_size_scale(),
                 },
                 menu: MenuTokens {
                     dropdown_bg: white(),
@@ -2406,6 +3180,8 @@ impl ComponentTokens {
                         .unwrap_or_else(|_| black())),
                     default_width: px(260.0),
                     min_width: px(80.0),
+                    root_gap: px(6.0),
+                    sizes: default_progress_size_scale(),
                 },
                 slider: SliderTokens {
                     track_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
@@ -2437,6 +3213,15 @@ impl ComponentTokens {
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                 },
+                loader: LoaderTokens {
+                    color: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    sizes: default_loader_size_scale(),
+                },
                 loading_overlay: LoadingOverlayTokens {
                     bg: (Rgba::try_from("#000000E6")
                         .map(Into::into)
@@ -2445,6 +3230,8 @@ impl ComponentTokens {
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                     label: white(),
+                    content_gap: px(8.0),
+                    label_size: px(13.0),
                 },
                 popover: PopoverTokens {
                     bg: white(),
@@ -2457,6 +3244,9 @@ impl ComponentTokens {
                     body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    padding: px(12.0),
+                    gap: px(8.0),
+                    radius: px(8.0),
                 },
                 tooltip: TooltipTokens {
                     bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
@@ -2561,6 +3351,8 @@ impl ComponentTokens {
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                     error_size: px(13.0),
+                    label_block_gap: px(4.0),
+                    label_row_gap: px(4.0),
                     slot_gap: px(8.0),
                     slot_min_width: px(16.0),
                     layout_gap_vertical: px(8.0),
@@ -2570,6 +3362,7 @@ impl ComponentTokens {
                     option_size: px(14.0),
                     option_padding_x: px(10.0),
                     option_padding_y: px(8.0),
+                    option_content_gap: px(8.0),
                     option_check_size: px(12.0),
                     dropdown_padding: px(6.0),
                     dropdown_gap: px(4.0),
@@ -2579,7 +3372,9 @@ impl ComponentTokens {
                     tag_size: px(12.0),
                     tag_padding_x: px(8.0),
                     tag_padding_y: px(3.0),
+                    tag_gap: px(4.0),
                     tag_max_width: px(120.0),
+                    dropdown_anchor_offset: px(2.0),
                     sizes: default_field_size_scale(),
                 },
                 modal: ModalTokens {
@@ -2601,6 +3396,8 @@ impl ComponentTokens {
                     title_size: px(18.0),
                     title_weight: FontWeight::SEMIBOLD,
                     body_size: px(14.0),
+                    kind_icon_size: px(16.0),
+                    kind_icon_gap: px(8.0),
                     panel_radius: px(12.0),
                     panel_padding: px(16.0),
                     header_margin_bottom: px(8.0),
@@ -2645,6 +3442,19 @@ impl ComponentTokens {
                     error_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    card_width: px(360.0),
+                    card_padding: px(12.0),
+                    row_gap: px(8.0),
+                    content_gap: px(4.0),
+                    icon_box_size: px(24.0),
+                    icon_size: px(17.0),
+                    close_button_size: px(24.0),
+                    close_icon_size: px(13.0),
+                    title_size: px(14.0),
+                    body_size: px(13.0),
+                    stack_gap: px(8.0),
+                    edge_offset: px(16.0),
+                    top_offset_extra: px(8.0),
                 },
                 divider: DividerTokens {
                     line: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
@@ -2664,6 +3474,7 @@ impl ComponentTokens {
                     border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    padding: default_inset_size_scale(),
                 },
                 drawer: DrawerTokens {
                     panel_bg: white(),
@@ -2737,6 +3548,7 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    height: default_title_bar_height_px(),
                     title_size: px(14.0),
                     title_weight: FontWeight::MEDIUM,
                     windows_button_width: px(45.0),
@@ -2865,6 +3677,7 @@ impl ComponentTokens {
                     error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[6 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    sizes: default_text_size_scale(),
                 },
                 title: TitleTokens {
                     fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
@@ -2913,6 +3726,7 @@ impl ComponentTokens {
                     border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    padding: default_inset_size_scale(),
                 },
                 action_icon: ActionIconTokens {
                     filled_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
@@ -3048,6 +3862,8 @@ impl ComponentTokens {
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                     error_size: px(13.0),
+                    label_block_gap: px(4.0),
+                    label_row_gap: px(4.0),
                     layout_gap_vertical: px(8.0),
                     layout_gap_horizontal: px(12.0),
                     horizontal_label_width: px(168.0),
@@ -3143,6 +3959,7 @@ impl ComponentTokens {
                     inactive: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    sizes: default_rating_size_scale(),
                 },
                 tabs: TabsTokens {
                     list_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
@@ -3185,6 +4002,7 @@ impl ComponentTokens {
                     list_gap: px(2.0),
                     list_padding: px(2.0),
                     panel_padding: px(16.0),
+                    sizes: default_tabs_size_scale(),
                 },
                 pagination: PaginationTokens {
                     item_bg: white(),
@@ -3425,6 +4243,10 @@ impl ComponentTokens {
                     children_gap: px(0.0),
                     sizes: default_tree_size_scale(),
                 },
+                layout: LayoutTokens {
+                    gap: default_layout_gap_scale(),
+                    space: default_layout_space_scale(),
+                },
             },
             ColorScheme::Dark => Self {
                 button: ButtonTokens {
@@ -3517,6 +4339,8 @@ impl ComponentTokens {
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                     error_size: px(13.0),
+                    label_block_gap: px(4.0),
+                    label_row_gap: px(4.0),
                     slot_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
@@ -3525,6 +4349,8 @@ impl ComponentTokens {
                     layout_gap_vertical: px(8.0),
                     layout_gap_horizontal: px(12.0),
                     horizontal_label_width: px(168.0),
+                    pin_cells_gap: px(8.0),
+                    pin_error_gap: px(4.0),
                     sizes: default_field_size_scale(),
                 },
                 radio: RadioTokens {
@@ -3558,6 +4384,10 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    label_description_gap: px(2.0),
+                    group_gap_horizontal: px(12.0),
+                    group_gap_vertical: px(8.0),
+                    sizes: default_choice_control_size_scale(),
                 },
                 checkbox: CheckboxTokens {
                     control_bg: (Rgba::try_from(
@@ -3593,6 +4423,10 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    label_description_gap: px(2.0),
+                    group_gap_horizontal: px(12.0),
+                    group_gap_vertical: px(8.0),
+                    sizes: default_choice_control_size_scale(),
                 },
                 switch: SwitchTokens {
                     track_off_bg: (Rgba::try_from(
@@ -3624,6 +4458,8 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    label_description_gap: px(2.0),
+                    sizes: default_switch_size_scale(),
                 },
                 chip: ChipTokens {
                     unchecked_bg: (Rgba::try_from(
@@ -3697,6 +4533,11 @@ impl ComponentTokens {
                     border_focus: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    content_gap: px(4.0),
+                    indicator_size: px(12.0),
+                    group_gap_horizontal: px(8.0),
+                    group_gap_vertical: px(8.0),
+                    sizes: default_button_size_scale(),
                 },
                 badge: BadgeTokens {
                     filled_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
@@ -3744,6 +4585,7 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    sizes: default_badge_size_scale(),
                 },
                 accordion: AccordionTokens {
                     item_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
@@ -3757,30 +4599,22 @@ impl ComponentTokens {
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
-                    label_size: px(14.0),
                     description: (Rgba::try_from(
                         PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
-                    description_size: px(13.0),
                     content: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
-                    content_size: px(14.0),
                     chevron: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
-                    chevron_size: px(14.0),
                     stack_gap: px(8.0),
                     header_gap: px(8.0),
                     label_stack_gap: px(2.0),
-                    header_padding_x: px(12.0),
-                    header_padding_y: px(10.0),
                     panel_gap: px(4.0),
-                    panel_padding_x: px(12.0),
-                    panel_padding_bottom: px(10.0),
-                    panel_padding_top: px(2.0),
+                    sizes: default_accordion_size_scale(),
                 },
                 menu: MenuTokens {
                     dropdown_bg: (Rgba::try_from(
@@ -3833,6 +4667,8 @@ impl ComponentTokens {
                         .unwrap_or_else(|_| black())),
                     default_width: px(260.0),
                     min_width: px(80.0),
+                    root_gap: px(6.0),
+                    sizes: default_progress_size_scale(),
                 },
                 slider: SliderTokens {
                     track_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[5 as usize])
@@ -3866,6 +4702,15 @@ impl ComponentTokens {
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                 },
+                loader: LoaderTokens {
+                    color: (Rgba::try_from(PaletteCatalog::scale(primary)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    sizes: default_loader_size_scale(),
+                },
                 loading_overlay: LoadingOverlayTokens {
                     bg: (Rgba::try_from("#000000E6")
                         .map(Into::into)
@@ -3876,6 +4721,8 @@ impl ComponentTokens {
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    content_gap: px(8.0),
+                    label_size: px(13.0),
                 },
                 popover: PopoverTokens {
                     bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
@@ -3890,6 +4737,9 @@ impl ComponentTokens {
                     body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    padding: px(12.0),
+                    gap: px(8.0),
+                    radius: px(8.0),
                 },
                 tooltip: TooltipTokens {
                     bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
@@ -4004,6 +4854,8 @@ impl ComponentTokens {
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                     error_size: px(13.0),
+                    label_block_gap: px(4.0),
+                    label_row_gap: px(4.0),
                     slot_gap: px(8.0),
                     slot_min_width: px(16.0),
                     layout_gap_vertical: px(8.0),
@@ -4013,6 +4865,7 @@ impl ComponentTokens {
                     option_size: px(14.0),
                     option_padding_x: px(10.0),
                     option_padding_y: px(8.0),
+                    option_content_gap: px(8.0),
                     option_check_size: px(12.0),
                     dropdown_padding: px(6.0),
                     dropdown_gap: px(4.0),
@@ -4022,7 +4875,9 @@ impl ComponentTokens {
                     tag_size: px(12.0),
                     tag_padding_x: px(8.0),
                     tag_padding_y: px(3.0),
+                    tag_gap: px(4.0),
                     tag_max_width: px(120.0),
+                    dropdown_anchor_offset: px(2.0),
                     sizes: default_field_size_scale(),
                 },
                 modal: ModalTokens {
@@ -4046,6 +4901,8 @@ impl ComponentTokens {
                     title_size: px(18.0),
                     title_weight: FontWeight::SEMIBOLD,
                     body_size: px(14.0),
+                    kind_icon_size: px(16.0),
+                    kind_icon_gap: px(8.0),
                     panel_radius: px(12.0),
                     panel_padding: px(16.0),
                     header_margin_bottom: px(8.0),
@@ -4066,6 +4923,19 @@ impl ComponentTokens {
                     warning_fg: resolve_palette_hsla(PaletteKey::Yellow, 4),
                     error_bg: resolve_palette_hsla(PaletteKey::Red, 4).opacity(0.15),
                     error_fg: resolve_palette_hsla(PaletteKey::Red, 4),
+                    card_width: px(360.0),
+                    card_padding: px(12.0),
+                    row_gap: px(8.0),
+                    content_gap: px(4.0),
+                    icon_box_size: px(24.0),
+                    icon_size: px(17.0),
+                    close_button_size: px(24.0),
+                    close_icon_size: px(13.0),
+                    title_size: px(14.0),
+                    body_size: px(13.0),
+                    stack_gap: px(8.0),
+                    edge_offset: px(16.0),
+                    top_offset_extra: px(8.0),
                 },
                 divider: DividerTokens {
                     line: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
@@ -4085,6 +4955,7 @@ impl ComponentTokens {
                     border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[5 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    padding: default_inset_size_scale(),
                 },
                 drawer: DrawerTokens {
                     panel_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
@@ -4178,6 +5049,7 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    height: default_title_bar_height_px(),
                     title_size: px(14.0),
                     title_weight: FontWeight::MEDIUM,
                     windows_button_width: px(45.0),
@@ -4306,6 +5178,7 @@ impl ComponentTokens {
                     error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    sizes: default_text_size_scale(),
                 },
                 title: TitleTokens {
                     fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
@@ -4356,6 +5229,7 @@ impl ComponentTokens {
                     border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    padding: default_inset_size_scale(),
                 },
                 action_icon: ActionIconTokens {
                     filled_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[5 as usize])
@@ -4501,6 +5375,8 @@ impl ComponentTokens {
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
                     error_size: px(13.0),
+                    label_block_gap: px(4.0),
+                    label_row_gap: px(4.0),
                     layout_gap_vertical: px(8.0),
                     layout_gap_horizontal: px(12.0),
                     horizontal_label_width: px(168.0),
@@ -4600,6 +5476,7 @@ impl ComponentTokens {
                     inactive: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[3 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    sizes: default_rating_size_scale(),
                 },
                 tabs: TabsTokens {
                     list_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[7 as usize])
@@ -4648,6 +5525,7 @@ impl ComponentTokens {
                     list_gap: px(2.0),
                     list_padding: px(2.0),
                     panel_padding: px(16.0),
+                    sizes: default_tabs_size_scale(),
                 },
                 pagination: PaginationTokens {
                     item_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[7 as usize])
@@ -4899,6 +5777,10 @@ impl ComponentTokens {
                     root_gap: px(2.0),
                     children_gap: px(0.0),
                     sizes: default_tree_size_scale(),
+                },
+                layout: LayoutTokens {
+                    gap: default_layout_gap_scale(),
+                    space: default_layout_space_scale(),
                 },
             },
         }
@@ -5199,12 +6081,16 @@ pub struct InputOverrides {
     pub description_size: Option<Pixels>,
     pub error: Option<Hsla>,
     pub error_size: Option<Pixels>,
+    pub label_block_gap: Option<Pixels>,
+    pub label_row_gap: Option<Pixels>,
     pub slot_fg: Option<Hsla>,
     pub slot_gap: Option<Pixels>,
     pub slot_min_width: Option<Pixels>,
     pub layout_gap_vertical: Option<Pixels>,
     pub layout_gap_horizontal: Option<Pixels>,
     pub horizontal_label_width: Option<Pixels>,
+    pub pin_cells_gap: Option<Pixels>,
+    pub pin_error_gap: Option<Pixels>,
     pub sizes: Option<FieldSizeScale>,
 }
 
@@ -5255,6 +6141,12 @@ impl InputOverrides {
         if let Some(value) = self.error_size {
             current.error_size = value;
         }
+        if let Some(value) = self.label_block_gap {
+            current.label_block_gap = value;
+        }
+        if let Some(value) = self.label_row_gap {
+            current.label_row_gap = value;
+        }
         if let Some(value) = &self.slot_fg {
             current.slot_fg = value.clone();
         }
@@ -5273,6 +6165,12 @@ impl InputOverrides {
         if let Some(value) = self.horizontal_label_width {
             current.horizontal_label_width = value;
         }
+        if let Some(value) = self.pin_cells_gap {
+            current.pin_cells_gap = value;
+        }
+        if let Some(value) = self.pin_error_gap {
+            current.pin_error_gap = value;
+        }
         if let Some(value) = self.sizes {
             current.sizes = value;
         }
@@ -5290,6 +6188,10 @@ pub struct RadioOverrides {
     pub indicator: Option<Hsla>,
     pub label: Option<Hsla>,
     pub description: Option<Hsla>,
+    pub label_description_gap: Option<Pixels>,
+    pub group_gap_horizontal: Option<Pixels>,
+    pub group_gap_vertical: Option<Pixels>,
+    pub sizes: Option<ChoiceControlSizeScale>,
 }
 
 impl RadioOverrides {
@@ -5318,6 +6220,18 @@ impl RadioOverrides {
         if let Some(value) = &self.description {
             current.description = value.clone();
         }
+        if let Some(value) = self.label_description_gap {
+            current.label_description_gap = value;
+        }
+        if let Some(value) = self.group_gap_horizontal {
+            current.group_gap_horizontal = value;
+        }
+        if let Some(value) = self.group_gap_vertical {
+            current.group_gap_vertical = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
+        }
         current
     }
 }
@@ -5333,6 +6247,10 @@ pub struct CheckboxOverrides {
     pub indicator: Option<Hsla>,
     pub label: Option<Hsla>,
     pub description: Option<Hsla>,
+    pub label_description_gap: Option<Pixels>,
+    pub group_gap_horizontal: Option<Pixels>,
+    pub group_gap_vertical: Option<Pixels>,
+    pub sizes: Option<ChoiceControlSizeScale>,
 }
 
 impl CheckboxOverrides {
@@ -5364,6 +6282,18 @@ impl CheckboxOverrides {
         if let Some(value) = &self.description {
             current.description = value.clone();
         }
+        if let Some(value) = self.label_description_gap {
+            current.label_description_gap = value;
+        }
+        if let Some(value) = self.group_gap_horizontal {
+            current.group_gap_horizontal = value;
+        }
+        if let Some(value) = self.group_gap_vertical {
+            current.group_gap_vertical = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
+        }
         current
     }
 }
@@ -5377,6 +6307,8 @@ pub struct SwitchOverrides {
     pub thumb_bg: Option<Hsla>,
     pub label: Option<Hsla>,
     pub description: Option<Hsla>,
+    pub label_description_gap: Option<Pixels>,
+    pub sizes: Option<SwitchSizeScale>,
 }
 
 impl SwitchOverrides {
@@ -5402,6 +6334,12 @@ impl SwitchOverrides {
         if let Some(value) = &self.description {
             current.description = value.clone();
         }
+        if let Some(value) = self.label_description_gap {
+            current.label_description_gap = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
+        }
         current
     }
 }
@@ -5425,6 +6363,11 @@ pub struct ChipOverrides {
     pub default_border: Option<Hsla>,
     pub border_hover: Option<Hsla>,
     pub border_focus: Option<Hsla>,
+    pub content_gap: Option<Pixels>,
+    pub indicator_size: Option<Pixels>,
+    pub group_gap_horizontal: Option<Pixels>,
+    pub group_gap_vertical: Option<Pixels>,
+    pub sizes: Option<ButtonSizeScale>,
 }
 
 impl ChipOverrides {
@@ -5480,6 +6423,21 @@ impl ChipOverrides {
         if let Some(value) = &self.border_focus {
             current.border_focus = value.clone();
         }
+        if let Some(value) = self.content_gap {
+            current.content_gap = value;
+        }
+        if let Some(value) = self.indicator_size {
+            current.indicator_size = value;
+        }
+        if let Some(value) = self.group_gap_horizontal {
+            current.group_gap_horizontal = value;
+        }
+        if let Some(value) = self.group_gap_vertical {
+            current.group_gap_vertical = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
+        }
         current
     }
 }
@@ -5497,6 +6455,7 @@ pub struct BadgeOverrides {
     pub default_bg: Option<Hsla>,
     pub default_fg: Option<Hsla>,
     pub default_border: Option<Hsla>,
+    pub sizes: Option<BadgeSizeScale>,
 }
 
 impl BadgeOverrides {
@@ -5534,6 +6493,9 @@ impl BadgeOverrides {
         if let Some(value) = &self.default_border {
             current.default_border = value.clone();
         }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
+        }
         current
     }
 }
@@ -5543,22 +6505,14 @@ pub struct AccordionOverrides {
     pub item_bg: Option<Hsla>,
     pub item_border: Option<Hsla>,
     pub label: Option<Hsla>,
-    pub label_size: Option<Pixels>,
     pub description: Option<Hsla>,
-    pub description_size: Option<Pixels>,
     pub content: Option<Hsla>,
-    pub content_size: Option<Pixels>,
     pub chevron: Option<Hsla>,
-    pub chevron_size: Option<Pixels>,
     pub stack_gap: Option<Pixels>,
     pub header_gap: Option<Pixels>,
     pub label_stack_gap: Option<Pixels>,
-    pub header_padding_x: Option<Pixels>,
-    pub header_padding_y: Option<Pixels>,
     pub panel_gap: Option<Pixels>,
-    pub panel_padding_x: Option<Pixels>,
-    pub panel_padding_bottom: Option<Pixels>,
-    pub panel_padding_top: Option<Pixels>,
+    pub sizes: Option<AccordionSizeScale>,
 }
 
 impl AccordionOverrides {
@@ -5572,26 +6526,14 @@ impl AccordionOverrides {
         if let Some(value) = &self.label {
             current.label = value.clone();
         }
-        if let Some(value) = self.label_size {
-            current.label_size = value;
-        }
         if let Some(value) = &self.description {
             current.description = value.clone();
-        }
-        if let Some(value) = self.description_size {
-            current.description_size = value;
         }
         if let Some(value) = &self.content {
             current.content = value.clone();
         }
-        if let Some(value) = self.content_size {
-            current.content_size = value;
-        }
         if let Some(value) = &self.chevron {
             current.chevron = value.clone();
-        }
-        if let Some(value) = self.chevron_size {
-            current.chevron_size = value;
         }
         if let Some(value) = self.stack_gap {
             current.stack_gap = value;
@@ -5602,23 +6544,11 @@ impl AccordionOverrides {
         if let Some(value) = self.label_stack_gap {
             current.label_stack_gap = value;
         }
-        if let Some(value) = self.header_padding_x {
-            current.header_padding_x = value;
-        }
-        if let Some(value) = self.header_padding_y {
-            current.header_padding_y = value;
-        }
         if let Some(value) = self.panel_gap {
             current.panel_gap = value;
         }
-        if let Some(value) = self.panel_padding_x {
-            current.panel_padding_x = value;
-        }
-        if let Some(value) = self.panel_padding_bottom {
-            current.panel_padding_bottom = value;
-        }
-        if let Some(value) = self.panel_padding_top {
-            current.panel_padding_top = value;
+        if let Some(value) = self.sizes {
+            current.sizes = value;
         }
         current
     }
@@ -5709,6 +6639,8 @@ pub struct ProgressOverrides {
     pub label: Option<Hsla>,
     pub default_width: Option<Pixels>,
     pub min_width: Option<Pixels>,
+    pub root_gap: Option<Pixels>,
+    pub sizes: Option<ProgressSizeScale>,
 }
 
 impl ProgressOverrides {
@@ -5727,6 +6659,12 @@ impl ProgressOverrides {
         }
         if let Some(value) = self.min_width {
             current.min_width = value;
+        }
+        if let Some(value) = self.root_gap {
+            current.root_gap = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
         }
         current
     }
@@ -5809,10 +6747,34 @@ impl OverlayOverrides {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct LoaderOverrides {
+    pub color: Option<Hsla>,
+    pub label: Option<Hsla>,
+    pub sizes: Option<LoaderSizeScale>,
+}
+
+impl LoaderOverrides {
+    fn apply(&self, mut current: LoaderTokens) -> LoaderTokens {
+        if let Some(value) = &self.color {
+            current.color = value.clone();
+        }
+        if let Some(value) = &self.label {
+            current.label = value.clone();
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
+        }
+        current
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct LoadingOverlayOverrides {
     pub bg: Option<Hsla>,
     pub loader_color: Option<Hsla>,
     pub label: Option<Hsla>,
+    pub content_gap: Option<Pixels>,
+    pub label_size: Option<Pixels>,
 }
 
 impl LoadingOverlayOverrides {
@@ -5826,6 +6788,12 @@ impl LoadingOverlayOverrides {
         if let Some(value) = &self.label {
             current.label = value.clone();
         }
+        if let Some(value) = self.content_gap {
+            current.content_gap = value;
+        }
+        if let Some(value) = self.label_size {
+            current.label_size = value;
+        }
         current
     }
 }
@@ -5836,6 +6804,9 @@ pub struct PopoverOverrides {
     pub border: Option<Hsla>,
     pub title: Option<Hsla>,
     pub body: Option<Hsla>,
+    pub padding: Option<Pixels>,
+    pub gap: Option<Pixels>,
+    pub radius: Option<Pixels>,
 }
 
 impl PopoverOverrides {
@@ -5851,6 +6822,15 @@ impl PopoverOverrides {
         }
         if let Some(value) = &self.body {
             current.body = value.clone();
+        }
+        if let Some(value) = self.padding {
+            current.padding = value;
+        }
+        if let Some(value) = self.gap {
+            current.gap = value;
+        }
+        if let Some(value) = self.radius {
+            current.radius = value;
         }
         current
     }
@@ -5980,6 +6960,8 @@ pub struct SelectOverrides {
     pub description_size: Option<Pixels>,
     pub error: Option<Hsla>,
     pub error_size: Option<Pixels>,
+    pub label_block_gap: Option<Pixels>,
+    pub label_row_gap: Option<Pixels>,
     pub slot_gap: Option<Pixels>,
     pub slot_min_width: Option<Pixels>,
     pub layout_gap_vertical: Option<Pixels>,
@@ -5989,6 +6971,7 @@ pub struct SelectOverrides {
     pub option_size: Option<Pixels>,
     pub option_padding_x: Option<Pixels>,
     pub option_padding_y: Option<Pixels>,
+    pub option_content_gap: Option<Pixels>,
     pub option_check_size: Option<Pixels>,
     pub dropdown_padding: Option<Pixels>,
     pub dropdown_gap: Option<Pixels>,
@@ -5998,7 +6981,9 @@ pub struct SelectOverrides {
     pub tag_size: Option<Pixels>,
     pub tag_padding_x: Option<Pixels>,
     pub tag_padding_y: Option<Pixels>,
+    pub tag_gap: Option<Pixels>,
     pub tag_max_width: Option<Pixels>,
+    pub dropdown_anchor_offset: Option<Pixels>,
     pub sizes: Option<FieldSizeScale>,
 }
 
@@ -6070,6 +7055,12 @@ impl SelectOverrides {
         if let Some(value) = self.error_size {
             current.error_size = value;
         }
+        if let Some(value) = self.label_block_gap {
+            current.label_block_gap = value;
+        }
+        if let Some(value) = self.label_row_gap {
+            current.label_row_gap = value;
+        }
         if let Some(value) = self.slot_gap {
             current.slot_gap = value;
         }
@@ -6096,6 +7087,9 @@ impl SelectOverrides {
         }
         if let Some(value) = self.option_padding_y {
             current.option_padding_y = value;
+        }
+        if let Some(value) = self.option_content_gap {
+            current.option_content_gap = value;
         }
         if let Some(value) = self.option_check_size {
             current.option_check_size = value;
@@ -6124,8 +7118,14 @@ impl SelectOverrides {
         if let Some(value) = self.tag_padding_y {
             current.tag_padding_y = value;
         }
+        if let Some(value) = self.tag_gap {
+            current.tag_gap = value;
+        }
         if let Some(value) = self.tag_max_width {
             current.tag_max_width = value;
+        }
+        if let Some(value) = self.dropdown_anchor_offset {
+            current.dropdown_anchor_offset = value;
         }
         if let Some(value) = self.sizes {
             current.sizes = value;
@@ -6144,6 +7144,8 @@ pub struct ModalOverrides {
     pub title_size: Option<Pixels>,
     pub title_weight: Option<FontWeight>,
     pub body_size: Option<Pixels>,
+    pub kind_icon_size: Option<Pixels>,
+    pub kind_icon_gap: Option<Pixels>,
     pub panel_radius: Option<Pixels>,
     pub panel_padding: Option<Pixels>,
     pub header_margin_bottom: Option<Pixels>,
@@ -6181,6 +7183,12 @@ impl ModalOverrides {
         }
         if let Some(value) = self.body_size {
             current.body_size = value;
+        }
+        if let Some(value) = self.kind_icon_size {
+            current.kind_icon_size = value;
+        }
+        if let Some(value) = self.kind_icon_gap {
+            current.kind_icon_gap = value;
         }
         if let Some(value) = self.panel_radius {
             current.panel_radius = value;
@@ -6226,6 +7234,19 @@ pub struct ToastOverrides {
     pub warning_fg: Option<Hsla>,
     pub error_bg: Option<Hsla>,
     pub error_fg: Option<Hsla>,
+    pub card_width: Option<Pixels>,
+    pub card_padding: Option<Pixels>,
+    pub row_gap: Option<Pixels>,
+    pub content_gap: Option<Pixels>,
+    pub icon_box_size: Option<Pixels>,
+    pub icon_size: Option<Pixels>,
+    pub close_button_size: Option<Pixels>,
+    pub close_icon_size: Option<Pixels>,
+    pub title_size: Option<Pixels>,
+    pub body_size: Option<Pixels>,
+    pub stack_gap: Option<Pixels>,
+    pub edge_offset: Option<Pixels>,
+    pub top_offset_extra: Option<Pixels>,
 }
 
 impl ToastOverrides {
@@ -6253,6 +7274,45 @@ impl ToastOverrides {
         }
         if let Some(value) = &self.error_fg {
             current.error_fg = value.clone();
+        }
+        if let Some(value) = self.card_width {
+            current.card_width = value;
+        }
+        if let Some(value) = self.card_padding {
+            current.card_padding = value;
+        }
+        if let Some(value) = self.row_gap {
+            current.row_gap = value;
+        }
+        if let Some(value) = self.content_gap {
+            current.content_gap = value;
+        }
+        if let Some(value) = self.icon_box_size {
+            current.icon_box_size = value;
+        }
+        if let Some(value) = self.icon_size {
+            current.icon_size = value;
+        }
+        if let Some(value) = self.close_button_size {
+            current.close_button_size = value;
+        }
+        if let Some(value) = self.close_icon_size {
+            current.close_icon_size = value;
+        }
+        if let Some(value) = self.title_size {
+            current.title_size = value;
+        }
+        if let Some(value) = self.body_size {
+            current.body_size = value;
+        }
+        if let Some(value) = self.stack_gap {
+            current.stack_gap = value;
+        }
+        if let Some(value) = self.edge_offset {
+            current.edge_offset = value;
+        }
+        if let Some(value) = self.top_offset_extra {
+            current.top_offset_extra = value;
         }
         current
     }
@@ -6292,6 +7352,7 @@ impl DividerOverrides {
 pub struct ScrollAreaOverrides {
     pub bg: Option<Hsla>,
     pub border: Option<Hsla>,
+    pub padding: Option<InsetSizeScale>,
 }
 
 impl ScrollAreaOverrides {
@@ -6301,6 +7362,9 @@ impl ScrollAreaOverrides {
         }
         if let Some(value) = &self.border {
             current.border = value.clone();
+        }
+        if let Some(value) = self.padding {
+            current.padding = value;
         }
         current
     }
@@ -6448,6 +7512,7 @@ pub struct TitleBarOverrides {
     pub border: Option<Hsla>,
     pub fg: Option<Hsla>,
     pub controls_bg: Option<Hsla>,
+    pub height: Option<Pixels>,
     pub title_size: Option<Pixels>,
     pub title_weight: Option<FontWeight>,
     pub windows_button_width: Option<Pixels>,
@@ -6478,6 +7543,9 @@ impl TitleBarOverrides {
         }
         if let Some(value) = &self.controls_bg {
             current.controls_bg = value.clone();
+        }
+        if let Some(value) = self.height {
+            current.height = value;
         }
         if let Some(value) = self.title_size {
             current.title_size = value;
@@ -6701,6 +7769,7 @@ pub struct TextOverrides {
     pub success: Option<Hsla>,
     pub warning: Option<Hsla>,
     pub error: Option<Hsla>,
+    pub sizes: Option<TextSizeScale>,
 }
 
 impl TextOverrides {
@@ -6725,6 +7794,9 @@ impl TextOverrides {
         }
         if let Some(value) = &self.error {
             current.error = value.clone();
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
         }
         current
     }
@@ -6802,6 +7874,7 @@ impl TitleOverrides {
 pub struct PaperOverrides {
     pub bg: Option<Hsla>,
     pub border: Option<Hsla>,
+    pub padding: Option<InsetSizeScale>,
 }
 
 impl PaperOverrides {
@@ -6811,6 +7884,9 @@ impl PaperOverrides {
         }
         if let Some(value) = &self.border {
             current.border = value.clone();
+        }
+        if let Some(value) = self.padding {
+            current.padding = value;
         }
         current
     }
@@ -6957,6 +8033,8 @@ pub struct TextareaOverrides {
     pub description_size: Option<Pixels>,
     pub error: Option<Hsla>,
     pub error_size: Option<Pixels>,
+    pub label_block_gap: Option<Pixels>,
+    pub label_row_gap: Option<Pixels>,
     pub layout_gap_vertical: Option<Pixels>,
     pub layout_gap_horizontal: Option<Pixels>,
     pub horizontal_label_width: Option<Pixels>,
@@ -7010,6 +8088,12 @@ impl TextareaOverrides {
         }
         if let Some(value) = self.error_size {
             current.error_size = value;
+        }
+        if let Some(value) = self.label_block_gap {
+            current.label_block_gap = value;
+        }
+        if let Some(value) = self.label_row_gap {
+            current.label_row_gap = value;
         }
         if let Some(value) = self.layout_gap_vertical {
             current.layout_gap_vertical = value;
@@ -7190,6 +8274,7 @@ impl RangeSliderOverrides {
 pub struct RatingOverrides {
     pub active: Option<Hsla>,
     pub inactive: Option<Hsla>,
+    pub sizes: Option<RatingSizeScale>,
 }
 
 impl RatingOverrides {
@@ -7199,6 +8284,9 @@ impl RatingOverrides {
         }
         if let Some(value) = &self.inactive {
             current.inactive = value.clone();
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
         }
         current
     }
@@ -7220,6 +8308,7 @@ pub struct TabsOverrides {
     pub list_gap: Option<Pixels>,
     pub list_padding: Option<Pixels>,
     pub panel_padding: Option<Pixels>,
+    pub sizes: Option<TabsSizeScale>,
 }
 
 impl TabsOverrides {
@@ -7265,6 +8354,9 @@ impl TabsOverrides {
         }
         if let Some(value) = self.panel_padding {
             current.panel_padding = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
         }
         current
     }
@@ -7687,6 +8779,24 @@ impl TreeOverrides {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct LayoutOverrides {
+    pub gap: Option<GapSizeScale>,
+    pub space: Option<GapSizeScale>,
+}
+
+impl LayoutOverrides {
+    fn apply(&self, mut current: LayoutTokens) -> LayoutTokens {
+        if let Some(value) = self.gap {
+            current.gap = value;
+        }
+        if let Some(value) = self.space {
+            current.space = value;
+        }
+        current
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ComponentOverrides {
     pub button: ButtonOverrides,
     pub input: InputOverrides,
@@ -7700,6 +8810,7 @@ pub struct ComponentOverrides {
     pub progress: ProgressOverrides,
     pub slider: SliderOverrides,
     pub overlay: OverlayOverrides,
+    pub loader: LoaderOverrides,
     pub loading_overlay: LoadingOverlayOverrides,
     pub popover: PopoverOverrides,
     pub tooltip: TooltipOverrides,
@@ -7730,6 +8841,7 @@ pub struct ComponentOverrides {
     pub stepper: StepperOverrides,
     pub timeline: TimelineOverrides,
     pub tree: TreeOverrides,
+    pub layout: LayoutOverrides,
 }
 
 impl ComponentOverrides {
@@ -7747,6 +8859,7 @@ impl ComponentOverrides {
             progress: self.progress.apply(current.progress),
             slider: self.slider.apply(current.slider),
             overlay: self.overlay.apply(current.overlay),
+            loader: self.loader.apply(current.loader),
             loading_overlay: self.loading_overlay.apply(current.loading_overlay),
             popover: self.popover.apply(current.popover),
             tooltip: self.tooltip.apply(current.tooltip),
@@ -7777,6 +8890,7 @@ impl ComponentOverrides {
             stepper: self.stepper.apply(current.stepper),
             timeline: self.timeline.apply(current.timeline),
             tree: self.tree.apply(current.tree),
+            layout: self.layout.apply(current.layout),
         }
     }
 }

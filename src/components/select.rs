@@ -291,9 +291,9 @@ impl Select {
         }
 
         let tokens = &self.theme.components.select;
-        let mut block = Stack::vertical().gap_1();
+        let mut block = Stack::vertical().gap(tokens.label_block_gap);
         if let Some(label) = self.label.clone() {
-            let mut label_row = Stack::horizontal().gap_1().child(
+            let mut label_row = Stack::horizontal().gap(tokens.label_row_gap).child(
                 div()
                     .text_size(tokens.label_size)
                     .font_weight(tokens.label_weight)
@@ -534,7 +534,7 @@ impl Select {
                             .w_full()
                             .justify_between()
                             .items_center()
-                            .gap_2()
+                            .gap(tokens.option_content_gap)
                             .child(label_node)
                             .child(
                                 div()
@@ -551,7 +551,7 @@ impl Select {
                                                     "selected",
                                                     option.value.to_string(),
                                                 ))
-                                                .size(12.0)
+                                                .size(f32::from(tokens.option_check_size))
                                                 .color(resolve_hsla(&self.theme, &tokens.icon)),
                                         ),
                                     ),
@@ -709,6 +709,11 @@ impl MotionAware for Select {
 impl RenderOnce for Select {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
+        let layout_gap_vertical = self.theme.components.select.layout_gap_vertical;
+        let label_block_gap = self.theme.components.select.label_block_gap;
+        let dropdown_anchor_offset = self.theme.components.select.dropdown_anchor_offset;
+        let layout_gap_horizontal = self.theme.components.select.layout_gap_horizontal;
+        let horizontal_label_width = self.theme.components.select.horizontal_label_width;
         let state = SelectState::resolve(SelectStateInput {
             id: &self.id,
             opened_controlled: self.opened_controlled,
@@ -719,7 +724,7 @@ impl RenderOnce for Select {
         let dropdown_upward = state.dropdown_upward;
         let mut container = Stack::vertical()
             .id(self.id.clone())
-            .gap(self.theme.components.select.layout_gap_vertical)
+            .gap(layout_gap_vertical)
             .relative()
             .w_full();
 
@@ -727,7 +732,7 @@ impl RenderOnce for Select {
             container = container.child(self.render_label_block());
         }
 
-        let mut field = Stack::vertical().gap_1();
+        let mut field = Stack::vertical().gap(label_block_gap);
         let mut trigger = div()
             .id(self.id.slot("trigger"))
             .relative()
@@ -741,7 +746,7 @@ impl RenderOnce for Select {
                     &self.id,
                     "anchor-host",
                     PopupPlacement::Top,
-                    2.0,
+                    f32::from(dropdown_anchor_offset),
                     floating,
                     24,
                     true,
@@ -752,7 +757,7 @@ impl RenderOnce for Select {
                     &self.id,
                     "anchor-host",
                     PopupPlacement::Bottom,
-                    2.0,
+                    f32::from(dropdown_anchor_offset),
                     floating,
                     24,
                     true,
@@ -768,10 +773,10 @@ impl RenderOnce for Select {
             FieldLayout::Horizontal => Stack::horizontal()
                 .id(self.id.clone())
                 .items_start()
-                .gap(self.theme.components.select.layout_gap_horizontal)
+                .gap(layout_gap_horizontal)
                 .child(
                     div()
-                        .w(self.theme.components.select.horizontal_label_width)
+                        .w(horizontal_label_width)
                         .child(self.render_label_block()),
                 )
                 .child(div().flex_1().child(field)),
@@ -987,10 +992,10 @@ impl MultiSelect {
         }
 
         let tokens = &self.theme.components.select;
-        let mut block = Stack::vertical().gap_1();
+        let mut block = Stack::vertical().gap(tokens.label_block_gap);
 
         if let Some(label) = self.label.clone() {
-            let mut label_row = Stack::horizontal().gap_1().child(
+            let mut label_row = Stack::horizontal().gap(tokens.label_row_gap).child(
                 div()
                     .text_size(tokens.label_size)
                     .font_weight(tokens.label_weight)
@@ -1165,7 +1170,7 @@ impl MultiSelect {
                 Stack::horizontal()
                     .flex_1()
                     .min_w_0()
-                    .gap_1()
+                    .gap(tokens.tag_gap)
                     .overflow_hidden()
                     .children(tags),
             );
@@ -1248,7 +1253,7 @@ impl MultiSelect {
                             .w_full()
                             .justify_between()
                             .items_center()
-                            .gap_2()
+                            .gap(tokens.option_content_gap)
                             .child(label_node)
                             .child(
                                 div()
@@ -1265,7 +1270,7 @@ impl MultiSelect {
                                                     "selected",
                                                     option.value.to_string(),
                                                 ))
-                                                .size(12.0)
+                                                .size(f32::from(tokens.option_check_size))
                                                 .color(resolve_hsla(&self.theme, &tokens.icon)),
                                         ),
                                     ),
@@ -1427,6 +1432,11 @@ impl MotionAware for MultiSelect {
 impl RenderOnce for MultiSelect {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
+        let layout_gap_vertical = self.theme.components.select.layout_gap_vertical;
+        let label_block_gap = self.theme.components.select.label_block_gap;
+        let dropdown_anchor_offset = self.theme.components.select.dropdown_anchor_offset;
+        let layout_gap_horizontal = self.theme.components.select.layout_gap_horizontal;
+        let horizontal_label_width = self.theme.components.select.horizontal_label_width;
         let state = SelectState::resolve(SelectStateInput {
             id: &self.id,
             opened_controlled: self.opened_controlled,
@@ -1437,14 +1447,14 @@ impl RenderOnce for MultiSelect {
         let dropdown_upward = state.dropdown_upward;
         let mut container = Stack::vertical()
             .id(self.id.clone())
-            .gap(self.theme.components.select.layout_gap_vertical)
+            .gap(layout_gap_vertical)
             .relative()
             .w_full();
         if self.layout == FieldLayout::Vertical {
             container = container.child(self.render_label_block());
         }
 
-        let mut field = Stack::vertical().gap_1();
+        let mut field = Stack::vertical().gap(label_block_gap);
         let mut trigger = div()
             .id(self.id.slot("trigger"))
             .relative()
@@ -1458,7 +1468,7 @@ impl RenderOnce for MultiSelect {
                     &self.id,
                     "anchor-host",
                     PopupPlacement::Top,
-                    2.0,
+                    f32::from(dropdown_anchor_offset),
                     floating,
                     24,
                     true,
@@ -1469,7 +1479,7 @@ impl RenderOnce for MultiSelect {
                     &self.id,
                     "anchor-host",
                     PopupPlacement::Bottom,
-                    2.0,
+                    f32::from(dropdown_anchor_offset),
                     floating,
                     24,
                     true,
@@ -1485,10 +1495,10 @@ impl RenderOnce for MultiSelect {
             FieldLayout::Horizontal => Stack::horizontal()
                 .id(self.id.clone())
                 .items_start()
-                .gap(self.theme.components.select.layout_gap_horizontal)
+                .gap(layout_gap_horizontal)
                 .child(
                     div()
-                        .w(self.theme.components.select.horizontal_label_width)
+                        .w(horizontal_label_width)
                         .child(self.render_label_block()),
                 )
                 .child(div().flex_1().child(field)),

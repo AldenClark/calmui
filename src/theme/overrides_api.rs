@@ -83,12 +83,16 @@ impl_option_overrides_methods!(InputOverrides {
     description_size: Pixels,
     error: Hsla,
     error_size: Pixels,
+    label_block_gap: Pixels,
+    label_row_gap: Pixels,
     slot_fg: Hsla,
     slot_gap: Pixels,
     slot_min_width: Pixels,
     layout_gap_vertical: Pixels,
     layout_gap_horizontal: Pixels,
     horizontal_label_width: Pixels,
+    pin_cells_gap: Pixels,
+    pin_error_gap: Pixels,
     sizes: FieldSizeScale,
 });
 
@@ -101,6 +105,10 @@ impl_option_overrides_methods!(RadioOverrides {
     indicator: Hsla,
     label: Hsla,
     description: Hsla,
+    label_description_gap: Pixels,
+    group_gap_horizontal: Pixels,
+    group_gap_vertical: Pixels,
+    sizes: ChoiceControlSizeScale,
 });
 
 impl_option_overrides_methods!(CheckboxOverrides {
@@ -113,6 +121,10 @@ impl_option_overrides_methods!(CheckboxOverrides {
     indicator: Hsla,
     label: Hsla,
     description: Hsla,
+    label_description_gap: Pixels,
+    group_gap_horizontal: Pixels,
+    group_gap_vertical: Pixels,
+    sizes: ChoiceControlSizeScale,
 });
 
 impl_option_overrides_methods!(SwitchOverrides {
@@ -123,6 +135,8 @@ impl_option_overrides_methods!(SwitchOverrides {
     thumb_bg: Hsla,
     label: Hsla,
     description: Hsla,
+    label_description_gap: Pixels,
+    sizes: SwitchSizeScale,
 });
 
 impl_option_overrides_methods!(ChipOverrides {
@@ -143,6 +157,11 @@ impl_option_overrides_methods!(ChipOverrides {
     default_border: Hsla,
     border_hover: Hsla,
     border_focus: Hsla,
+    content_gap: Pixels,
+    indicator_size: Pixels,
+    group_gap_horizontal: Pixels,
+    group_gap_vertical: Pixels,
+    sizes: ButtonSizeScale,
 });
 
 impl_option_overrides_methods!(BadgeOverrides {
@@ -157,28 +176,21 @@ impl_option_overrides_methods!(BadgeOverrides {
     default_bg: Hsla,
     default_fg: Hsla,
     default_border: Hsla,
+    sizes: BadgeSizeScale,
 });
 
 impl_option_overrides_methods!(AccordionOverrides {
     item_bg: Hsla,
     item_border: Hsla,
     label: Hsla,
-    label_size: Pixels,
     description: Hsla,
-    description_size: Pixels,
     content: Hsla,
-    content_size: Pixels,
     chevron: Hsla,
-    chevron_size: Pixels,
     stack_gap: Pixels,
     header_gap: Pixels,
     label_stack_gap: Pixels,
-    header_padding_x: Pixels,
-    header_padding_y: Pixels,
     panel_gap: Pixels,
-    panel_padding_x: Pixels,
-    panel_padding_bottom: Pixels,
-    panel_padding_top: Pixels,
+    sizes: AccordionSizeScale,
 });
 
 impl_option_overrides_methods!(MenuOverrides {
@@ -207,6 +219,8 @@ impl_option_overrides_methods!(ProgressOverrides {
     label: Hsla,
     default_width: Pixels,
     min_width: Pixels,
+    root_gap: Pixels,
+    sizes: ProgressSizeScale,
 });
 
 impl_option_overrides_methods!(SliderOverrides {
@@ -227,10 +241,18 @@ impl_option_overrides_methods!(SliderOverrides {
 
 impl_option_overrides_methods!(OverlayOverrides { bg: Hsla });
 
+impl_option_overrides_methods!(LoaderOverrides {
+    color: Hsla,
+    label: Hsla,
+    sizes: LoaderSizeScale,
+});
+
 impl_option_overrides_methods!(LoadingOverlayOverrides {
     bg: Hsla,
     loader_color: Hsla,
     label: Hsla,
+    content_gap: Pixels,
+    label_size: Pixels,
 });
 
 impl_option_overrides_methods!(PopoverOverrides {
@@ -238,6 +260,9 @@ impl_option_overrides_methods!(PopoverOverrides {
     border: Hsla,
     title: Hsla,
     body: Hsla,
+    padding: Pixels,
+    gap: Pixels,
+    radius: Pixels,
 });
 
 impl_option_overrides_methods!(TooltipOverrides {
@@ -289,6 +314,8 @@ impl_option_overrides_methods!(SelectOverrides {
     description_size: Pixels,
     error: Hsla,
     error_size: Pixels,
+    label_block_gap: Pixels,
+    label_row_gap: Pixels,
     slot_gap: Pixels,
     slot_min_width: Pixels,
     layout_gap_vertical: Pixels,
@@ -298,6 +325,7 @@ impl_option_overrides_methods!(SelectOverrides {
     option_size: Pixels,
     option_padding_x: Pixels,
     option_padding_y: Pixels,
+    option_content_gap: Pixels,
     option_check_size: Pixels,
     dropdown_padding: Pixels,
     dropdown_gap: Pixels,
@@ -307,7 +335,9 @@ impl_option_overrides_methods!(SelectOverrides {
     tag_size: Pixels,
     tag_padding_x: Pixels,
     tag_padding_y: Pixels,
+    tag_gap: Pixels,
     tag_max_width: Pixels,
+    dropdown_anchor_offset: Pixels,
     sizes: FieldSizeScale,
 });
 
@@ -320,6 +350,8 @@ impl_option_overrides_methods!(ModalOverrides {
     title_size: Pixels,
     title_weight: FontWeight,
     body_size: Pixels,
+    kind_icon_size: Pixels,
+    kind_icon_gap: Pixels,
     panel_radius: Pixels,
     panel_padding: Pixels,
     header_margin_bottom: Pixels,
@@ -341,6 +373,19 @@ impl_option_overrides_methods!(ToastOverrides {
     warning_fg: Hsla,
     error_bg: Hsla,
     error_fg: Hsla,
+    card_width: Pixels,
+    card_padding: Pixels,
+    row_gap: Pixels,
+    content_gap: Pixels,
+    icon_box_size: Pixels,
+    icon_size: Pixels,
+    close_button_size: Pixels,
+    close_icon_size: Pixels,
+    title_size: Pixels,
+    body_size: Pixels,
+    stack_gap: Pixels,
+    edge_offset: Pixels,
+    top_offset_extra: Pixels,
 });
 
 impl_option_overrides_methods!(DividerOverrides {
@@ -354,6 +399,7 @@ impl_option_overrides_methods!(DividerOverrides {
 impl_option_overrides_methods!(ScrollAreaOverrides {
     bg: Hsla,
     border: Hsla,
+    padding: InsetSizeScale,
 });
 
 impl_option_overrides_methods!(DrawerOverrides {
@@ -396,6 +442,7 @@ impl_option_overrides_methods!(TitleBarOverrides {
     border: Hsla,
     fg: Hsla,
     controls_bg: Hsla,
+    height: Pixels,
     title_size: Pixels,
     title_weight: FontWeight,
     windows_button_width: Pixels,
@@ -463,6 +510,7 @@ impl_option_overrides_methods!(TextOverrides {
     success: Hsla,
     warning: Hsla,
     error: Hsla,
+    sizes: TextSizeScale,
 });
 
 impl_option_overrides_methods!(TitleOverrides {
@@ -483,6 +531,7 @@ impl_option_overrides_methods!(TitleLevelOverrides {
 impl_option_overrides_methods!(PaperOverrides {
     bg: Hsla,
     border: Hsla,
+    padding: InsetSizeScale,
 });
 
 impl_option_overrides_methods!(ActionIconOverrides {
@@ -533,6 +582,8 @@ impl_option_overrides_methods!(TextareaOverrides {
     description_size: Pixels,
     error: Hsla,
     error_size: Pixels,
+    label_block_gap: Pixels,
+    label_row_gap: Pixels,
     layout_gap_vertical: Pixels,
     layout_gap_horizontal: Pixels,
     horizontal_label_width: Pixels,
@@ -583,6 +634,7 @@ impl_option_overrides_methods!(RangeSliderOverrides {
 impl_option_overrides_methods!(RatingOverrides {
     active: Hsla,
     inactive: Hsla,
+    sizes: RatingSizeScale,
 });
 
 impl_option_overrides_methods!(TabsOverrides {
@@ -600,6 +652,7 @@ impl_option_overrides_methods!(TabsOverrides {
     list_gap: Pixels,
     list_padding: Pixels,
     panel_padding: Pixels,
+    sizes: TabsSizeScale,
 });
 
 impl_option_overrides_methods!(PaginationOverrides {
@@ -709,6 +762,11 @@ impl_option_overrides_methods!(TreeOverrides {
     sizes: TreeSizeScale,
 });
 
+impl_option_overrides_methods!(LayoutOverrides {
+    gap: GapSizeScale,
+    space: GapSizeScale,
+});
+
 impl_nested_overrides_methods!(ComponentOverrides {
     button: ButtonOverrides,
     input: InputOverrides,
@@ -722,6 +780,7 @@ impl_nested_overrides_methods!(ComponentOverrides {
     progress: ProgressOverrides,
     slider: SliderOverrides,
     overlay: OverlayOverrides,
+    loader: LoaderOverrides,
     loading_overlay: LoadingOverlayOverrides,
     popover: PopoverOverrides,
     tooltip: TooltipOverrides,
@@ -752,6 +811,7 @@ impl_nested_overrides_methods!(ComponentOverrides {
     stepper: StepperOverrides,
     timeline: TimelineOverrides,
     tree: TreeOverrides,
+    layout: LayoutOverrides,
 });
 
 impl ThemeOverrides {
@@ -835,6 +895,7 @@ impl_theme_component_passthrough_methods!(
     progress: ProgressOverrides,
     slider: SliderOverrides,
     overlay: OverlayOverrides,
+    loader: LoaderOverrides,
     loading_overlay: LoadingOverlayOverrides,
     popover: PopoverOverrides,
     tooltip: TooltipOverrides,
@@ -865,6 +926,7 @@ impl_theme_component_passthrough_methods!(
     stepper: StepperOverrides,
     timeline: TimelineOverrides,
     tree: TreeOverrides,
+    layout: LayoutOverrides,
 );
 
 impl Theme {

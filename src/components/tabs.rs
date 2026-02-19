@@ -144,14 +144,11 @@ impl Tabs {
         .map(SharedString::from)
     }
 
-    fn apply_tab_size<T: Styled>(size: Size, node: T) -> T {
-        match size {
-            Size::Xs => node.text_xs().py_0p5().px_2(),
-            Size::Sm => node.text_sm().py_1().px_2p5(),
-            Size::Md => node.text_base().py_1p5().px_3(),
-            Size::Lg => node.text_lg().py_2().px_3p5(),
-            Size::Xl => node.text_xl().py_2p5().px_4(),
-        }
+    fn apply_tab_size<T: Styled>(preset: crate::theme::TabsSizePreset, node: T) -> T {
+        node.text_size(preset.font_size)
+            .line_height(preset.line_height)
+            .px(preset.padding_x)
+            .py(preset.padding_y)
     }
 
     fn active_bg(&self) -> gpui::Hsla {
@@ -202,13 +199,13 @@ impl RenderOnce for Tabs {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = self.theme.components.tabs.clone();
+        let tab_size_preset = tokens.sizes.for_size(self.size);
         let selected = self.resolved_value();
         let theme = self.theme.clone();
         let on_change = self.on_change.clone();
         let controlled = self.value_controlled;
         let control_id = self.id.clone();
         let active_bg = self.active_bg();
-        let size = self.size;
         let motion = self.motion;
         let panel_fallback_fg = resolve_hsla(&self.theme, &self.theme.semantic.text_muted);
         let transparent = resolve_hsla(&theme, &gpui::transparent_black());
@@ -257,7 +254,7 @@ impl RenderOnce for Tabs {
                 trigger = trigger.child(label);
             }
 
-            trigger = Self::apply_tab_size(size, trigger);
+            trigger = Self::apply_tab_size(tab_size_preset, trigger);
             trigger = apply_radius(&self.theme, trigger, self.radius);
             if is_active {
                 trigger = trigger.shadow_sm();

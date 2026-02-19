@@ -1101,10 +1101,10 @@ impl Textarea {
         }
 
         let tokens = &self.theme.components.textarea;
-        let mut block = Stack::vertical().gap_1();
+        let mut block = Stack::vertical().gap(tokens.label_block_gap);
 
         if let Some(label) = &self.label {
-            let mut label_row = Stack::horizontal().gap_1().child(
+            let mut label_row = Stack::horizontal().gap(tokens.label_row_gap).child(
                 div()
                     .text_size(tokens.label_size)
                     .font_weight(tokens.label_weight)
@@ -1200,7 +1200,6 @@ impl Textarea {
             .flex_col()
             .items_start()
             .justify_start()
-            .gap_0()
             .w_full()
             .h(px(box_height))
             .bg(FieldVariantRuntime::control_bg(
@@ -2042,7 +2041,7 @@ impl Textarea {
                     .child(self.placeholder.clone().unwrap_or_default()),
             );
         } else {
-            let mut content = Stack::vertical().w_full().gap_0();
+            let mut content = Stack::vertical().w_full();
             let (caret_line, caret_col) =
                 Self::caret_visual_position(&wrapped_lines, current_caret);
             let selection_bg = resolve_hsla(&self.theme, &tokens.selection_bg);

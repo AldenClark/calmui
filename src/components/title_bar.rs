@@ -18,16 +18,6 @@ type WindowCloseHandler = std::rc::Rc<dyn Fn(&gpui::ClickEvent, &mut Window, &mu
 
 static TITLEBAR_SHORTCUTS_INSTALLED: AtomicBool = AtomicBool::new(false);
 
-pub fn default_title_bar_height() -> f32 {
-    if cfg!(target_os = "macos") {
-        30.0
-    } else if cfg!(target_os = "windows") {
-        32.0
-    } else {
-        34.0
-    }
-}
-
 fn install_titlebar_shortcuts_once(cx: &mut gpui::App) {
     if TITLEBAR_SHORTCUTS_INSTALLED.swap(true, Ordering::AcqRel) {
         return;
@@ -78,7 +68,7 @@ pub struct TitleBar {
     id: ComponentId,
     pub(crate) visible: bool,
     pub(crate) title: Option<SharedString>,
-    pub(crate) height_px: f32,
+    pub(crate) height_px: Option<f32>,
     pub(crate) immersive: bool,
     pub(crate) background: Option<Hsla>,
     pub(crate) show_window_controls: bool,
@@ -95,7 +85,7 @@ impl TitleBar {
             id: ComponentId::default(),
             visible: true,
             title: None,
-            height_px: default_title_bar_height(),
+            height_px: None,
             immersive: false,
             background: None,
             show_window_controls: true,
@@ -133,7 +123,7 @@ impl TitleBar {
     /// - 如果放入 `AppShell` 中，建议同时通过 `AppShell::title_bar_height(...)`
     ///   保持外层区域高度一致。
     pub fn height(mut self, value: f32) -> Self {
-        self.height_px = value.max(0.0);
+        self.height_px = Some(value.max(0.0));
         self
     }
 
@@ -173,7 +163,7 @@ impl TitleBar {
         self
     }
 
-    pub fn height_px(&self) -> f32 {
+    pub fn height_px(&self) -> Option<f32> {
         self.height_px
     }
 
@@ -191,7 +181,11 @@ impl TitleBar {
         self
     }
 
-    fn render_window_controls_windows(&self, window: &mut Window) -> WindowControls {
+    fn render_window_controls_windows(
+        &self,
+        window: &mut Window,
+        height_px: f32,
+    ) -> WindowControls {
         let tokens = &self.theme.components.title_bar;
         let fg = resolve_hsla(&self.theme, &self.theme.components.title_bar.fg);
         let (neutral_hover_bg, neutral_active_bg) = match self.theme.color_scheme {
@@ -214,7 +208,7 @@ impl TitleBar {
             div()
                 .id(id)
                 .w(tokens.windows_button_width)
-                .h(px(self.height_px))
+                .h(px(height_px))
                 .flex()
                 .items_center()
                 .justify_center()
@@ -236,7 +230,7 @@ impl TitleBar {
                 .id(self.id.slot("controls-win"))
                 .flex()
                 .items_center()
-                .h(px(self.height_px))
+                .h(px(height_px))
                 .child(
                     button(self.id.slot("win-min"), "\u{e921}", false)
                         .window_control_area(WindowControlArea::Min),
@@ -251,7 +245,7 @@ impl TitleBar {
         }
     }
 
-    fn render_window_controls_linux(&self) -> WindowControls {
+    fn render_window_controls_linux(&self, _height_px: f32) -> WindowControls {
         #[derive(Clone, Copy)]
         enum LinuxWindowAction {
             Minimize,
@@ -342,16 +336,17 @@ impl TitleBar {
         &self,
         window: &mut Window,
         fullscreen: bool,
+        height_px: f32,
     ) -> Option<WindowControls> {
         if !self.show_window_controls || fullscreen {
             return None;
         }
 
         if cfg!(target_os = "windows") {
-            return Some(self.render_window_controls_windows(window));
+            return Some(self.render_window_controls_windows(window, height_px));
         }
 
-        Some(self.render_window_controls_linux())
+        Some(self.render_window_controls_linux(height_px))
     }
 }
 
@@ -381,7 +376,8 @@ impl RenderOnce for TitleBar {
         }
         let immersive = self.immersive;
         let tokens = &self.theme.components.title_bar;
-        let controls = self.render_window_controls(window, fullscreen);
+        let height_px = self.height_px.unwrap_or_else(|| f32::from(tokens.height));
+        let controls = self.render_window_controls(window, fullscreen, height_px);
         let controls_width = controls.as_ref().map_or(0.0, |c| c.width_px);
         let macos_controls_reserve =
             if cfg!(target_os = "macos") && self.show_window_controls && !fullscreen {
@@ -423,7 +419,7 @@ impl RenderOnce for TitleBar {
             .id(self.id.clone())
             .relative()
             .w_full()
-            .h(px(self.height_px))
+            .h(px(height_px))
             .pl(px(padding_left))
             .pr(px(padding_right))
             .flex()
@@ -440,7 +436,7 @@ impl RenderOnce for TitleBar {
                     .gap(tokens.controls_slot_gap);
 
                 left_cluster =
-                    left_cluster.child(div().w(px(macos_controls_reserve)).h(px(self.height_px)));
+                    left_cluster.child(div().w(px(macos_controls_reserve)).h(px(height_px)));
                 if let Some(title) = title_element {
                     left_cluster = left_cluster.child(title);
                 }
@@ -463,7 +459,7 @@ impl RenderOnce for TitleBar {
                 let left = div()
                     .id(self.id.slot("mac-left"))
                     .w(px(macos_controls_reserve))
-                    .h(px(self.height_px))
+                    .h(px(height_px))
                     .flex();
 
                 let center = div()
@@ -479,7 +475,7 @@ impl RenderOnce for TitleBar {
                 let right = div()
                     .id(self.id.slot("mac-right"))
                     .w(px(macos_controls_reserve))
-                    .h(px(self.height_px));
+                    .h(px(height_px));
 
                 row = row.child(left).child(center).child(right);
             }
@@ -530,7 +526,7 @@ impl RenderOnce for TitleBar {
                     .child(
                         div()
                             .w(px(controls_width))
-                            .h(px(self.height_px))
+                            .h(px(height_px))
                             .window_control_area(WindowControlArea::Drag),
                     )
                     .child(
@@ -549,7 +545,7 @@ impl RenderOnce for TitleBar {
                         || {
                             div()
                                 .w(px(controls_width))
-                                .h(px(self.height_px))
+                                .h(px(height_px))
                                 .into_any_element()
                         },
                         |controls| controls.element,
@@ -585,7 +581,7 @@ impl RenderOnce for TitleBar {
                 }
             } else {
                 row = row
-                    .child(div().w(px(controls_width)).h(px(self.height_px)))
+                    .child(div().w(px(controls_width)).h(px(height_px)))
                     .child(
                         div()
                             .id(self.id.slot("linux-center"))
@@ -601,7 +597,7 @@ impl RenderOnce for TitleBar {
                         || {
                             div()
                                 .w(px(controls_width))
-                                .h(px(self.height_px))
+                                .h(px(height_px))
                                 .into_any_element()
                         },
                         |controls| controls.element,
