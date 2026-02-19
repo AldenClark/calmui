@@ -2026,33 +2026,6 @@ impl Textarea {
         let ime_horizontal_padding = horizontal_padding;
         let ime_content_width_fallback = content_width_fallback;
         let ime_font_size = font_size;
-        input = input.child(
-            canvas(
-                |_, _, _| (),
-                move |_, (), window, cx| {
-                    window.handle_input(
-                        &focus_handle_for_ime,
-                        TextareaImeHandler {
-                            id: ime_id.clone(),
-                            value_controlled: ime_value_controlled,
-                            rendered_value: ime_rendered_value.clone(),
-                            max_length: ime_max_length,
-                            disabled: ime_disabled,
-                            read_only: ime_read_only,
-                            on_change: ime_on_change.clone(),
-                            line_height: ime_line_height,
-                            vertical_padding: ime_vertical_padding,
-                            horizontal_padding: ime_horizontal_padding,
-                            content_width_fallback: ime_content_width_fallback,
-                            font_size: ime_font_size,
-                        },
-                        cx,
-                    );
-                },
-            )
-            .absolute()
-            .size(px(0.0)),
-        );
 
         if current_value.is_empty() && !is_focused {
             input = input.child(
@@ -2150,7 +2123,26 @@ impl Textarea {
                                 f32::from(bounds.size.height).to_string(),
                             );
                         },
-                        |_, _, _, _| {},
+                        move |_, _, window, cx| {
+                            window.handle_input(
+                                &focus_handle_for_ime,
+                                TextareaImeHandler {
+                                    id: ime_id.clone(),
+                                    value_controlled: ime_value_controlled,
+                                    rendered_value: ime_rendered_value.clone(),
+                                    max_length: ime_max_length,
+                                    disabled: ime_disabled,
+                                    read_only: ime_read_only,
+                                    on_change: ime_on_change.clone(),
+                                    line_height: ime_line_height,
+                                    vertical_padding: ime_vertical_padding,
+                                    horizontal_padding: ime_horizontal_padding,
+                                    content_width_fallback: ime_content_width_fallback,
+                                    font_size: ime_font_size,
+                                },
+                                cx,
+                            );
+                        },
                     )
                     .absolute()
                     .size_full()

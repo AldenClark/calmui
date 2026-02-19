@@ -1404,31 +1404,6 @@ impl TextInput {
         let ime_mask_reveal_ms = self.mask_reveal_ms;
         let ime_font_size = font_size;
         let ime_on_change = self.on_change.clone();
-        input = input.child(
-            canvas(
-                |_, _, _| (),
-                move |_, (), window, cx| {
-                    window.handle_input(
-                        &focus_handle_for_ime,
-                        TextInputImeHandler {
-                            id: ime_id.clone(),
-                            value_controlled: ime_value_controlled,
-                            rendered_value: ime_rendered_value.clone(),
-                            max_length: ime_max_length,
-                            disabled: ime_disabled,
-                            read_only: ime_read_only,
-                            masked: ime_masked,
-                            mask_reveal_ms: ime_mask_reveal_ms,
-                            font_size: ime_font_size,
-                            on_change: ime_on_change.clone(),
-                        },
-                        cx,
-                    );
-                },
-            )
-            .absolute()
-            .size(px(0.0)),
-        );
 
         if let Some(left_slot) = self.left_slot.take() {
             input = input.child(
@@ -1496,7 +1471,24 @@ impl TextInput {
                         f32::from(bounds.size.height).to_string(),
                     );
                 },
-                |_, _, _, _| {},
+                move |_, _, window, cx| {
+                    window.handle_input(
+                        &focus_handle_for_ime,
+                        TextInputImeHandler {
+                            id: ime_id.clone(),
+                            value_controlled: ime_value_controlled,
+                            rendered_value: ime_rendered_value.clone(),
+                            max_length: ime_max_length,
+                            disabled: ime_disabled,
+                            read_only: ime_read_only,
+                            masked: ime_masked,
+                            mask_reveal_ms: ime_mask_reveal_ms,
+                            font_size: ime_font_size,
+                            on_change: ime_on_change.clone(),
+                        },
+                        cx,
+                    );
+                },
             )
             .absolute()
             .size_full()
