@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
-    StatefulInteractiveElement, Styled, Window, canvas, div, px,
+    canvas, div, px, AnyElement, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    SharedString, StatefulInteractiveElement, Styled, Window,
 };
 
 use crate::contracts::{FieldLike, MotionAware, VariantConfigurable};
@@ -11,17 +11,17 @@ use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
 use crate::theme::{SelectTokens, Theme};
 
-use super::Stack;
 use super::field_variant::FieldVariantRuntime;
 use super::icon::Icon;
-use super::interaction_adapter::{ActivateHandler, PressAdapter, bind_press_adapter};
-use super::popup::{PopupPlacement, anchored_host};
+use super::interaction_adapter::{bind_press_adapter, ActivateHandler, PressAdapter};
+use super::popup::{anchored_host, PopupPlacement};
 use super::select_state::{self, SelectState, SelectStateInput};
 use super::transition::TransitionExt;
 use super::utils::{
-    InteractionStyles, apply_field_size, apply_interaction_styles, apply_radius, interaction_style,
-    resolve_hsla,
+    apply_field_size, apply_interaction_styles, apply_radius, interaction_style, resolve_hsla,
+    InteractionStyles,
 };
+use super::Stack;
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 type SelectChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
@@ -1521,6 +1521,29 @@ impl crate::contracts::ComponentThemeOverridable for Select {
 impl crate::contracts::ComponentThemeOverridable for MultiSelect {
     fn local_theme_mut(&mut self) -> &mut crate::theme::LocalTheme {
         &mut self.theme
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[track_caller]
+    fn select_id_once() -> String {
+        Select::new().id.to_string()
+    }
+
+    #[test]
+    fn select_default_id_differs_across_callsites() {
+        let first = select_id_once();
+        let second = { Select::new().id.to_string() };
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn select_default_id_reuses_same_callsite() {
+        let ids = (0..3).map(|_| select_id_once()).collect::<Vec<_>>();
+        assert!(ids.windows(2).all(|pair| pair[0] == pair[1]));
     }
 }
 

@@ -9,6 +9,7 @@ pub struct ComponentId {
 }
 
 impl ComponentId {
+    #[track_caller]
     pub fn stable(prefix: &str) -> Self {
         Self::new(stable_auto_id(prefix))
     }
@@ -62,25 +63,13 @@ impl Default for ComponentId {
 #[track_caller]
 pub fn stable_auto_id(prefix: &str) -> String {
     let location = std::panic::Location::caller();
-    let seed = format!(
-        "{prefix}:{}:{}:{}",
+    let crate_name = env!("CARGO_PKG_NAME");
+    format!(
+        "{prefix}|crate={crate_name}|file={}|line={}|col={}",
         location.file(),
         location.line(),
         location.column()
-    );
-    format!("{prefix}-{:016x}", fnv1a64(seed.as_bytes()))
-}
-
-fn fnv1a64(bytes: &[u8]) -> u64 {
-    const OFFSET_BASIS: u64 = 0xcbf29ce484222325;
-    const PRIME: u64 = 0x00000100000001b3;
-
-    let mut hash = OFFSET_BASIS;
-    for byte in bytes {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(PRIME);
-    }
-    hash
+    )
 }
 
 impl std::fmt::Display for ComponentId {
@@ -188,14 +177,42 @@ mod tests {
         assert_ne!(first, second);
     }
 
+    #[test]
+    fn stable_id_contains_enhanced_seed_fields() {
+        let id = call_once();
+        assert!(id.contains("button|crate="));
+        assert!(id.contains("|file="));
+        assert!(id.contains("|line="));
+        assert!(id.contains("|col="));
+    }
+
     #[track_caller]
     fn component_id_once() -> String {
         ComponentId::default().to_string()
+    }
+
+    #[track_caller]
+    fn stable_component_id_once() -> String {
+        ComponentId::stable("component").to_string()
     }
 
     #[test]
     fn component_id_default_is_stable_for_same_callsite() {
         let ids = (0..3).map(|_| component_id_once()).collect::<Vec<_>>();
         assert!(ids.windows(2).all(|pair| pair[0] == pair[1]));
+    }
+
+    #[test]
+    fn component_id_default_differs_for_different_callsites() {
+        let first = component_id_once();
+        let second = { ComponentId::default().to_string() };
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn component_id_stable_differs_for_different_callsites() {
+        let first = stable_component_id_once();
+        let second = { ComponentId::stable("component").to_string() };
+        assert_ne!(first, second);
     }
 }

@@ -687,13 +687,18 @@ impl RenderOnce for AppShell {
             if !self.title_bar_immersive && self.inline_dividers {
                 title_chrome.bordered = false;
             }
+            let title_region_bg = if self.title_bar_immersive {
+                gpui::transparent_black()
+            } else {
+                title_bar_bg
+            };
             let title_region = self
                 .wrap_region(
                     window,
                     self.id.slot("title-bar"),
                     title_bar(self.title_bar_immersive),
                     &title_chrome,
-                    title_bar_bg,
+                    title_region_bg,
                 )
                 .h(px(title_bar_height_px))
                 .w_full()
