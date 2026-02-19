@@ -176,12 +176,12 @@ impl RenderOnce for Popover {
         let opened = popup_state.opened;
         let is_controlled = popup_state.controlled;
 
-        let mut trigger = div().id(self.id.slot("trigger")).relative().child(
-            self.trigger
-                .take()
-                .map(|content| content())
-                .unwrap_or_else(|| div().child("Open").into_any_element()),
-        );
+        let mut trigger = div().id(self.id.slot("trigger")).relative();
+        if let Some(content) = self.trigger.take() {
+            trigger = trigger.child(content());
+        } else {
+            trigger = trigger.child("Open");
+        }
 
         if self.disabled {
             trigger = trigger.cursor_default().opacity(0.55);

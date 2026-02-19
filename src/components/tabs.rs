@@ -308,12 +308,7 @@ impl RenderOnce for Tabs {
             triggers.push(trigger.into_any_element());
         }
 
-        let panel_content = selected_panel.or(first_panel).unwrap_or_else(|| {
-            div()
-                .text_color(panel_fallback_fg)
-                .child("No panel")
-                .into_any_element()
-        });
+        let panel_content = selected_panel.or(first_panel);
 
         let mut list = Stack::horizontal()
             .id(self.id.slot("list"))
@@ -333,8 +328,12 @@ impl RenderOnce for Tabs {
             .border_color(resolve_hsla(&theme, &tokens.panel_border))
             .bg(resolve_hsla(&theme, &tokens.panel_bg))
             .text_color(resolve_hsla(&theme, &tokens.panel_fg))
-            .p(tokens.panel_padding)
-            .child(panel_content);
+            .p(tokens.panel_padding);
+        if let Some(content) = panel_content {
+            panel = panel.child(content);
+        } else {
+            panel = panel.text_color(panel_fallback_fg).child("No panel");
+        }
         panel = apply_radius(&self.theme, panel, self.radius);
 
         Stack::vertical()

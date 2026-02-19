@@ -123,9 +123,9 @@ const BUDGETS: &[DepthBudget] = &[
     },
     DepthBudget {
         file: "hovercard.rs",
-        max_child: 12,
-        max_div: 7,
-        max_canvas: 2,
+        max_child: 11,
+        max_div: 5,
+        max_canvas: 1,
         max_chain: 5,
     },
     DepthBudget {
@@ -165,8 +165,8 @@ const BUDGETS: &[DepthBudget] = &[
     },
     DepthBudget {
         file: "layout.rs",
-        max_child: 9,
-        max_div: 11,
+        max_child: 8,
+        max_div: 10,
         max_canvas: 1,
         max_chain: 6,
     },
@@ -193,9 +193,9 @@ const BUDGETS: &[DepthBudget] = &[
     },
     DepthBudget {
         file: "menu.rs",
-        max_child: 11,
-        max_div: 7,
-        max_canvas: 2,
+        max_child: 10,
+        max_div: 5,
+        max_canvas: 1,
         max_chain: 5,
     },
     DepthBudget {
@@ -249,8 +249,8 @@ const BUDGETS: &[DepthBudget] = &[
     },
     DepthBudget {
         file: "popover.rs",
-        max_child: 7,
-        max_div: 5,
+        max_child: 6,
+        max_div: 3,
         max_canvas: 1,
         max_chain: 5,
     },
@@ -361,9 +361,9 @@ const BUDGETS: &[DepthBudget] = &[
     },
     DepthBudget {
         file: "table.rs",
-        max_child: 47,
-        max_div: 21,
-        max_canvas: 3,
+        max_child: 44,
+        max_div: 19,
+        max_canvas: 2,
         max_chain: 4,
     },
     DepthBudget {
@@ -375,8 +375,8 @@ const BUDGETS: &[DepthBudget] = &[
     },
     DepthBudget {
         file: "tabs.rs",
-        max_child: 8,
-        max_div: 5,
+        max_child: 7,
+        max_div: 3,
         max_canvas: 1,
         max_chain: 6,
     },
@@ -424,8 +424,8 @@ const BUDGETS: &[DepthBudget] = &[
     },
     DepthBudget {
         file: "timeline.rs",
-        max_child: 18,
-        max_div: 10,
+        max_child: 17,
+        max_div: 8,
         max_canvas: 1,
         max_chain: 6,
     },
@@ -452,8 +452,8 @@ const BUDGETS: &[DepthBudget] = &[
     },
     DepthBudget {
         file: "tooltip.rs",
-        max_child: 7,
-        max_div: 7,
+        max_child: 6,
+        max_div: 5,
         max_canvas: 1,
         max_chain: 5,
     },

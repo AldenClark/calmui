@@ -251,25 +251,24 @@ impl RenderOnce for Timeline {
                 );
             }
 
-            let mut right_col =
-                Stack::vertical()
-                    .gap(tokens.content_gap)
-                    .min_w_0()
-                    .child(div().children(item.title.map(|title| {
-                        div()
-                            .text_size(size_preset.title_size)
-                            .text_color(if is_current {
-                                resolve_hsla(&theme, &tokens.title_active)
-                            } else {
-                                resolve_hsla(&theme, &tokens.title)
-                            })
-                            .font_weight(if is_current {
-                                gpui::FontWeight::SEMIBOLD
-                            } else {
-                                gpui::FontWeight::NORMAL
-                            })
-                            .child(title)
-                    })));
+            let mut right_col = Stack::vertical().gap(tokens.content_gap).min_w_0();
+            if let Some(title) = item.title {
+                right_col = right_col.child(
+                    div()
+                        .text_size(size_preset.title_size)
+                        .text_color(if is_current {
+                            resolve_hsla(&theme, &tokens.title_active)
+                        } else {
+                            resolve_hsla(&theme, &tokens.title)
+                        })
+                        .font_weight(if is_current {
+                            gpui::FontWeight::SEMIBOLD
+                        } else {
+                            gpui::FontWeight::NORMAL
+                        })
+                        .child(title),
+                );
+            }
             if let Some(body) = item.body {
                 right_col = right_col.child(
                     div()

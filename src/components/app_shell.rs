@@ -313,7 +313,7 @@ pub struct AppShell {
     /// 左侧区域内容。
     sidebar: Option<SlotRenderer>,
     /// 中央主内容区域（必填）。
-    content: SlotRenderer,
+    content: Option<SlotRenderer>,
     /// 右侧属性面板内容。
     inspector: Option<SlotRenderer>,
     /// 内容区底部面板。
@@ -368,7 +368,7 @@ impl AppShell {
             title_bar_immersive: false,
             title_bar_is_calmui: false,
             sidebar: None,
-            content: Box::new(|| content.into_any_element()),
+            content: Some(Box::new(|| content.into_any_element())),
             inspector: None,
             bottom_panel: None,
             title_bar_height_px: None,
@@ -395,7 +395,7 @@ impl AppShell {
 
     /// 替换主内容区域。
     pub fn content(mut self, value: impl IntoElement + 'static) -> Self {
-        self.content = Box::new(|| value.into_any_element());
+        self.content = Some(Box::new(|| value.into_any_element()));
         self
     }
 
@@ -816,8 +816,10 @@ impl RenderOnce for AppShell {
             .flex_col();
 
         // `content` 为 `FnOnce`，这里先取出再调用，避免对 `self` 产生部分移动。
-        let content_renderer =
-            std::mem::replace(&mut self.content, Box::new(|| div().into_any_element()));
+        let content_renderer = self
+            .content
+            .take()
+            .expect("AppShell content renderer must exist");
         let content_element = content_renderer();
 
         center = center.child(

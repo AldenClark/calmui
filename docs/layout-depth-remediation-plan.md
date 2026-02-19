@@ -15,17 +15,23 @@ Keep the new architecture + tokenization model, while removing layout-depth regr
 
 ## Delivery Tracks
 
-1. Test and guardrail track
+1. Test and guardrail track (implemented)
 - `src/components/test_contract_matrix.rs`
   - Compile-time contract matrix across render/styled/theming/behavior traits.
+- `src/components/test_component_smoke.rs`
+  - Smoke rendering coverage for exported component families (primitives/forms/overlay/layout/data-heavy).
 - `src/components/test_state_logic.rs`
   - Deterministic state-machine tests for popup/menu/select/table/tree/input/slider logic.
 - `src/components/test_layout_depth_budget.rs`
   - Depth budget gate for all component files.
+- `src/components/test_flattening_invariants.rs`
+  - Enforces sparse-rendering invariants across all component sources.
+- `src/components/test_component_coverage.rs`
+  - Ensures every non-test component module is covered by both depth budgets and flattening invariants.
 - `docs/component-depth-matrix.csv`
   - Current component depth baseline and priority tiering.
 
-2. Architecture flattening track
+2. Architecture flattening track (current batch implemented)
 - Remove empty placeholder nodes for optional regions (`label/description/error/close action`).
 - Keep existing token surfaces, but render optional slots only when data exists.
 - Prefer `children(option)` over synthetic empty `div` placeholders.
@@ -38,7 +44,7 @@ Keep the new architecture + tokenization model, while removing layout-depth regr
 - P2/P3 hardening:
   - Remaining components in `docs/component-depth-matrix.csv`
 
-4. Impact accounting track
+4. Impact accounting track (implemented for current batch)
 - For each batch, publish:
   - metric delta (`child/div/canvas/max_chain`)
   - style deltas (spacing/click area/focus ring/overlay coverage)
@@ -54,8 +60,17 @@ Every batch must pass:
 4. depth budget gate green
 5. impact report updated
 
+## Current Status
+
+- Test foundation: done
+- Guardrails wired into `cargo test --lib`: done
+- High-risk sparse-rendering batch (`input/textarea/select/modal/layers/title_bar`): done
+- Additional flattening batch (`table/timeline/layout/menu/popover/tooltip/hovercard/tabs`): done
+- Updated impact report and depth matrix: done
+
 ## Risk Notes
 
 - Largest risk is visual micro-shifts caused by removing wrapper nodes.
 - Highest-risk surfaces are modal/titlebar/shell overlays and input focus rings.
 - New `overlay` behavior should be validated in stacked scenarios (`Overlay + ModalLayer + AppShell`), because matte/frosted layering now differs from older versions.
+- Popup-family default trigger rendering changed from wrapped fallback nodes to direct text fallback; theme overrides that relied on wrapper selectors should be smoke-tested.

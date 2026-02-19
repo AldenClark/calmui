@@ -62,11 +62,19 @@ mod tree_state;
 mod utils;
 
 #[cfg(test)]
+mod test_component_coverage;
+#[cfg(test)]
+mod test_component_smoke;
+#[cfg(test)]
 mod test_contract_matrix;
+#[cfg(test)]
+mod test_flattening_invariants;
 #[cfg(test)]
 mod test_layout_depth_budget;
 #[cfg(test)]
 mod test_state_logic;
+#[cfg(test)]
+mod test_theme_api_smoke;
 
 pub use accordion::{Accordion, AccordionItem, AccordionItemMeta};
 pub use action_icon::ActionIcon;

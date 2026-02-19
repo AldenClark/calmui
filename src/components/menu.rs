@@ -321,24 +321,23 @@ impl RenderOnce for Menu {
         let mut trigger = div()
             .id(self.id.slot("trigger"))
             .relative()
-            .cursor_pointer()
-            .child(
-                self.trigger
-                    .take()
-                    .map(|content| content())
-                    .unwrap_or_else(|| div().child("Menu").into_any_element()),
+            .cursor_pointer();
+        if let Some(content) = self.trigger.take() {
+            trigger = trigger.child(content());
+        } else {
+            trigger = trigger.child("Menu");
+        }
+        trigger = trigger.child({
+            let id_for_width = self.id.clone();
+            canvas(
+                move |bounds, _, _cx| {
+                    menu_state::set_dropdown_width(&id_for_width, f32::from(bounds.size.width));
+                },
+                |_, _, _, _| {},
             )
-            .child({
-                let id_for_width = self.id.clone();
-                canvas(
-                    move |bounds, _, _cx| {
-                        menu_state::set_dropdown_width(&id_for_width, f32::from(bounds.size.width));
-                    },
-                    |_, _, _, _| {},
-                )
-                .absolute()
-                .size_full()
-            });
+            .absolute()
+            .size_full()
+        });
 
         if self.disabled {
             trigger = trigger.opacity(0.55).cursor_default();

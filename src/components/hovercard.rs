@@ -278,16 +278,12 @@ impl RenderOnce for HoverCard {
             self.resolved_opened()
         };
         let is_controlled = popup_state.controlled;
-        let trigger_content = self
-            .trigger
-            .take()
-            .map(|render| render())
-            .unwrap_or_else(|| div().child("target").into_any_element());
-
-        let mut trigger = div()
-            .id(self.id.slot("trigger"))
-            .relative()
-            .child(trigger_content);
+        let mut trigger = div().id(self.id.slot("trigger")).relative();
+        if let Some(render) = self.trigger.take() {
+            trigger = trigger.child(render());
+        } else {
+            trigger = trigger.child("target");
+        }
         trigger = trigger.child({
             let id_for_width = self.id.clone();
             canvas(

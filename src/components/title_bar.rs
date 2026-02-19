@@ -522,13 +522,23 @@ impl RenderOnce for TitleBar {
                     row = row.child(controls.element);
                 }
             } else {
-                row = row
-                    .child(
+                let leading_drag_spacer = (controls_width > 0.0).then_some(
+                    div()
+                        .w(px(controls_width))
+                        .h(px(height_px))
+                        .window_control_area(WindowControlArea::Drag)
+                        .into_any_element(),
+                );
+                let trailing_controls = controls.map(|controls| controls.element).or_else(|| {
+                    (controls_width > 0.0).then_some(
                         div()
                             .w(px(controls_width))
                             .h(px(height_px))
-                            .window_control_area(WindowControlArea::Drag),
+                            .into_any_element(),
                     )
+                });
+                row = row
+                    .children(leading_drag_spacer)
                     .child(
                         div()
                             .id(self.id.slot("win-center"))
@@ -541,15 +551,7 @@ impl RenderOnce for TitleBar {
                             .window_control_area(WindowControlArea::Drag)
                             .children(title_element),
                     )
-                    .child(controls.map_or_else(
-                        || {
-                            div()
-                                .w(px(controls_width))
-                                .h(px(height_px))
-                                .into_any_element()
-                        },
-                        |controls| controls.element,
-                    ));
+                    .children(trailing_controls);
             }
         } else {
             if has_slot {
@@ -580,8 +582,22 @@ impl RenderOnce for TitleBar {
                     row = row.child(controls.element);
                 }
             } else {
+                let leading_spacer = (controls_width > 0.0).then_some(
+                    div()
+                        .w(px(controls_width))
+                        .h(px(height_px))
+                        .into_any_element(),
+                );
+                let trailing_controls = controls.map(|controls| controls.element).or_else(|| {
+                    (controls_width > 0.0).then_some(
+                        div()
+                            .w(px(controls_width))
+                            .h(px(height_px))
+                            .into_any_element(),
+                    )
+                });
                 row = row
-                    .child(div().w(px(controls_width)).h(px(height_px)))
+                    .children(leading_spacer)
                     .child(
                         div()
                             .id(self.id.slot("linux-center"))
@@ -593,15 +609,7 @@ impl RenderOnce for TitleBar {
                             .justify_center()
                             .children(title_element),
                     )
-                    .child(controls.map_or_else(
-                        || {
-                            div()
-                                .w(px(controls_width))
-                                .h(px(height_px))
-                                .into_any_element()
-                        },
-                        |controls| controls.element,
-                    ));
+                    .children(trailing_controls);
             }
         }
 

@@ -121,13 +121,14 @@ impl RenderOnce for Grid {
         if !current_row.is_empty() {
             let mut row = div().flex().flex_row().w_full();
             row = row.gap(gap_scale.for_size(gap_x));
-            while current_row.len() < columns {
-                current_row.push(div().w_full().h_full().into_any_element());
-            }
-            let items = current_row
+            let filled_count = current_row.len();
+            let mut items = current_row
                 .drain(..)
                 .map(|item| div().flex_1().min_w_0().child(item))
                 .collect::<Vec<_>>();
+            for _ in filled_count..columns {
+                items.push(div().flex_1().min_w_0());
+            }
             rows.push(row.children(items));
         }
 

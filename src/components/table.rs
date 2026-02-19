@@ -748,8 +748,6 @@ impl RenderOnce for Table {
                         TableAlign::Right => cell.items_end().justify_end(),
                     }
                     .child((cell_data.content)());
-                } else {
-                    cell = cell.child(div().child(""));
                 }
 
                 row_node = row_node.child(cell);
@@ -767,22 +765,19 @@ impl RenderOnce for Table {
         }
 
         if !has_rows {
-            rows_root = rows_root.child(Self::apply_cell_size(
-                table_size_preset,
-                div()
-                    .id(table_id.slot("empty"))
-                    .w_full()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_color(resolve_hsla(&self.theme, &tokens.caption))
-                    .child(
-                        self.empty
-                            .take()
-                            .map(|slot| slot())
-                            .unwrap_or_else(|| div().child("No data").into_any_element()),
-                    ),
-            ));
+            let mut empty_cell = div()
+                .id(table_id.slot("empty"))
+                .w_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_color(resolve_hsla(&self.theme, &tokens.caption));
+            if let Some(empty_slot) = self.empty.take() {
+                empty_cell = empty_cell.child(empty_slot());
+            } else {
+                empty_cell = empty_cell.child("No data");
+            }
+            rows_root = rows_root.child(Self::apply_cell_size(table_size_preset, empty_cell));
         }
 
         let render_pagination_bar = |suffix: &str| {

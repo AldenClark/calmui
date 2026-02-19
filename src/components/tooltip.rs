@@ -110,11 +110,8 @@ impl Tooltip {
         self
     }
 
-    fn render_bubble(&self, window: &gpui::Window) -> AnyElement {
+    fn render_bubble(&self, window: &gpui::Window, label: SharedString) -> AnyElement {
         let tokens = &self.theme.components.tooltip;
-        let Some(label) = self.label.clone() else {
-            return div().into_any_element();
-        };
         div()
             .id(self.id.slot("bubble"))
             .text_size(tokens.text_size)
@@ -157,16 +154,12 @@ impl RenderOnce for Tooltip {
         });
         let opened = popup_state.opened;
         let is_controlled = popup_state.controlled;
-        let trigger_content = self
-            .trigger
-            .take()
-            .map(|render| render())
-            .unwrap_or_else(|| div().child("target").into_any_element());
-
-        let mut trigger = div()
-            .id(self.id.slot("trigger"))
-            .relative()
-            .child(trigger_content);
+        let mut trigger = div().id(self.id.slot("trigger")).relative();
+        if let Some(render) = self.trigger.take() {
+            trigger = trigger.child(render());
+        } else {
+            trigger = trigger.child("target");
+        }
 
         if self.disabled {
             trigger = trigger.cursor_default().opacity(0.55);
@@ -212,8 +205,8 @@ impl RenderOnce for Tooltip {
             }
         }
 
-        if opened && self.label.is_some() {
-            let bubble = self.render_bubble(window);
+        if opened && let Some(label) = self.label.clone() {
+            let bubble = self.render_bubble(window, label);
             let placement = match self.placement {
                 TooltipPlacement::Top => PopupPlacement::Top,
                 TooltipPlacement::Bottom => PopupPlacement::Bottom,
