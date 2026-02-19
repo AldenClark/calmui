@@ -11,7 +11,7 @@ use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
 use super::Stack;
-use super::control;
+use super::selection_state;
 use super::transition::TransitionExt;
 use super::utils::{
     InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles, apply_radius,
@@ -108,11 +108,10 @@ impl Pagination {
 
     fn resolved_page(&self) -> usize {
         let total = self.total.max(1);
-        let controlled = self
-            .value_controlled
-            .then_some(self.value.unwrap_or(self.default_value).clamp(1, total));
+        let controlled = self.value.unwrap_or(self.default_value).clamp(1, total);
         let default = self.default_value.clamp(1, total);
-        control::usize_state(&self.id, "page", controlled, default).clamp(1, total)
+        selection_state::resolve_usize(&self.id, "page", self.value_controlled, controlled, default)
+            .clamp(1, total)
     }
 
     fn apply_item_size<T: Styled>(size: Size, node: T) -> T {
@@ -261,8 +260,7 @@ impl RenderOnce for Pagination {
                 let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
                 let focus_ring = resolve_hsla(&theme, &theme.semantic.focus_ring);
                 let click_handler: PressHandler = Rc::new(move |_: &ClickEvent, window, cx| {
-                    if !controlled {
-                        control::set_text_state(&id, "page", target.to_string());
+                    if selection_state::apply_usize(&id, "page", controlled, target) {
                         window.refresh();
                     }
                     if let Some(handler) = on_change.as_ref() {
@@ -334,8 +332,7 @@ impl RenderOnce for Pagination {
                         let focus_ring = resolve_hsla(&theme, &theme.semantic.focus_ring);
                         let click_handler: PressHandler =
                             Rc::new(move |_: &ClickEvent, window, cx| {
-                                if !controlled {
-                                    control::set_text_state(&id, "page", page.to_string());
+                                if selection_state::apply_usize(&id, "page", controlled, page) {
                                     window.refresh();
                                 }
                                 if let Some(handler) = on_change.as_ref() {

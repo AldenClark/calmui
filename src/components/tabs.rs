@@ -11,7 +11,7 @@ use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
 use super::Stack;
-use super::control;
+use super::selection_state;
 use super::transition::TransitionExt;
 use super::utils::{
     InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles, apply_radius,
@@ -125,11 +125,11 @@ impl Tabs {
             .clone()
             .or_else(|| self.items.first().map(|item| item.value.clone()));
 
-        control::optional_text_state(
+        selection_state::resolve_optional_text(
             &self.id,
             "value",
-            self.value_controlled
-                .then_some(self.value.as_ref().map(|value| value.to_string())),
+            self.value_controlled,
+            self.value.as_ref().map(|value| value.to_string()),
             default.map(|value| value.to_string()),
         )
         .map(SharedString::from)
@@ -264,8 +264,12 @@ impl RenderOnce for Tabs {
                 };
                 let focus_ring = resolve_hsla(&theme, &theme.semantic.focus_ring);
                 let click_handler: PressHandler = Rc::new(move |_: &ClickEvent, window, cx| {
-                    if !controlled {
-                        control::set_optional_text_state(&id, "value", Some(value.to_string()));
+                    if selection_state::apply_optional_text(
+                        &id,
+                        "value",
+                        controlled,
+                        Some(value.to_string()),
+                    ) {
                         window.refresh();
                     }
                     if let Some(handler) = on_change.as_ref() {

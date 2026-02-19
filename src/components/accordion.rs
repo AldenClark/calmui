@@ -11,8 +11,8 @@ use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
 use super::Stack;
-use super::control;
 use super::icon::Icon;
+use super::selection_state;
 use super::transition::TransitionExt;
 use super::utils::{
     InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles, apply_radius,
@@ -140,11 +140,11 @@ impl Accordion {
     }
 
     fn resolved_value(&self) -> Option<SharedString> {
-        control::optional_text_state(
+        selection_state::resolve_optional_text(
             &self.id,
             "value",
-            self.value_controlled
-                .then_some(self.value.as_ref().map(|value| value.to_string())),
+            self.value_controlled,
+            self.value.as_ref().map(|value| value.to_string()),
             self.default_value.as_ref().map(|value| value.to_string()),
         )
         .map(SharedString::from)
@@ -193,6 +193,17 @@ impl RenderOnce for Accordion {
         let tokens = &self.theme.components.accordion;
         let active_value = self.resolved_value();
         let is_controlled = self.value_controlled;
+        let size_delta = match self.size {
+            Size::Xs => -2.0,
+            Size::Sm => -1.0,
+            Size::Md => 0.0,
+            Size::Lg => 2.0,
+            Size::Xl => 4.0,
+        };
+        let label_size = gpui::px((f32::from(tokens.label_size) + size_delta).max(10.0));
+        let description_size =
+            gpui::px((f32::from(tokens.description_size) + size_delta).max(10.0));
+        let content_size = gpui::px((f32::from(tokens.content_size) + size_delta).max(10.0));
 
         let item_views = self
             .items
@@ -216,33 +227,27 @@ impl RenderOnce for Accordion {
                     .border_color(resolve_hsla(&self.theme, &tokens.item_border));
                 root = apply_radius(&self.theme, root, self.radius);
 
-                let size_text = match self.size {
-                    Size::Xs | Size::Sm => div().text_sm(),
-                    Size::Md => div().text_base(),
-                    Size::Lg => div().text_lg(),
-                    Size::Xl => div().text_xl(),
-                };
-
                 let mut header = div()
                     .id(header_id)
                     .flex()
                     .items_center()
                     .justify_between()
-                    .gap_2()
+                    .gap(tokens.header_gap)
                     .cursor_pointer()
-                    .px(gpui::px(12.0))
-                    .py(gpui::px(10.0))
+                    .px(tokens.header_padding_x)
+                    .py(tokens.header_padding_y)
                     .child(
                         Stack::vertical()
-                            .gap_0p5()
+                            .gap(tokens.label_stack_gap)
                             .child(
-                                size_text
+                                div()
+                                    .text_size(label_size)
                                     .text_color(resolve_hsla(&self.theme, &tokens.label))
                                     .child(item.meta.label),
                             )
                             .children(item.meta.description.clone().map(|description| {
                                 div()
-                                    .text_sm()
+                                    .text_size(description_size)
                                     .text_color(resolve_hsla(&self.theme, &tokens.description))
                                     .child(description)
                             })),
@@ -254,7 +259,7 @@ impl RenderOnce for Accordion {
                             "chevron-down"
                         })
                         .with_id(chevron_id)
-                        .size(14.0)
+                        .size(f32::from(tokens.chevron_size))
                         .color(resolve_hsla(&self.theme, &tokens.chevron)),
                     );
 
@@ -266,9 +271,10 @@ impl RenderOnce for Accordion {
                         let value = item.meta.value.clone();
                         Some(Rc::new(
                             move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
-                                let current = control::optional_text_state(
+                                let current = selection_state::resolve_optional_text(
                                     &accordion_id,
                                     "value",
+                                    false,
                                     None,
                                     None::<String>,
                                 );
@@ -278,12 +284,12 @@ impl RenderOnce for Accordion {
                                     Some(value.to_string())
                                 };
 
-                                if !is_controlled {
-                                    control::set_optional_text_state(
-                                        &accordion_id,
-                                        "value",
-                                        next.clone(),
-                                    );
+                                if selection_state::apply_optional_text(
+                                    &accordion_id,
+                                    "value",
+                                    is_controlled,
+                                    next.clone(),
+                                ) {
                                     window.refresh();
                                 }
                                 (handler)(next.map(SharedString::from), window, cx);
@@ -294,9 +300,10 @@ impl RenderOnce for Accordion {
                         let value = item.meta.value.clone();
                         Some(Rc::new(
                             move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
-                                let current = control::optional_text_state(
+                                let current = selection_state::resolve_optional_text(
                                     &accordion_id,
                                     "value",
+                                    false,
                                     None,
                                     None::<String>,
                                 );
@@ -305,8 +312,14 @@ impl RenderOnce for Accordion {
                                 } else {
                                     Some(value.to_string())
                                 };
-                                control::set_optional_text_state(&accordion_id, "value", next);
-                                window.refresh();
+                                if selection_state::apply_optional_text(
+                                    &accordion_id,
+                                    "value",
+                                    false,
+                                    next,
+                                ) {
+                                    window.refresh();
+                                }
                             },
                         ) as PressHandler)
                     } else {
@@ -338,14 +351,14 @@ impl RenderOnce for Accordion {
                 if is_open {
                     let mut body = Stack::vertical()
                         .id(panel_id.clone())
-                        .gap_1()
-                        .px(gpui::px(12.0))
-                        .pb(gpui::px(10.0))
-                        .pt(gpui::px(2.0))
+                        .gap(tokens.panel_gap)
+                        .px(tokens.panel_padding_x)
+                        .pb(tokens.panel_padding_bottom)
+                        .pt(tokens.panel_padding_top)
                         .text_color(resolve_hsla(&self.theme, &tokens.content));
 
                     if let Some(text) = item.body.take() {
-                        body = body.child(div().text_sm().child(text));
+                        body = body.child(div().text_size(content_size).child(text));
                     }
                     if let Some(content) = item.content.take() {
                         body = body.child(content());
@@ -359,7 +372,7 @@ impl RenderOnce for Accordion {
 
         Stack::vertical()
             .id(self.id.clone())
-            .gap_2()
+            .gap(tokens.stack_gap)
             .w_full()
             .children(item_views)
             .with_enter_transition(self.id.slot("enter"), self.motion)

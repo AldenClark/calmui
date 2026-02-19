@@ -8,7 +8,7 @@ use crate::id::ComponentId;
 use super::utils::{hairline_px, resolve_hsla};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DividerOrientation {
+enum DividerAxis {
     Horizontal,
     Vertical,
 }
@@ -23,7 +23,7 @@ pub enum DividerLabelPosition {
 #[derive(IntoElement)]
 pub struct Divider {
     id: ComponentId,
-    orientation: DividerOrientation,
+    axis: DividerAxis,
     label: Option<SharedString>,
     label_position: DividerLabelPosition,
     theme: crate::theme::LocalTheme,
@@ -32,10 +32,10 @@ pub struct Divider {
 
 impl Divider {
     #[track_caller]
-    pub fn new() -> Self {
+    pub fn horizontal() -> Self {
         Self {
             id: ComponentId::default(),
-            orientation: DividerOrientation::Horizontal,
+            axis: DividerAxis::Horizontal,
             label: None,
             label_position: DividerLabelPosition::Center,
             theme: crate::theme::LocalTheme::default(),
@@ -43,9 +43,12 @@ impl Divider {
         }
     }
 
-    pub fn orientation(mut self, orientation: DividerOrientation) -> Self {
-        self.orientation = orientation;
-        self
+    #[track_caller]
+    pub fn vertical() -> Self {
+        Self {
+            axis: DividerAxis::Vertical,
+            ..Self::horizontal()
+        }
     }
 
     pub fn label(mut self, label: impl Into<SharedString>) -> Self {
@@ -74,9 +77,9 @@ impl RenderOnce for Divider {
         let label_color = resolve_hsla(&self.theme, &tokens.label);
         let line_thickness = hairline_px(window);
 
-        match self.orientation {
-            DividerOrientation::Vertical => div().id(self.id).w(line_thickness).h_full().bg(line),
-            DividerOrientation::Horizontal => {
+        match self.axis {
+            DividerAxis::Vertical => div().id(self.id).w(line_thickness).h_full().bg(line),
+            DividerAxis::Horizontal => {
                 if let Some(label) = self.label {
                     let left_flex = match self.label_position {
                         DividerLabelPosition::Start => 0.0,

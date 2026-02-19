@@ -12,6 +12,7 @@ use crate::style::{GroupOrientation, Radius, Size, Variant};
 
 use super::Stack;
 use super::control;
+use super::selection_state;
 use super::toggle::{ToggleConfig, wire_toggle_handlers};
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
@@ -23,7 +24,7 @@ type RadioGroupChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::A
 pub struct Radio {
     id: ComponentId,
     value: SharedString,
-    label: SharedString,
+    label: Option<SharedString>,
     description: Option<SharedString>,
     checked: Option<bool>,
     default_checked: bool,
@@ -38,12 +39,11 @@ pub struct Radio {
 
 impl Radio {
     #[track_caller]
-    pub fn new(label: impl Into<SharedString>) -> Self {
-        let label = label.into();
+    pub fn new() -> Self {
         Self {
             id: ComponentId::default(),
-            value: label.clone(),
-            label,
+            value: SharedString::from(""),
+            label: None,
             description: None,
             checked: None,
             default_checked: false,
@@ -55,6 +55,22 @@ impl Radio {
             motion: MotionConfig::default(),
             on_change: None,
         }
+    }
+
+    #[track_caller]
+    pub fn labeled(label: impl Into<SharedString>) -> Self {
+        let label = label.into();
+        Self::new().value(label.clone()).label(label)
+    }
+
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
+    }
+
+    pub fn clear_label(mut self) -> Self {
+        self.label = None;
+        self
     }
 
     pub fn value(mut self, value: impl Into<SharedString>) -> Self {
@@ -185,13 +201,13 @@ impl RenderOnce for Radio {
             .child(
                 Stack::vertical()
                     .gap_0p5()
-                    .child(
-                        Stack::horizontal()
-                            .items_center()
-                            .gap_2()
-                            .child(control)
-                            .child(div().text_color(fg).child(self.label)),
-                    )
+                    .child({
+                        let mut content = Stack::horizontal().items_center().gap_2().child(control);
+                        if let Some(label) = self.label {
+                            content = content.child(div().text_color(fg).child(label));
+                        }
+                        content
+                    })
                     .children(self.description.map(|description| {
                         div()
                             .ml(px(dot_size + 8.0))
@@ -325,11 +341,11 @@ impl RadioGroup {
     }
 
     fn resolved_value(&self) -> Option<SharedString> {
-        control::optional_text_state(
+        selection_state::resolve_optional_text(
             &self.id,
             "value",
-            self.value_controlled
-                .then_some(self.value.as_ref().map(|value| value.to_string())),
+            self.value_controlled,
+            self.value.as_ref().map(|value| value.to_string()),
             self.default_value.as_ref().map(|value| value.to_string()),
         )
         .map(SharedString::from)
@@ -379,7 +395,8 @@ impl RenderOnce for RadioGroup {
                 let checked = selected_value
                     .as_ref()
                     .is_some_and(|current| current.as_ref() == option.value.as_ref());
-                let mut radio = Radio::new(option.label)
+                let mut radio = Radio::new()
+                    .label(option.label.clone())
                     .with_id(self.id.slot_index("option", index.to_string()))
                     .value(option.value.clone())
                     .checked(checked)
@@ -397,8 +414,12 @@ impl RenderOnce for RadioGroup {
                 let id = self.id.clone();
                 radio = radio.on_change(move |next, window, cx| {
                     if next {
-                        if !is_controlled {
-                            control::set_optional_text_state(&id, "value", Some(value.to_string()));
+                        if selection_state::apply_optional_text(
+                            &id,
+                            "value",
+                            is_controlled,
+                            Some(value.to_string()),
+                        ) {
                             window.refresh();
                         }
                         if let Some(handler) = on_change.as_ref() {

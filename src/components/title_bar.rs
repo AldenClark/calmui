@@ -192,6 +192,7 @@ impl TitleBar {
     }
 
     fn render_window_controls_windows(&self, window: &mut Window) -> WindowControls {
+        let tokens = &self.theme.components.title_bar;
         let fg = resolve_hsla(&self.theme, &self.theme.components.title_bar.fg);
         let (neutral_hover_bg, neutral_active_bg) = match self.theme.color_scheme {
             ColorScheme::Dark => (gpui::white().opacity(0.14), gpui::white().opacity(0.22)),
@@ -212,13 +213,13 @@ impl TitleBar {
             };
             div()
                 .id(id)
-                .w(px(45.0))
+                .w(tokens.windows_button_width)
                 .h(px(self.height_px))
                 .flex()
                 .items_center()
                 .justify_center()
                 .font_family("Segoe MDL2 Assets")
-                .text_size(px(10.0))
+                .text_size(tokens.windows_icon_size)
                 .bg(gpui::transparent_black())
                 .text_color(fg)
                 .cursor_pointer()
@@ -246,7 +247,7 @@ impl TitleBar {
                 )
                 .child(close)
                 .into_any_element(),
-            width_px: 135.0,
+            width_px: f32::from(tokens.windows_button_width) * 3.0,
         }
     }
 
@@ -272,9 +273,9 @@ impl TitleBar {
                 };
                 div()
                     .id(id)
-                    .w(px(28.0))
-                    .h(px(24.0))
-                    .rounded_sm()
+                    .w(tokens.linux_button_width)
+                    .h(tokens.linux_button_height)
+                    .rounded(tokens.control_button_radius)
                     .flex()
                     .items_center()
                     .justify_center()
@@ -312,7 +313,7 @@ impl TitleBar {
                 .id(self.id.slot("controls-linux"))
                 .flex()
                 .items_center()
-                .gap(px(6.0))
+                .gap(tokens.linux_buttons_gap)
                 .child(button(
                     self.id.slot("linux-min"),
                     "—",
@@ -332,7 +333,8 @@ impl TitleBar {
                     true,
                 ))
                 .into_any_element(),
-            width_px: 96.0,
+            width_px: (f32::from(tokens.linux_button_width) * 3.0)
+                + (f32::from(tokens.linux_buttons_gap) * 2.0),
         }
     }
 
@@ -378,16 +380,16 @@ impl RenderOnce for TitleBar {
             return div().into_any_element();
         }
         let immersive = self.immersive;
+        let tokens = &self.theme.components.title_bar;
         let controls = self.render_window_controls(window, fullscreen);
         let controls_width = controls.as_ref().map_or(0.0, |c| c.width_px);
         let macos_controls_reserve =
             if cfg!(target_os = "macos") && self.show_window_controls && !fullscreen {
-                72.0
+                f32::from(tokens.macos_controls_reserve)
             } else {
                 0.0
             };
 
-        let tokens = &self.theme.components.title_bar;
         let line_thickness = hairline_px(window);
         let bg_token = self
             .background
@@ -395,9 +397,12 @@ impl RenderOnce for TitleBar {
             .unwrap_or_else(gpui::transparent_black);
         let fg = resolve_hsla(&self.theme, &tokens.fg);
         let (padding_left, padding_right) = if cfg!(target_os = "windows") {
-            (8.0, 0.0)
+            (f32::from(tokens.platform_padding_left), 0.0)
         } else {
-            (12.0, 12.0)
+            (
+                f32::from(tokens.platform_padding_left),
+                f32::from(tokens.platform_padding_right),
+            )
         };
 
         let hide_title_in_macos_fullscreen = cfg!(target_os = "macos") && fullscreen && has_slot;
@@ -406,7 +411,8 @@ impl RenderOnce for TitleBar {
         } else {
             self.title.clone().map(|title| {
                 div()
-                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_size(tokens.title_size)
+                    .font_weight(tokens.title_weight)
                     .text_color(fg)
                     .truncate()
                     .child(title)
@@ -431,7 +437,7 @@ impl RenderOnce for TitleBar {
                     .id(self.id.slot("mac-left"))
                     .flex()
                     .items_center()
-                    .gap(px(10.0));
+                    .gap(tokens.controls_slot_gap);
 
                 left_cluster =
                     left_cluster.child(div().w(px(macos_controls_reserve)).h(px(self.height_px)));
@@ -482,9 +488,9 @@ impl RenderOnce for TitleBar {
                 let left_title = div()
                     .id(self.id.slot("win-title"))
                     .h_full()
-                    .max_w(px(320.0))
-                    .min_w(px(72.0))
-                    .pr(px(12.0))
+                    .max_w(tokens.title_max_width)
+                    .min_w(tokens.title_min_width)
+                    .pr(tokens.title_padding_right)
                     .flex()
                     .items_center()
                     .window_control_area(WindowControlArea::Drag)
@@ -555,8 +561,8 @@ impl RenderOnce for TitleBar {
                     div()
                         .id(self.id.slot("linux-title"))
                         .h_full()
-                        .max_w(px(320.0))
-                        .pr(px(12.0))
+                        .max_w(tokens.title_max_width)
+                        .pr(tokens.title_padding_right)
                         .flex()
                         .items_center()
                         .children(title_element),

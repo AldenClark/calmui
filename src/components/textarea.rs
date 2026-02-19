@@ -27,7 +27,7 @@ use super::text_input_actions::{
 };
 use super::text_input_state::InputState;
 use super::transition::TransitionExt;
-use super::utils::{apply_input_size, apply_radius, resolve_hsla};
+use super::utils::{apply_field_size, apply_radius, resolve_hsla};
 
 type ChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
 
@@ -625,13 +625,14 @@ impl Textarea {
     }
 
     fn font_size_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 12.0,
-            Size::Sm => 14.0,
-            Size::Md => 16.0,
-            Size::Lg => 18.0,
-            Size::Xl => 20.0,
-        }
+        f32::from(
+            self.theme
+                .components
+                .textarea
+                .sizes
+                .for_size(self.size)
+                .font_size,
+        )
     }
 
     fn line_layout(window: &Window, font_size: f32, text: &str) -> Arc<gpui::LineLayout> {
@@ -892,44 +893,48 @@ impl Textarea {
     }
 
     fn line_height_px(&self) -> f32 {
-        let base = match self.size {
-            Size::Xs => 14.0,
-            Size::Sm => 16.0,
-            Size::Md => 18.0,
-            Size::Lg => 20.0,
-            Size::Xl => 22.0,
-        };
+        let base = f32::from(
+            self.theme
+                .components
+                .textarea
+                .sizes
+                .for_size(self.size)
+                .line_height,
+        );
         base + self.line_gap_px
     }
 
     fn vertical_padding_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 5.0,
-            Size::Sm => 6.0,
-            Size::Md => 8.0,
-            Size::Lg => 10.0,
-            Size::Xl => 12.0,
-        }
+        f32::from(
+            self.theme
+                .components
+                .textarea
+                .sizes
+                .for_size(self.size)
+                .padding_y,
+        )
     }
 
     fn horizontal_padding_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 8.0,
-            Size::Sm => 10.0,
-            Size::Md => 12.0,
-            Size::Lg => 14.0,
-            Size::Xl => 16.0,
-        }
+        f32::from(
+            self.theme
+                .components
+                .textarea
+                .sizes
+                .for_size(self.size)
+                .padding_x,
+        )
     }
 
     fn caret_height_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 13.0,
-            Size::Sm => 15.0,
-            Size::Md => 17.0,
-            Size::Lg => 19.0,
-            Size::Xl => 21.0,
-        }
+        f32::from(
+            self.theme
+                .components
+                .textarea
+                .sizes
+                .for_size(self.size)
+                .caret_height,
+        )
     }
 
     fn content_width_for_box(id: &str, horizontal_padding: f32) -> f32 {
@@ -1093,7 +1098,8 @@ impl Textarea {
         if let Some(label) = &self.label {
             let mut label_row = Stack::horizontal().gap_1().child(
                 div()
-                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_size(tokens.label_size)
+                    .font_weight(tokens.label_weight)
                     .text_color(resolve_hsla(&self.theme, &tokens.label))
                     .child(label.clone()),
             );
@@ -1112,7 +1118,7 @@ impl Textarea {
         if let Some(description) = &self.description {
             block = block.child(
                 div()
-                    .text_sm()
+                    .text_size(tokens.description_size)
                     .text_color(resolve_hsla(&self.theme, &tokens.description))
                     .child(description.clone()),
             );
@@ -1121,7 +1127,7 @@ impl Textarea {
         if let Some(error) = &self.error {
             block = block.child(
                 div()
-                    .text_sm()
+                    .text_size(tokens.error_size)
                     .text_color(resolve_hsla(&self.theme, &tokens.error))
                     .child(error.clone()),
             );
@@ -1191,7 +1197,7 @@ impl Textarea {
             .text_color(resolve_hsla(&self.theme, &tokens.fg))
             .border(super::utils::quantized_stroke_px(window, 1.0));
 
-        input = apply_input_size(input, self.size);
+        input = apply_field_size(input, tokens.sizes.for_size(self.size));
         input = apply_radius(&self.theme, input, self.radius);
 
         let border = if self.error.is_some() {
@@ -2184,14 +2190,18 @@ impl RenderOnce for Textarea {
         match self.layout {
             FieldLayout::Vertical => Stack::vertical()
                 .id(self.id.clone())
-                .gap_2()
+                .gap(self.theme.components.textarea.layout_gap_vertical)
                 .child(self.render_label_block())
                 .child(self.render_input_box(window, _cx)),
             FieldLayout::Horizontal => Stack::horizontal()
                 .id(self.id.clone())
                 .items_start()
-                .gap_3()
-                .child(div().w(px(168.0)).child(self.render_label_block()))
+                .gap(self.theme.components.textarea.layout_gap_horizontal)
+                .child(
+                    div()
+                        .w(self.theme.components.textarea.horizontal_label_width)
+                        .child(self.render_label_block()),
+                )
                 .child(div().flex_1().child(self.render_input_box(window, _cx))),
         }
     }

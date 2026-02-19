@@ -15,6 +15,7 @@ use super::button::Button;
 use super::control;
 use super::icon::Icon;
 use super::overlay::{Overlay, OverlayCoverage, OverlayMaterialMode};
+use super::popup_state::{self, PopupStateInput, PopupStateValue};
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
 
@@ -29,7 +30,7 @@ pub struct Modal {
     id: ComponentId,
     opened: Option<bool>,
     default_opened: bool,
-    title: SharedString,
+    title: Option<SharedString>,
     body: Option<SharedString>,
     width_px: f32,
     kind: ModalKind,
@@ -53,12 +54,12 @@ pub struct Modal {
 
 impl Modal {
     #[track_caller]
-    pub fn new(title: impl Into<SharedString>) -> Self {
+    pub fn new() -> Self {
         Self {
             id: ComponentId::default(),
             opened: None,
             default_opened: false,
-            title: title.into(),
+            title: None,
             body: None,
             width_px: 560.0,
             kind: ModalKind::Custom,
@@ -81,24 +82,33 @@ impl Modal {
         }
     }
 
+    pub fn titled(title: impl Into<SharedString>) -> Self {
+        Self::new().title(title)
+    }
+
     pub fn confirm(title: impl Into<SharedString>, body: impl Into<SharedString>) -> Self {
-        Self::new(title).with_kind(ModalKind::Confirm).body(body)
+        Self::titled(title).with_kind(ModalKind::Confirm).body(body)
     }
 
     pub fn info(title: impl Into<SharedString>, body: impl Into<SharedString>) -> Self {
-        Self::new(title).with_kind(ModalKind::Info).body(body)
+        Self::titled(title).with_kind(ModalKind::Info).body(body)
     }
 
     pub fn success(title: impl Into<SharedString>, body: impl Into<SharedString>) -> Self {
-        Self::new(title).with_kind(ModalKind::Success).body(body)
+        Self::titled(title).with_kind(ModalKind::Success).body(body)
     }
 
     pub fn warning(title: impl Into<SharedString>, body: impl Into<SharedString>) -> Self {
-        Self::new(title).with_kind(ModalKind::Warning).body(body)
+        Self::titled(title).with_kind(ModalKind::Warning).body(body)
     }
 
     pub fn error(title: impl Into<SharedString>, body: impl Into<SharedString>) -> Self {
-        Self::new(title).with_kind(ModalKind::Error).body(body)
+        Self::titled(title).with_kind(ModalKind::Error).body(body)
+    }
+
+    pub fn title(mut self, value: impl Into<SharedString>) -> Self {
+        self.title = Some(value.into());
+        self
     }
 
     pub fn opened(mut self, value: bool) -> Self {
@@ -201,15 +211,21 @@ impl Modal {
     }
 
     fn resolved_opened(&self) -> bool {
-        control::bool_state(&self.id, "opened", self.opened, self.default_opened)
+        PopupStateValue::resolve(PopupStateInput {
+            id: &self.id,
+            opened: self.opened,
+            default_opened: self.default_opened,
+            disabled: false,
+        })
+        .opened
     }
 
     pub(crate) fn kind_ref(&self) -> ModalKind {
         self.kind
     }
 
-    pub(crate) fn title_ref(&self) -> &SharedString {
-        &self.title
+    pub(crate) fn title_ref(&self) -> Option<&SharedString> {
+        self.title.as_ref()
     }
 
     pub(crate) fn body_ref(&self) -> Option<&SharedString> {
@@ -392,8 +408,7 @@ impl Modal {
             .on_click(
                 move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
                     if close_on_click_outside {
-                        if !is_controlled {
-                            control::set_bool_state(&id_for_overlay, "opened", false);
+                        if popup_state::on_close_request(&id_for_overlay, is_controlled) {
                             window.refresh();
                         }
                         Self::close_from_callbacks(
@@ -412,8 +427,8 @@ impl Modal {
             let state_change_for_close = self.on_state_change.clone();
             close_action = div()
                 .id(self.id.slot("close"))
-                .w(px(26.0))
-                .h(px(26.0))
+                .w(tokens.close_size)
+                .h(tokens.close_size)
                 .rounded_full()
                 .border(super::utils::quantized_stroke_px(window, 1.0))
                 .border_color(resolve_hsla(
@@ -429,13 +444,12 @@ impl Modal {
                 .child(
                     Icon::named("x")
                         .with_id(self.id.slot("close-icon"))
-                        .size(14.0)
+                        .size(f32::from(tokens.close_icon_size))
                         .color(resolve_hsla(&self.theme, &tokens.title)),
                 )
                 .on_click(
                     move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
-                        if !is_controlled {
-                            control::set_bool_state(&id_for_close, "opened", false);
+                        if popup_state::on_close_request(&id_for_close, is_controlled) {
                             window.refresh();
                         }
                         Self::close_from_callbacks(
@@ -452,31 +466,37 @@ impl Modal {
             .id(self.id.slot("panel"))
             .w(px(self.width_px))
             .max_w_full()
-            .rounded_lg()
+            .rounded(tokens.panel_radius)
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.panel_border))
             .bg(resolve_hsla(&self.theme, &tokens.panel_bg))
-            .p_4()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .mb_2()
-                    .child(
-                        div()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(resolve_hsla(&self.theme, &tokens.title))
-                            .child(self.title.clone()),
-                    )
-                    .child(close_action),
-            );
+            .p(tokens.panel_padding);
+
+        if self.title.is_some() || self.close_button {
+            let mut header = div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .mb(tokens.header_margin_bottom);
+            if let Some(title) = self.title.clone() {
+                header = header.child(
+                    div()
+                        .text_size(tokens.title_size)
+                        .font_weight(tokens.title_weight)
+                        .text_color(resolve_hsla(&self.theme, &tokens.title))
+                        .child(title),
+                );
+            } else {
+                header = header.child(div().flex_1());
+            }
+            panel = panel.child(header.child(close_action));
+        }
 
         if let Some(body) = self.body.clone() {
             panel = panel.child(
                 div()
-                    .mb_2()
-                    .text_sm()
+                    .mb(tokens.body_margin_bottom)
+                    .text_size(tokens.body_size)
                     .text_color(resolve_hsla(&self.theme, &tokens.body))
                     .child(body),
             );
@@ -497,16 +517,17 @@ impl Modal {
             let close_cb_confirm = self.on_close.clone();
             panel = panel.child(
                 div()
-                    .mt_3()
+                    .mt(tokens.actions_margin_top)
                     .flex()
                     .justify_end()
-                    .gap_2()
+                    .gap(tokens.actions_gap)
                     .child(
-                        Button::new(self.cancel_label.clone())
+                        Button::new()
+                            .label(self.cancel_label.clone())
                             .with_variant(Variant::Default)
                             .on_click(move |_, window, _| {
-                                if !is_controlled {
-                                    control::set_bool_state(&id_for_cancel, "opened", false);
+                                if popup_state::on_close_request(&id_for_cancel, is_controlled) {
+                                    window.refresh();
                                 }
                                 Self::action_from_callbacks(
                                     &cancel_cb,
@@ -518,15 +539,15 @@ impl Modal {
                                     &state_change_for_cancel,
                                     ModalCloseReason::CancelAction,
                                 );
-                                window.refresh();
                             }),
                     )
                     .child(
-                        Button::new(self.confirm_label.clone())
+                        Button::new()
+                            .label(self.confirm_label.clone())
                             .with_variant(Variant::Filled)
                             .on_click(move |_, window, _| {
-                                if !is_controlled {
-                                    control::set_bool_state(&id_for_confirm, "opened", false);
+                                if popup_state::on_close_request(&id_for_confirm, is_controlled) {
+                                    window.refresh();
                                 }
                                 Self::action_from_callbacks(
                                     &confirm_cb,
@@ -538,7 +559,6 @@ impl Modal {
                                     &state_change_for_confirm,
                                     ModalCloseReason::ConfirmAction,
                                 );
-                                window.refresh();
                             }),
                     ),
             );
@@ -548,26 +568,30 @@ impl Modal {
             let complete_cb = self.on_complete.clone();
             let close_cb_complete = self.on_close.clone();
             panel = panel.child(
-                div().mt_3().flex().justify_end().child(
-                    Button::new(self.complete_label.clone())
-                        .with_variant(Variant::Filled)
-                        .on_click(move |_, window, _| {
-                            if !is_controlled {
-                                control::set_bool_state(&id_for_complete, "opened", false);
-                            }
-                            Self::action_from_callbacks(
-                                &complete_cb,
-                                &state_change_for_complete,
-                                ModalStateChange::Completed,
-                            );
-                            Self::close_from_callbacks(
-                                &close_cb_complete,
-                                &state_change_for_complete,
-                                ModalCloseReason::CompleteAction,
-                            );
-                            window.refresh();
-                        }),
-                ),
+                div()
+                    .mt(tokens.actions_margin_top)
+                    .flex()
+                    .justify_end()
+                    .child(
+                        Button::new()
+                            .label(self.complete_label.clone())
+                            .with_variant(Variant::Filled)
+                            .on_click(move |_, window, _| {
+                                if popup_state::on_close_request(&id_for_complete, is_controlled) {
+                                    window.refresh();
+                                }
+                                Self::action_from_callbacks(
+                                    &complete_cb,
+                                    &state_change_for_complete,
+                                    ModalStateChange::Completed,
+                                );
+                                Self::close_from_callbacks(
+                                    &close_cb_complete,
+                                    &state_change_for_complete,
+                                    ModalCloseReason::CompleteAction,
+                                );
+                            }),
+                    ),
             );
         }
 
@@ -585,16 +609,17 @@ impl Modal {
             .left_0()
             .size_full()
             .on_key_down(move |event, window, _cx| {
-                if close_on_escape && event.keystroke.key == "escape" {
-                    if !is_controlled {
-                        control::set_bool_state(&id_for_escape, "opened", false);
-                    }
+                if close_on_escape && control::is_escape_keystroke(event) {
+                    let should_refresh =
+                        popup_state::on_close_request(&id_for_escape, is_controlled);
                     Self::close_from_callbacks(
                         &close_callbacks_for_escape,
                         &state_change_for_escape,
                         ModalCloseReason::EscapeKey,
                     );
-                    window.refresh();
+                    if should_refresh {
+                        window.refresh();
+                    }
                 }
             })
             .child(overlay)

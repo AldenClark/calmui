@@ -243,8 +243,8 @@ mod tests {
     #[test]
     fn modal_manager_uses_stack_order() {
         let manager = ModalManager::new();
-        let first_id = manager.open(Modal::new("A"));
-        let second_id = manager.open(Modal::new("B"));
+        let first_id = manager.open(Modal::titled("A"));
+        let second_id = manager.open(Modal::titled("B"));
 
         let stack = manager.list();
         assert_eq!(stack.len(), 2);

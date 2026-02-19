@@ -28,8 +28,8 @@ pub enum AlertKind {
 #[derive(IntoElement)]
 pub struct Alert {
     id: ComponentId,
-    title: SharedString,
-    message: SharedString,
+    title: Option<SharedString>,
+    message: Option<SharedString>,
     kind: AlertKind,
     icon: Option<IconSource>,
     closable: bool,
@@ -44,11 +44,11 @@ pub struct Alert {
 
 impl Alert {
     #[track_caller]
-    pub fn new(title: impl Into<SharedString>, message: impl Into<SharedString>) -> Self {
+    pub fn new() -> Self {
         Self {
             id: ComponentId::default(),
-            title: title.into(),
-            message: message.into(),
+            title: None,
+            message: None,
             kind: AlertKind::Info,
             icon: None,
             closable: true,
@@ -60,6 +60,20 @@ impl Alert {
             theme: crate::theme::LocalTheme::default(),
             style: gpui::StyleRefinement::default(),
         }
+    }
+
+    pub fn titled(title: impl Into<SharedString>) -> Self {
+        Self::new().title(title)
+    }
+
+    pub fn title(mut self, value: impl Into<SharedString>) -> Self {
+        self.title = Some(value.into());
+        self
+    }
+
+    pub fn message(mut self, value: impl Into<SharedString>) -> Self {
+        self.message = Some(value.into());
+        self
     }
 
     pub fn kind(mut self, value: AlertKind) -> Self {
@@ -248,21 +262,21 @@ impl RenderOnce for Alert {
                         div().flex_1().overflow_hidden().child(
                             Stack::vertical()
                                 .gap_1()
-                                .child(
+                                .children(self.title.map(|title| {
                                     div()
                                         .w_full()
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
                                         .truncate()
-                                        .child(self.title),
-                                )
-                                .child(
+                                        .child(title)
+                                }))
+                                .children(self.message.map(|message| {
                                     div()
                                         .w_full()
                                         .text_sm()
                                         .whitespace_normal()
                                         .line_clamp(4)
-                                        .child(self.message),
-                                ),
+                                        .child(message)
+                                })),
                         ),
                     )
                     .children(show_right_actions.then_some(right)),

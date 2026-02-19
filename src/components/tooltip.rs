@@ -1,14 +1,14 @@
 use gpui::{
     AnyElement, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
-    StatefulInteractiveElement, Styled, Window, div, px,
+    StatefulInteractiveElement, Styled, Window, div,
 };
 
 use crate::contracts::MotionAware;
 use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 
-use super::control;
-use super::popup::{PopupPlacement, PopupState, anchored_host};
+use super::popup::{PopupPlacement, anchored_host};
+use super::popup_state::{self, PopupStateInput, PopupStateValue};
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
 
@@ -24,7 +24,7 @@ pub enum TooltipPlacement {
 #[derive(IntoElement)]
 pub struct Tooltip {
     id: ComponentId,
-    label: SharedString,
+    label: Option<SharedString>,
     opened: Option<bool>,
     default_opened: bool,
     disabled: bool,
@@ -40,10 +40,10 @@ pub struct Tooltip {
 
 impl Tooltip {
     #[track_caller]
-    pub fn new(label: impl Into<SharedString>) -> Self {
+    pub fn new() -> Self {
         Self {
             id: ComponentId::default(),
-            label: label.into(),
+            label: None,
             opened: None,
             default_opened: false,
             disabled: false,
@@ -56,6 +56,15 @@ impl Tooltip {
             trigger: None,
             on_open_change: None,
         }
+    }
+
+    pub fn labeled(label: impl Into<SharedString>) -> Self {
+        Self::new().label(label)
+    }
+
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
     }
 
     pub fn opened(mut self, value: bool) -> Self {
@@ -103,17 +112,21 @@ impl Tooltip {
 
     fn render_bubble(&self, window: &gpui::Window) -> AnyElement {
         let tokens = &self.theme.components.tooltip;
+        let Some(label) = self.label.clone() else {
+            return div().into_any_element();
+        };
         div()
             .id(self.id.slot("bubble"))
-            .text_xs()
-            .px(px(8.0))
-            .py(px(5.0))
-            .rounded_md()
+            .text_size(tokens.text_size)
+            .px(tokens.padding_x)
+            .py(tokens.padding_y)
+            .max_w(tokens.max_width)
+            .rounded(tokens.radius)
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.border))
             .bg(resolve_hsla(&self.theme, &tokens.bg))
             .text_color(resolve_hsla(&self.theme, &tokens.fg))
-            .child(self.label.clone())
+            .child(label)
             .with_enter_transition(self.id.slot("bubble-enter"), self.motion)
             .into_any_element()
     }
@@ -136,8 +149,13 @@ impl MotionAware for Tooltip {
 impl RenderOnce for Tooltip {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let popup_state = PopupState::resolve(&self.id, self.opened, self.default_opened);
-        let opened = !self.disabled && popup_state.opened;
+        let popup_state = PopupStateValue::resolve(PopupStateInput {
+            id: &self.id,
+            opened: self.opened,
+            default_opened: self.default_opened,
+            disabled: self.disabled,
+        });
+        let opened = popup_state.opened;
         let is_controlled = popup_state.controlled;
         let trigger_content = self
             .trigger
@@ -156,8 +174,7 @@ impl RenderOnce for Tooltip {
             trigger = trigger.cursor_pointer();
             let id = self.id.clone();
             trigger = trigger.on_hover(move |hovered, window, cx| {
-                if !is_controlled {
-                    control::set_bool_state(&id, "opened", *hovered);
+                if popup_state::apply_opened(&id, is_controlled, *hovered) {
                     window.refresh();
                 }
                 (handler)(*hovered, window, cx);
@@ -166,8 +183,9 @@ impl RenderOnce for Tooltip {
             trigger = trigger.cursor_pointer();
             let id = self.id.clone();
             trigger = trigger.on_hover(move |hovered, window, _cx| {
-                control::set_bool_state(&id, "opened", *hovered);
-                window.refresh();
+                if popup_state::apply_opened(&id, false, *hovered) {
+                    window.refresh();
+                }
             });
         } else {
             trigger = trigger.cursor_pointer();
@@ -178,8 +196,7 @@ impl RenderOnce for Tooltip {
                 let next = !opened;
                 let id = self.id.clone();
                 trigger = trigger.on_click(move |_, window, cx| {
-                    if !is_controlled {
-                        control::set_bool_state(&id, "opened", next);
+                    if popup_state::apply_opened(&id, is_controlled, next) {
                         window.refresh();
                     }
                     (handler)(next, window, cx);
@@ -188,13 +205,14 @@ impl RenderOnce for Tooltip {
                 let next = !opened;
                 let id = self.id.clone();
                 trigger = trigger.on_click(move |_, window, _cx| {
-                    control::set_bool_state(&id, "opened", next);
-                    window.refresh();
+                    if popup_state::apply_opened(&id, false, next) {
+                        window.refresh();
+                    }
                 });
             }
         }
 
-        if opened {
+        if opened && self.label.is_some() {
             let bubble = self.render_bubble(window);
             let placement = match self.placement {
                 TooltipPlacement::Top => PopupPlacement::Top,

@@ -26,7 +26,7 @@ use super::text_input_actions::{
 };
 use super::text_input_state::InputState;
 use super::transition::TransitionExt;
-use super::utils::{apply_input_size, apply_radius, quantized_stroke_px, resolve_hsla};
+use super::utils::{apply_field_size, apply_radius, quantized_stroke_px, resolve_hsla};
 
 type ChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
 type SubmitHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
@@ -606,23 +606,13 @@ impl TextInput {
     }
 
     fn caret_height_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 13.0,
-            Size::Sm => 15.0,
-            Size::Md => 17.0,
-            Size::Lg => 19.0,
-            Size::Xl => 21.0,
-        }
+        let size = self.theme.components.input.sizes.for_size(self.size);
+        f32::from(size.caret_height)
     }
 
     fn font_size_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 12.0,
-            Size::Sm => 14.0,
-            Size::Md => 16.0,
-            Size::Lg => 18.0,
-            Size::Xl => 20.0,
-        }
+        let size = self.theme.components.input.sizes.for_size(self.size);
+        f32::from(size.font_size)
     }
 
     fn char_width_px(&self, window: &Window) -> f32 {
@@ -867,13 +857,14 @@ impl TextInput {
             .flex()
             .flex_row()
             .items_center()
-            .gap_2()
+            .gap(tokens.slot_gap)
             .w_full()
             .bg(resolve_hsla(&self.theme, &tokens.bg))
             .text_color(resolve_hsla(&self.theme, &tokens.fg))
             .border(quantized_stroke_px(window, 1.0));
 
-        input = apply_input_size(input, self.size);
+        let field_size = tokens.sizes.for_size(self.size);
+        input = apply_field_size(input, field_size);
         input = apply_radius(&self.theme, input, self.radius);
 
         let border = if self.error.is_some() {
@@ -1413,7 +1404,8 @@ impl TextInput {
             input = input.child(
                 div()
                     .flex_none()
-                    .text_color(resolve_hsla(&self.theme, &self.theme.semantic.text_muted))
+                    .min_w(tokens.slot_min_width)
+                    .text_color(resolve_hsla(&self.theme, &tokens.slot_fg))
                     .child(left_slot()),
             );
         }
@@ -1569,7 +1561,8 @@ impl TextInput {
                 div()
                     .ml_auto()
                     .flex_none()
-                    .text_color(resolve_hsla(&self.theme, &self.theme.semantic.text_muted))
+                    .min_w(tokens.slot_min_width)
+                    .text_color(resolve_hsla(&self.theme, &tokens.slot_fg))
                     .child(right_slot()),
             );
         }
@@ -1589,7 +1582,8 @@ impl TextInput {
         if let Some(label) = &self.label {
             let mut label_row = Stack::horizontal().gap_1().child(
                 div()
-                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_size(self.theme.components.input.label_size)
+                    .font_weight(self.theme.components.input.label_weight)
                     .text_color(resolve_hsla(
                         &self.theme,
                         &self.theme.components.input.label,
@@ -1611,7 +1605,7 @@ impl TextInput {
         if let Some(description) = &self.description {
             block = block.child(
                 div()
-                    .text_sm()
+                    .text_size(self.theme.components.input.description_size)
                     .text_color(resolve_hsla(
                         &self.theme,
                         &self.theme.components.input.description,
@@ -1623,7 +1617,7 @@ impl TextInput {
         if let Some(error) = &self.error {
             block = block.child(
                 div()
-                    .text_sm()
+                    .text_size(self.theme.components.input.error_size)
                     .text_color(resolve_hsla(
                         &self.theme,
                         &self.theme.components.input.error,
@@ -1683,14 +1677,18 @@ impl RenderOnce for TextInput {
         match self.layout {
             FieldLayout::Vertical => Stack::vertical()
                 .id(self.id.clone())
-                .gap_2()
+                .gap(self.theme.components.input.layout_gap_vertical)
                 .child(self.render_label_block())
                 .child(self.render_input_box(window, _cx)),
             FieldLayout::Horizontal => Stack::horizontal()
                 .id(self.id.clone())
                 .items_start()
-                .gap_3()
-                .child(div().w(gpui::px(168.0)).child(self.render_label_block()))
+                .gap(self.theme.components.input.layout_gap_horizontal)
+                .child(
+                    div()
+                        .w(self.theme.components.input.horizontal_label_width)
+                        .child(self.render_label_block()),
+                )
                 .child(div().flex_1().child(self.render_input_box(window, _cx))),
         }
     }

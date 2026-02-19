@@ -16,7 +16,7 @@ type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 #[derive(IntoElement)]
 pub struct Badge {
     id: ComponentId,
-    label: SharedString,
+    label: Option<SharedString>,
     variant: Variant,
     size: Size,
     radius: Radius,
@@ -29,10 +29,10 @@ pub struct Badge {
 
 impl Badge {
     #[track_caller]
-    pub fn new(label: impl Into<SharedString>) -> Self {
+    pub fn new() -> Self {
         Self {
             id: ComponentId::default(),
-            label: label.into(),
+            label: None,
             variant: Variant::Filled,
             size: Size::Sm,
             radius: Radius::Pill,
@@ -42,6 +42,21 @@ impl Badge {
             style: gpui::StyleRefinement::default(),
             motion: MotionConfig::default(),
         }
+    }
+
+    #[track_caller]
+    pub fn labeled(label: impl Into<SharedString>) -> Self {
+        Self::new().label(label)
+    }
+
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
+    }
+
+    pub fn clear_label(mut self) -> Self {
+        self.label = None;
+        self
     }
 
     pub fn left_slot(mut self, content: impl IntoElement + 'static) -> Self {
@@ -141,7 +156,9 @@ impl RenderOnce for Badge {
         if let Some(left) = self.left_slot.take() {
             root = root.child(left());
         }
-        root = root.child(self.label);
+        if let Some(label) = self.label {
+            root = root.child(label);
+        }
         if let Some(right) = self.right_slot.take() {
             root = root.child(right());
         }

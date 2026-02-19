@@ -240,6 +240,36 @@ pub fn is_activation_key(key: &str) -> bool {
     key == "space" || key == "enter"
 }
 
+pub fn is_plain_keystroke(event: &gpui::KeyDownEvent) -> bool {
+    !event.keystroke.modifiers.control
+        && !event.keystroke.modifiers.platform
+        && !event.keystroke.modifiers.function
+        && !event.keystroke.modifiers.alt
+}
+
+pub fn is_activation_keystroke(event: &gpui::KeyDownEvent) -> bool {
+    is_plain_keystroke(event) && is_activation_key(event.keystroke.key.as_str())
+}
+
+pub fn is_escape_keystroke(event: &gpui::KeyDownEvent) -> bool {
+    is_plain_keystroke(event) && event.keystroke.key == "escape"
+}
+
+pub fn step_direction_from_vertical_key(event: &gpui::KeyDownEvent) -> Option<f64> {
+    if !is_plain_keystroke(event) {
+        return None;
+    }
+
+    let key = event.keystroke.key.as_str();
+    if key == "up" {
+        Some(1.0)
+    } else if key == "down" {
+        Some(-1.0)
+    } else {
+        None
+    }
+}
+
 pub fn text_state(id: &str, slot: &str, controlled: Option<String>, default: String) -> String {
     scope(id).text(slot, controlled, default)
 }

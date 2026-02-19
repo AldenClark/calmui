@@ -11,7 +11,8 @@ use crate::motion::MotionConfig;
 
 use super::Stack;
 use super::control;
-use super::popup::{PopupPlacement, PopupState, anchored_host};
+use super::popup::{PopupPlacement, anchored_host};
+use super::popup_state::{self, PopupStateInput, PopupStateValue};
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
 
@@ -32,7 +33,7 @@ pub enum HoverCardPlacement {
 #[derive(IntoElement)]
 pub struct HoverCard {
     id: ComponentId,
-    title: SharedString,
+    title: Option<SharedString>,
     body: Option<SharedString>,
     opened: Option<bool>,
     default_opened: bool,
@@ -50,10 +51,10 @@ pub struct HoverCard {
 
 impl HoverCard {
     #[track_caller]
-    pub fn new(title: impl Into<SharedString>) -> Self {
+    pub fn new() -> Self {
         Self {
             id: ComponentId::default(),
-            title: title.into(),
+            title: None,
             body: None,
             opened: None,
             default_opened: false,
@@ -68,6 +69,15 @@ impl HoverCard {
             content: None,
             on_open_change: None,
         }
+    }
+
+    pub fn titled(title: impl Into<SharedString>) -> Self {
+        Self::new().title(title)
+    }
+
+    pub fn title(mut self, value: impl Into<SharedString>) -> Self {
+        self.title = Some(value.into());
+        self
     }
 
     pub fn body(mut self, value: impl Into<SharedString>) -> Self {
@@ -132,7 +142,13 @@ impl HoverCard {
     }
 
     fn resolved_opened(&self) -> bool {
-        let base = PopupState::resolve(&self.id, self.opened, self.default_opened).opened;
+        let base = PopupStateValue::resolve(PopupStateInput {
+            id: &self.id,
+            opened: self.opened,
+            default_opened: self.default_opened,
+            disabled: false,
+        })
+        .opened;
         if self.opened.is_some() {
             base
         } else {
@@ -142,32 +158,39 @@ impl HoverCard {
 
     fn render_card(&mut self, is_controlled: bool, window: &gpui::Window) -> AnyElement {
         let tokens = &self.theme.components.hover_card;
+        let fallback_width = f32::from(tokens.max_width);
         let panel_width = if self.match_trigger_width {
-            panel_width_px(&self.id, 260.0).max(120.0)
+            panel_width_px(&self.id, fallback_width)
         } else {
-            260.0
-        };
+            fallback_width
+        }
+        .clamp(f32::from(tokens.min_width), f32::from(tokens.max_width));
         let mut card = Stack::vertical()
             .id(self.id.slot("card"))
-            .gap_1p5()
+            .gap(tokens.gap)
             .w(px(panel_width))
-            .max_w_full()
-            .p_3()
-            .rounded_md()
+            .min_w(tokens.min_width)
+            .max_w(tokens.max_width)
+            .p(tokens.padding)
+            .rounded(tokens.radius)
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.border))
-            .bg(resolve_hsla(&self.theme, &tokens.bg))
-            .child(
+            .bg(resolve_hsla(&self.theme, &tokens.bg));
+
+        if let Some(title) = self.title.clone() {
+            card = card.child(
                 div()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_size(tokens.title_size)
+                    .font_weight(tokens.title_weight)
                     .text_color(resolve_hsla(&self.theme, &tokens.title))
-                    .child(self.title.clone()),
+                    .child(title),
             );
+        }
 
         if let Some(body) = self.body.clone() {
             card = card.child(
                 div()
-                    .text_sm()
+                    .text_size(tokens.body_size)
                     .text_color(resolve_hsla(&self.theme, &tokens.body))
                     .child(body),
             );
@@ -184,8 +207,9 @@ impl HoverCard {
             let next = *hovered || control::bool_state(&id, "trigger-hovered", None, false);
             if !is_controlled {
                 if *hovered {
-                    control::set_bool_state(&id, "opened", true);
-                    window.refresh();
+                    if popup_state::on_open_request(&id, false) {
+                        window.refresh();
+                    }
                 } else {
                     let id_for_delay = id.clone();
                     let window_handle = window.window_handle();
@@ -206,8 +230,9 @@ impl HoverCard {
                                     None,
                                     false,
                                 );
-                                control::set_bool_state(&id_for_delay, "opened", still_open);
-                                window.refresh();
+                                if popup_state::apply_opened(&id_for_delay, false, still_open) {
+                                    window.refresh();
+                                }
                             });
                         }
                     })
@@ -241,7 +266,12 @@ impl MotionAware for HoverCard {
 impl RenderOnce for HoverCard {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let popup_state = PopupState::resolve(&self.id, self.opened, self.default_opened);
+        let popup_state = PopupStateValue::resolve(PopupStateInput {
+            id: &self.id,
+            opened: self.opened,
+            default_opened: self.default_opened,
+            disabled: false,
+        });
         let opened = if self.disabled {
             false
         } else {
@@ -285,8 +315,9 @@ impl RenderOnce for HoverCard {
                 let next = *hovered || control::bool_state(&id, "panel-hovered", None, false);
                 if !is_controlled {
                     if *hovered {
-                        control::set_bool_state(&id, "opened", true);
-                        window.refresh();
+                        if popup_state::on_open_request(&id, false) {
+                            window.refresh();
+                        }
                     } else {
                         let id_for_delay = id.clone();
                         let window_handle = window.window_handle();
@@ -307,8 +338,9 @@ impl RenderOnce for HoverCard {
                                         None,
                                         false,
                                     );
-                                    control::set_bool_state(&id_for_delay, "opened", still_open);
-                                    window.refresh();
+                                    if popup_state::apply_opened(&id_for_delay, false, still_open) {
+                                        window.refresh();
+                                    }
                                 });
                             }
                         })

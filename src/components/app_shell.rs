@@ -9,7 +9,7 @@ use gpui::{
 use crate::id::ComponentId;
 
 use super::control;
-use super::divider::{Divider, DividerOrientation};
+use super::divider::Divider;
 use super::overlay::{Overlay, OverlayMaterialMode};
 use super::scroll_area::{ScrollArea, ScrollDirection};
 use super::utils::resolve_hsla;
@@ -139,11 +139,11 @@ impl RenderOnce for Sidebar {
         let mut bg = resolve_hsla(&self.theme, &bg_token);
         let mut border_color = resolve_hsla(&self.theme, &tokens.border);
         let (radius_px, with_shadow) = match self.mode {
-            SidebarMode::Inline => (10.0, false),
+            SidebarMode::Inline => (tokens.inline_radius, false),
             SidebarMode::Overlay => {
                 bg = bg.opacity(0.9);
                 border_color = border_color.opacity(0.75);
-                (18.0, true)
+                (tokens.overlay_radius, true)
             }
         };
 
@@ -153,7 +153,7 @@ impl RenderOnce for Sidebar {
             .flex()
             .flex_col()
             .bg(bg)
-            .rounded(px(radius_px));
+            .rounded(radius_px);
 
         if self.bordered {
             root = root
@@ -173,7 +173,7 @@ impl RenderOnce for Sidebar {
         if let Some(header) = self.header.take() {
             root = root.child(
                 div()
-                    .p_3()
+                    .p(tokens.section_padding)
                     .text_color(resolve_hsla(&self.theme, &tokens.header_fg))
                     .child(header()),
             );
@@ -191,7 +191,7 @@ impl RenderOnce for Sidebar {
                             .with_id(self.id.slot("scroll"))
                             .direction(ScrollDirection::Vertical)
                             .bordered(false)
-                            .padding(crate::style::Size::Md)
+                            .padding(tokens.scroll_padding)
                             .child(content()),
                     ),
             );
@@ -202,8 +202,8 @@ impl RenderOnce for Sidebar {
         if let Some(footer) = self.footer.take() {
             root = root.child(
                 div()
-                    .p_3()
-                    .text_sm()
+                    .p(tokens.section_padding)
+                    .text_size(tokens.footer_size)
                     .text_color(resolve_hsla(&self.theme, &tokens.footer_fg))
                     .child(footer()),
             );
@@ -734,11 +734,8 @@ impl RenderOnce for AppShell {
             } else {
                 root = root.child(title_region);
                 if self.inline_dividers {
-                    root = root.child(
-                        Divider::new()
-                            .with_id(self.id.slot("divider-title-body"))
-                            .orientation(DividerOrientation::Horizontal),
-                    );
+                    root = root
+                        .child(Divider::horizontal().with_id(self.id.slot("divider-title-body")));
                 }
             }
         }
@@ -779,11 +776,8 @@ impl RenderOnce for AppShell {
                     .flex_none();
                 row = row.child(sidebar_region);
                 if self.inline_dividers {
-                    row = row.child(
-                        Divider::new()
-                            .with_id(self.id.slot("divider-sidebar-center"))
-                            .orientation(DividerOrientation::Vertical),
-                    );
+                    row = row
+                        .child(Divider::vertical().with_id(self.id.slot("divider-sidebar-center")));
                 }
             }
         }
@@ -815,11 +809,8 @@ impl RenderOnce for AppShell {
             let mut bottom_panel_chrome = self.bottom_panel_chrome.clone();
             if self.inline_dividers {
                 bottom_panel_chrome.bordered = false;
-                center = center.child(
-                    Divider::new()
-                        .with_id(self.id.slot("divider-content-bottom"))
-                        .orientation(DividerOrientation::Horizontal),
-                );
+                center = center
+                    .child(Divider::horizontal().with_id(self.id.slot("divider-content-bottom")));
             }
             let bottom_region = self
                 .wrap_region(
@@ -844,9 +835,7 @@ impl RenderOnce for AppShell {
                 if self.inline_dividers {
                     inspector_chrome.bordered = false;
                     row = row.child(
-                        Divider::new()
-                            .with_id(self.id.slot("divider-center-inspector"))
-                            .orientation(DividerOrientation::Vertical),
+                        Divider::vertical().with_id(self.id.slot("divider-center-inspector")),
                     );
                 }
                 let inspector_region = self

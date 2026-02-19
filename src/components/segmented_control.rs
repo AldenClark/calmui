@@ -10,7 +10,7 @@ use crate::id::ComponentId;
 use crate::motion::{MotionConfig, MotionLevel, TransitionPreset};
 use crate::style::{Radius, Size, Variant};
 
-use super::control;
+use super::selection_state;
 use super::transition::{TransitionExt, TransitionStage};
 use super::utils::{
     InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles, apply_radius,
@@ -123,11 +123,11 @@ impl SegmentedControl {
             .clone()
             .or_else(|| self.items.first().map(|item| item.value.clone()));
 
-        control::optional_text_state(
+        selection_state::resolve_optional_text(
             &self.id,
             "value",
-            self.value_controlled
-                .then_some(self.value.as_ref().map(|value| value.to_string())),
+            self.value_controlled,
+            self.value.as_ref().map(|value| value.to_string()),
             default.map(|value| value.to_string()),
         )
         .map(SharedString::from)
@@ -221,7 +221,8 @@ impl RenderOnce for SegmentedControl {
                 .iter()
                 .position(|item| item.value.as_ref() == value.as_ref())
         });
-        let previous_index = control::optional_usize_state(&self.id, "prev-index", None, None);
+        let previous_index =
+            selection_state::resolve_optional_usize(&self.id, "prev-index", None, None);
         let divider_height = match size {
             Size::Xs => 12.0,
             Size::Sm => 14.0,
@@ -338,9 +339,18 @@ impl RenderOnce for SegmentedControl {
                         hover_bg
                     };
                     let click_handler: PressHandler = Rc::new(move |_: &ClickEvent, window, cx| {
-                        control::set_optional_usize_state(&id, "prev-index", previous);
-                        if !controlled {
-                            control::set_optional_text_state(&id, "value", Some(value.to_string()));
+                        let _ = selection_state::apply_optional_usize(
+                            &id,
+                            "prev-index",
+                            false,
+                            previous,
+                        );
+                        if selection_state::apply_optional_text(
+                            &id,
+                            "value",
+                            controlled,
+                            Some(value.to_string()),
+                        ) {
                             window.refresh();
                         }
                         if let Some(handler) = on_change.as_ref() {

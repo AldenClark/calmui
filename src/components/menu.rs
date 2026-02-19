@@ -10,9 +10,9 @@ use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 
 use super::Stack;
-use super::control;
 use super::icon::Icon;
-use super::popup::{PopupPlacement, PopupState, anchored_host};
+use super::menu_state::{self, MenuState, MenuStateInput};
+use super::popup::{PopupPlacement, anchored_host};
 use super::transition::TransitionExt;
 use super::utils::{
     InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles,
@@ -152,16 +152,12 @@ impl Menu {
         self
     }
 
-    fn dropdown_width_px(id: &str) -> f32 {
-        let width = control::f32_state(id, "dropdown-width-px", None, 0.0);
-        if width >= 1.0 {
-            width.max(180.0)
-        } else {
-            220.0
-        }
-    }
-
-    fn render_dropdown(&self, is_controlled: bool, window: &gpui::Window) -> AnyElement {
+    fn render_dropdown(
+        &self,
+        is_controlled: bool,
+        dropdown_width_px: f32,
+        window: &gpui::Window,
+    ) -> AnyElement {
         let tokens = &self.theme.components.menu;
         let on_item_click = self.on_item_click.clone();
         let on_open_change = self.on_open_change.clone();
@@ -219,8 +215,11 @@ impl Menu {
                             }
 
                             if close_on_item_click {
-                                if !is_controlled {
-                                    control::set_bool_state(&menu_id, "opened", false);
+                                if menu_state::on_item_click(
+                                    &menu_id,
+                                    is_controlled,
+                                    close_on_item_click,
+                                ) {
                                     window.refresh();
                                 }
                                 if let Some(handler) = on_open_change.as_ref() {
@@ -246,7 +245,7 @@ impl Menu {
 
         let mut dropdown = Stack::vertical()
             .id(self.id.slot("dropdown"))
-            .w(px(Self::dropdown_width_px(&self.id)))
+            .w(px(dropdown_width_px))
             .max_w_full()
             .p_1p5()
             .gap_1()
@@ -261,8 +260,7 @@ impl Menu {
             if let Some(handler) = self.on_open_change.clone() {
                 let menu_id = self.id.clone();
                 dropdown = dropdown.on_mouse_down_out(move |_, window, cx| {
-                    if !is_controlled {
-                        control::set_bool_state(&menu_id, "opened", false);
+                    if menu_state::on_close_request(&menu_id, is_controlled) {
                         window.refresh();
                     }
                     (handler)(false, window, cx);
@@ -270,8 +268,9 @@ impl Menu {
             } else if !is_controlled {
                 let menu_id = self.id.clone();
                 dropdown = dropdown.on_mouse_down_out(move |_, window, _cx| {
-                    control::set_bool_state(&menu_id, "opened", false);
-                    window.refresh();
+                    if menu_state::on_close_request(&menu_id, false) {
+                        window.refresh();
+                    }
                 });
             }
         }
@@ -299,13 +298,15 @@ impl MotionAware for Menu {
 impl RenderOnce for Menu {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let popup_state = PopupState::resolve(&self.id, self.opened, self.default_opened);
-        let opened = if self.disabled {
-            false
-        } else {
-            popup_state.opened
-        };
-        let is_controlled = popup_state.controlled;
+        let state = MenuState::resolve(MenuStateInput {
+            id: &self.id,
+            opened: self.opened,
+            default_opened: self.default_opened,
+            disabled: self.disabled,
+        });
+        let opened = state.opened;
+        let is_controlled = state.controlled;
+        let dropdown_width_px = state.dropdown_width_px;
 
         let mut trigger = div()
             .id(self.id.slot("trigger"))
@@ -321,11 +322,7 @@ impl RenderOnce for Menu {
                 let id_for_width = self.id.clone();
                 canvas(
                     move |bounds, _, _cx| {
-                        control::set_text_state(
-                            &id_for_width,
-                            "dropdown-width-px",
-                            format!("{:.2}", f32::from(bounds.size.width)),
-                        );
+                        menu_state::set_dropdown_width(&id_for_width, f32::from(bounds.size.width));
                     },
                     |_, _, _, _| {},
                 )
@@ -341,8 +338,7 @@ impl RenderOnce for Menu {
                 let next = !opened;
                 Some(Rc::new(
                     move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
-                        if !is_controlled {
-                            control::set_bool_state(&id, "opened", next);
+                        if menu_state::on_trigger_toggle(&id, is_controlled, next) {
                             window.refresh();
                         }
                         (handler)(next, window, cx);
@@ -353,8 +349,9 @@ impl RenderOnce for Menu {
                 let next = !opened;
                 Some(Rc::new(
                     move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
-                        control::set_bool_state(&id, "opened", next);
-                        window.refresh();
+                        if menu_state::on_trigger_toggle(&id, false, next) {
+                            window.refresh();
+                        }
                     },
                 ) as PressHandler)
             } else {
@@ -373,7 +370,7 @@ impl RenderOnce for Menu {
         }
 
         if opened {
-            let dropdown = self.render_dropdown(is_controlled, window);
+            let dropdown = self.render_dropdown(is_controlled, dropdown_width_px, window);
             let anchor_host = anchored_host(
                 &self.id,
                 "anchor-host",

@@ -11,8 +11,8 @@ use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
 
 use super::Stack;
-use super::control;
 use super::loader::{Loader, LoaderElement, LoaderVariant};
+use super::selection_state;
 use super::transition::TransitionExt;
 use super::utils::{
     PressHandler, PressableBehavior, apply_button_size, apply_interaction_styles, apply_radius,
@@ -44,12 +44,7 @@ pub struct Button {
 
 impl Button {
     #[track_caller]
-    pub fn new(label: impl Into<SharedString>) -> Self {
-        Self::without_label().label(label)
-    }
-
-    #[track_caller]
-    pub fn without_label() -> Self {
+    pub fn new() -> Self {
         Self {
             id: ComponentId::default(),
             label: None,
@@ -68,6 +63,16 @@ impl Button {
             on_click: None,
             focus_handle: None,
         }
+    }
+
+    #[track_caller]
+    pub fn labeled(label: impl Into<SharedString>) -> Self {
+        Self::new().label(label)
+    }
+
+    #[track_caller]
+    pub fn without_label() -> Self {
+        Self::new()
     }
 
     pub fn label(mut self, label: impl Into<SharedString>) -> Self {
@@ -422,11 +427,11 @@ impl ButtonGroup {
     }
 
     fn resolved_value(&self) -> Option<SharedString> {
-        control::optional_text_state(
+        selection_state::resolve_optional_text(
             &self.id,
             "value",
-            self.value_controlled
-                .then_some(self.value.as_ref().map(|value| value.to_string())),
+            self.value_controlled,
+            self.value.as_ref().map(|value| value.to_string()),
             self.default_value.as_ref().map(|value| value.to_string()),
         )
         .map(SharedString::from)
@@ -483,7 +488,8 @@ impl RenderOnce for ButtonGroup {
                     self.inactive_variant
                 };
 
-                let mut button = Button::new(item.label.clone())
+                let mut button = Button::new()
+                    .label(item.label.clone())
                     .with_id(self.id.slot_index("item", index.to_string()))
                     .with_variant(variant);
                 button = Sized::with_size(button, self.size);
@@ -496,8 +502,12 @@ impl RenderOnce for ButtonGroup {
                     let value = item.value.clone();
                     let id = self.id.clone();
                     button = button.on_click(move |_, window, cx| {
-                        if !is_controlled {
-                            control::set_optional_text_state(&id, "value", Some(value.to_string()));
+                        if selection_state::apply_optional_text(
+                            &id,
+                            "value",
+                            is_controlled,
+                            Some(value.to_string()),
+                        ) {
                             window.refresh();
                         }
                         (handler)(value.clone(), window, cx);
@@ -506,8 +516,14 @@ impl RenderOnce for ButtonGroup {
                     let value = item.value.clone();
                     let id = self.id.clone();
                     button = button.on_click(move |_, window, _cx| {
-                        control::set_optional_text_state(&id, "value", Some(value.to_string()));
-                        window.refresh();
+                        if selection_state::apply_optional_text(
+                            &id,
+                            "value",
+                            false,
+                            Some(value.to_string()),
+                        ) {
+                            window.refresh();
+                        }
                     });
                 }
 

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, OnceLock};
 
-use crate::style::Radius;
+use crate::style::{Radius, Size};
 use crate::tokens::{ColorScale, PaletteCatalog, PaletteKey};
 use gpui::{
     Background, Corners, Fill, FontWeight, Hsla, Pixels, Rgba, black, px, transparent_black, white,
@@ -494,6 +494,76 @@ pub struct ButtonTokens {
     pub disabled_fg: Hsla,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FieldSizePreset {
+    pub font_size: Pixels,
+    pub line_height: Pixels,
+    pub padding_x: Pixels,
+    pub padding_y: Pixels,
+    pub caret_height: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FieldSizeScale {
+    pub xs: FieldSizePreset,
+    pub sm: FieldSizePreset,
+    pub md: FieldSizePreset,
+    pub lg: FieldSizePreset,
+    pub xl: FieldSizePreset,
+}
+
+impl FieldSizeScale {
+    pub fn for_size(&self, size: Size) -> FieldSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_field_size_scale() -> FieldSizeScale {
+    FieldSizeScale {
+        xs: FieldSizePreset {
+            font_size: px(12.0),
+            line_height: px(18.0),
+            padding_x: px(8.0),
+            padding_y: px(5.0),
+            caret_height: px(13.0),
+        },
+        sm: FieldSizePreset {
+            font_size: px(14.0),
+            line_height: px(20.0),
+            padding_x: px(10.0),
+            padding_y: px(6.0),
+            caret_height: px(15.0),
+        },
+        md: FieldSizePreset {
+            font_size: px(16.0),
+            line_height: px(22.0),
+            padding_x: px(12.0),
+            padding_y: px(8.0),
+            caret_height: px(17.0),
+        },
+        lg: FieldSizePreset {
+            font_size: px(18.0),
+            line_height: px(24.0),
+            padding_x: px(14.0),
+            padding_y: px(10.0),
+            caret_height: px(19.0),
+        },
+        xl: FieldSizePreset {
+            font_size: px(20.0),
+            line_height: px(26.0),
+            padding_x: px(16.0),
+            padding_y: px(12.0),
+            caret_height: px(21.0),
+        },
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InputTokens {
     pub bg: Hsla,
@@ -503,8 +573,19 @@ pub struct InputTokens {
     pub border_focus: Hsla,
     pub border_error: Hsla,
     pub label: Hsla,
+    pub label_size: Pixels,
+    pub label_weight: FontWeight,
     pub description: Hsla,
+    pub description_size: Pixels,
     pub error: Hsla,
+    pub error_size: Pixels,
+    pub slot_fg: Hsla,
+    pub slot_gap: Pixels,
+    pub slot_min_width: Pixels,
+    pub layout_gap_vertical: Pixels,
+    pub layout_gap_horizontal: Pixels,
+    pub horizontal_label_width: Pixels,
+    pub sizes: FieldSizeScale,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -584,9 +665,22 @@ pub struct AccordionTokens {
     pub item_bg: Hsla,
     pub item_border: Hsla,
     pub label: Hsla,
+    pub label_size: Pixels,
     pub description: Hsla,
+    pub description_size: Pixels,
     pub content: Hsla,
+    pub content_size: Pixels,
     pub chevron: Hsla,
+    pub chevron_size: Pixels,
+    pub stack_gap: Pixels,
+    pub header_gap: Pixels,
+    pub label_stack_gap: Pixels,
+    pub header_padding_x: Pixels,
+    pub header_padding_y: Pixels,
+    pub panel_gap: Pixels,
+    pub panel_padding_x: Pixels,
+    pub panel_padding_bottom: Pixels,
+    pub panel_padding_top: Pixels,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -614,6 +708,227 @@ pub struct SliderTokens {
     pub thumb_border: Hsla,
     pub label: Hsla,
     pub value: Hsla,
+    pub label_size: Pixels,
+    pub value_size: Pixels,
+    pub header_gap_vertical: Pixels,
+    pub header_gap_horizontal: Pixels,
+    pub sizes: SliderSizeScale,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SliderSizePreset {
+    pub track_thickness: Pixels,
+    pub thumb_size: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SliderSizeScale {
+    pub xs: SliderSizePreset,
+    pub sm: SliderSizePreset,
+    pub md: SliderSizePreset,
+    pub lg: SliderSizePreset,
+    pub xl: SliderSizePreset,
+}
+
+impl SliderSizeScale {
+    pub fn for_size(&self, size: Size) -> SliderSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_slider_size_scale() -> SliderSizeScale {
+    SliderSizeScale {
+        xs: SliderSizePreset {
+            track_thickness: px(4.0),
+            thumb_size: px(12.0),
+        },
+        sm: SliderSizePreset {
+            track_thickness: px(5.0),
+            thumb_size: px(14.0),
+        },
+        md: SliderSizePreset {
+            track_thickness: px(6.0),
+            thumb_size: px(16.0),
+        },
+        lg: SliderSizePreset {
+            track_thickness: px(8.0),
+            thumb_size: px(20.0),
+        },
+        xl: SliderSizePreset {
+            track_thickness: px(10.0),
+            thumb_size: px(24.0),
+        },
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TableSizePreset {
+    pub font_size: Pixels,
+    pub padding_x: Pixels,
+    pub padding_y: Pixels,
+    pub row_height: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TableSizeScale {
+    pub xs: TableSizePreset,
+    pub sm: TableSizePreset,
+    pub md: TableSizePreset,
+    pub lg: TableSizePreset,
+    pub xl: TableSizePreset,
+}
+
+impl TableSizeScale {
+    pub fn for_size(&self, size: Size) -> TableSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_table_size_scale() -> TableSizeScale {
+    TableSizeScale {
+        xs: TableSizePreset {
+            font_size: px(12.0),
+            padding_x: px(8.0),
+            padding_y: px(4.0),
+            row_height: px(24.0),
+        },
+        sm: TableSizePreset {
+            font_size: px(13.0),
+            padding_x: px(10.0),
+            padding_y: px(6.0),
+            row_height: px(28.0),
+        },
+        md: TableSizePreset {
+            font_size: px(14.0),
+            padding_x: px(12.0),
+            padding_y: px(8.0),
+            row_height: px(34.0),
+        },
+        lg: TableSizePreset {
+            font_size: px(16.0),
+            padding_x: px(14.0),
+            padding_y: px(10.0),
+            row_height: px(40.0),
+        },
+        xl: TableSizePreset {
+            font_size: px(18.0),
+            padding_x: px(16.0),
+            padding_y: px(12.0),
+            row_height: px(46.0),
+        },
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TreeSizePreset {
+    pub label_size: Pixels,
+    pub indent: Pixels,
+    pub row_padding_y: Pixels,
+    pub row_padding_right: Pixels,
+    pub row_inner_gap: Pixels,
+    pub toggle_size: Pixels,
+    pub toggle_icon_size: Pixels,
+    pub connector_stub_width: Pixels,
+    pub child_line_margin: Pixels,
+    pub child_line_padding: Pixels,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TreeSizeScale {
+    pub xs: TreeSizePreset,
+    pub sm: TreeSizePreset,
+    pub md: TreeSizePreset,
+    pub lg: TreeSizePreset,
+    pub xl: TreeSizePreset,
+}
+
+impl TreeSizeScale {
+    pub fn for_size(&self, size: Size) -> TreeSizePreset {
+        match size {
+            Size::Xs => self.xs,
+            Size::Sm => self.sm,
+            Size::Md => self.md,
+            Size::Lg => self.lg,
+            Size::Xl => self.xl,
+        }
+    }
+}
+
+fn default_tree_size_scale() -> TreeSizeScale {
+    TreeSizeScale {
+        xs: TreeSizePreset {
+            label_size: px(12.0),
+            indent: px(14.0),
+            row_padding_y: px(3.0),
+            row_padding_right: px(4.0),
+            row_inner_gap: px(4.0),
+            toggle_size: px(14.0),
+            toggle_icon_size: px(11.0),
+            connector_stub_width: px(6.0),
+            child_line_margin: px(7.0),
+            child_line_padding: px(8.0),
+        },
+        sm: TreeSizePreset {
+            label_size: px(13.0),
+            indent: px(16.0),
+            row_padding_y: px(4.0),
+            row_padding_right: px(5.0),
+            row_inner_gap: px(4.0),
+            toggle_size: px(15.0),
+            toggle_icon_size: px(12.0),
+            connector_stub_width: px(7.0),
+            child_line_margin: px(8.0),
+            child_line_padding: px(9.0),
+        },
+        md: TreeSizePreset {
+            label_size: px(14.0),
+            indent: px(18.0),
+            row_padding_y: px(4.0),
+            row_padding_right: px(6.0),
+            row_inner_gap: px(4.0),
+            toggle_size: px(16.0),
+            toggle_icon_size: px(13.0),
+            connector_stub_width: px(8.0),
+            child_line_margin: px(8.0),
+            child_line_padding: px(10.0),
+        },
+        lg: TreeSizePreset {
+            label_size: px(16.0),
+            indent: px(20.0),
+            row_padding_y: px(5.0),
+            row_padding_right: px(7.0),
+            row_inner_gap: px(5.0),
+            toggle_size: px(18.0),
+            toggle_icon_size: px(14.0),
+            connector_stub_width: px(9.0),
+            child_line_margin: px(9.0),
+            child_line_padding: px(11.0),
+        },
+        xl: TreeSizePreset {
+            label_size: px(18.0),
+            indent: px(22.0),
+            row_padding_y: px(6.0),
+            row_padding_right: px(8.0),
+            row_inner_gap: px(6.0),
+            toggle_size: px(20.0),
+            toggle_icon_size: px(15.0),
+            connector_stub_width: px(10.0),
+            child_line_margin: px(10.0),
+            child_line_padding: px(12.0),
+        },
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -641,6 +956,11 @@ pub struct TooltipTokens {
     pub bg: Hsla,
     pub fg: Hsla,
     pub border: Hsla,
+    pub text_size: Pixels,
+    pub padding_x: Pixels,
+    pub padding_y: Pixels,
+    pub radius: Pixels,
+    pub max_width: Pixels,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -649,6 +969,14 @@ pub struct HoverCardTokens {
     pub border: Hsla,
     pub title: Hsla,
     pub body: Hsla,
+    pub title_size: Pixels,
+    pub title_weight: FontWeight,
+    pub body_size: Pixels,
+    pub min_width: Pixels,
+    pub max_width: Pixels,
+    pub padding: Pixels,
+    pub gap: Pixels,
+    pub radius: Pixels,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -669,8 +997,30 @@ pub struct SelectTokens {
     pub tag_border: Hsla,
     pub icon: Hsla,
     pub label: Hsla,
+    pub label_size: Pixels,
+    pub label_weight: FontWeight,
     pub description: Hsla,
+    pub description_size: Pixels,
     pub error: Hsla,
+    pub error_size: Pixels,
+    pub slot_gap: Pixels,
+    pub slot_min_width: Pixels,
+    pub layout_gap_vertical: Pixels,
+    pub layout_gap_horizontal: Pixels,
+    pub horizontal_label_width: Pixels,
+    pub icon_size: Pixels,
+    pub option_size: Pixels,
+    pub option_padding_x: Pixels,
+    pub option_padding_y: Pixels,
+    pub option_check_size: Pixels,
+    pub dropdown_padding: Pixels,
+    pub dropdown_gap: Pixels,
+    pub dropdown_max_height: Pixels,
+    pub tag_size: Pixels,
+    pub tag_padding_x: Pixels,
+    pub tag_padding_y: Pixels,
+    pub tag_max_width: Pixels,
+    pub sizes: FieldSizeScale,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -680,6 +1030,17 @@ pub struct ModalTokens {
     pub overlay_bg: Hsla,
     pub title: Hsla,
     pub body: Hsla,
+    pub title_size: Pixels,
+    pub title_weight: FontWeight,
+    pub body_size: Pixels,
+    pub panel_radius: Pixels,
+    pub panel_padding: Pixels,
+    pub header_margin_bottom: Pixels,
+    pub body_margin_bottom: Pixels,
+    pub actions_margin_top: Pixels,
+    pub actions_gap: Pixels,
+    pub close_size: Pixels,
+    pub close_icon_size: Pixels,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -713,6 +1074,14 @@ pub struct DrawerTokens {
     pub overlay_bg: Hsla,
     pub title: Hsla,
     pub body: Hsla,
+    pub title_size: Pixels,
+    pub title_weight: FontWeight,
+    pub body_size: Pixels,
+    pub panel_padding: Pixels,
+    pub panel_radius: Pixels,
+    pub header_margin_bottom: Pixels,
+    pub close_size: Pixels,
+    pub close_icon_size: Pixels,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -726,6 +1095,21 @@ pub struct TitleBarTokens {
     pub border: Hsla,
     pub fg: Hsla,
     pub controls_bg: Hsla,
+    pub title_size: Pixels,
+    pub title_weight: FontWeight,
+    pub windows_button_width: Pixels,
+    pub windows_icon_size: Pixels,
+    pub linux_button_width: Pixels,
+    pub linux_button_height: Pixels,
+    pub linux_buttons_gap: Pixels,
+    pub macos_controls_reserve: Pixels,
+    pub title_padding_right: Pixels,
+    pub title_max_width: Pixels,
+    pub title_min_width: Pixels,
+    pub platform_padding_left: Pixels,
+    pub platform_padding_right: Pixels,
+    pub controls_slot_gap: Pixels,
+    pub control_button_radius: Pixels,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -735,6 +1119,11 @@ pub struct SidebarTokens {
     pub header_fg: Hsla,
     pub content_fg: Hsla,
     pub footer_fg: Hsla,
+    pub inline_radius: Pixels,
+    pub overlay_radius: Pixels,
+    pub section_padding: Pixels,
+    pub footer_size: Pixels,
+    pub scroll_padding: Size,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -829,8 +1218,16 @@ pub struct TextareaTokens {
     pub border_focus: Hsla,
     pub border_error: Hsla,
     pub label: Hsla,
+    pub label_size: Pixels,
+    pub label_weight: FontWeight,
     pub description: Hsla,
+    pub description_size: Pixels,
     pub error: Hsla,
+    pub error_size: Pixels,
+    pub layout_gap_vertical: Pixels,
+    pub layout_gap_horizontal: Pixels,
+    pub horizontal_label_width: Pixels,
+    pub sizes: FieldSizeScale,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -845,8 +1242,17 @@ pub struct NumberInputTokens {
     pub controls_fg: Hsla,
     pub controls_border: Hsla,
     pub label: Hsla,
+    pub label_size: Pixels,
+    pub label_weight: FontWeight,
     pub description: Hsla,
+    pub description_size: Pixels,
     pub error: Hsla,
+    pub error_size: Pixels,
+    pub controls_width: Pixels,
+    pub controls_height: Pixels,
+    pub controls_icon_size: Pixels,
+    pub controls_gap: Pixels,
+    pub sizes: FieldSizeScale,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -857,6 +1263,11 @@ pub struct RangeSliderTokens {
     pub thumb_border: Hsla,
     pub label: Hsla,
     pub value: Hsla,
+    pub label_size: Pixels,
+    pub value_size: Pixels,
+    pub header_gap_vertical: Pixels,
+    pub header_gap_horizontal: Pixels,
+    pub sizes: SliderSizeScale,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -909,6 +1320,20 @@ pub struct TableTokens {
     pub row_border: Hsla,
     pub cell_fg: Hsla,
     pub caption: Hsla,
+    pub caption_size: Pixels,
+    pub row_gap: Pixels,
+    pub pagination_summary_size: Pixels,
+    pub page_chip_size: Pixels,
+    pub page_chip_padding_x: Pixels,
+    pub page_chip_padding_y: Pixels,
+    pub page_chip_radius: Pixels,
+    pub page_chip_gap: Pixels,
+    pub pagination_items_gap: Pixels,
+    pub pagination_padding_x: Pixels,
+    pub pagination_padding_y: Pixels,
+    pub pagination_gap: Pixels,
+    pub virtualization_padding: Pixels,
+    pub sizes: TableSizeScale,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -955,6 +1380,9 @@ pub struct TreeTokens {
     pub row_hover_bg: Hsla,
     pub row_disabled_fg: Hsla,
     pub line: Hsla,
+    pub root_gap: Pixels,
+    pub children_gap: Pixels,
+    pub sizes: TreeSizeScale,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1075,14 +1503,27 @@ impl ComponentTokens {
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    label_size: px(14.0),
+                    label_weight: FontWeight::MEDIUM,
                     description: (Rgba::try_from(
                         PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    description_size: px(13.0),
                     error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[6 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    error_size: px(13.0),
+                    slot_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    slot_gap: px(8.0),
+                    slot_min_width: px(16.0),
+                    layout_gap_vertical: px(8.0),
+                    layout_gap_horizontal: px(12.0),
+                    horizontal_label_width: px(168.0),
+                    sizes: default_field_size_scale(),
                 },
                 radio: RadioTokens {
                     control_bg: white(),
@@ -1294,17 +1735,30 @@ impl ComponentTokens {
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    label_size: px(14.0),
                     description: (Rgba::try_from(
                         PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    description_size: px(13.0),
                     content: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    content_size: px(14.0),
                     chevron: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    chevron_size: px(14.0),
+                    stack_gap: px(8.0),
+                    header_gap: px(8.0),
+                    label_stack_gap: px(2.0),
+                    header_padding_x: px(12.0),
+                    header_padding_y: px(10.0),
+                    panel_gap: px(4.0),
+                    panel_padding_x: px(12.0),
+                    panel_padding_bottom: px(10.0),
+                    panel_padding_top: px(2.0),
                 },
                 menu: MenuTokens {
                     dropdown_bg: white(),
@@ -1358,6 +1812,11 @@ impl ComponentTokens {
                     value: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    label_size: px(14.0),
+                    value_size: px(14.0),
+                    header_gap_vertical: px(6.0),
+                    header_gap_horizontal: px(8.0),
+                    sizes: default_slider_size_scale(),
                 },
                 overlay: OverlayTokens {
                     bg: (Rgba::try_from("#000000E6")
@@ -1393,6 +1852,11 @@ impl ComponentTokens {
                     border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[6 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    text_size: px(12.0),
+                    padding_x: px(8.0),
+                    padding_y: px(5.0),
+                    radius: px(8.0),
+                    max_width: px(240.0),
                 },
                 hover_card: HoverCardTokens {
                     bg: white(),
@@ -1405,6 +1869,14 @@ impl ComponentTokens {
                     body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    title_size: px(15.0),
+                    title_weight: FontWeight::SEMIBOLD,
+                    body_size: px(14.0),
+                    min_width: px(120.0),
+                    max_width: px(360.0),
+                    padding: px(12.0),
+                    gap: px(6.0),
+                    radius: px(8.0),
                 },
                 select: SelectTokens {
                     bg: white(),
@@ -1463,14 +1935,36 @@ impl ComponentTokens {
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    label_size: px(14.0),
+                    label_weight: FontWeight::MEDIUM,
                     description: (Rgba::try_from(
                         PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    description_size: px(13.0),
                     error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[6 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    error_size: px(13.0),
+                    slot_gap: px(8.0),
+                    slot_min_width: px(16.0),
+                    layout_gap_vertical: px(8.0),
+                    layout_gap_horizontal: px(12.0),
+                    horizontal_label_width: px(168.0),
+                    icon_size: px(14.0),
+                    option_size: px(14.0),
+                    option_padding_x: px(10.0),
+                    option_padding_y: px(8.0),
+                    option_check_size: px(12.0),
+                    dropdown_padding: px(6.0),
+                    dropdown_gap: px(4.0),
+                    dropdown_max_height: px(280.0),
+                    tag_size: px(12.0),
+                    tag_padding_x: px(8.0),
+                    tag_padding_y: px(3.0),
+                    tag_max_width: px(120.0),
+                    sizes: default_field_size_scale(),
                 },
                 modal: ModalTokens {
                     panel_bg: white(),
@@ -1488,6 +1982,17 @@ impl ComponentTokens {
                     body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    title_size: px(18.0),
+                    title_weight: FontWeight::SEMIBOLD,
+                    body_size: px(14.0),
+                    panel_radius: px(12.0),
+                    panel_padding: px(16.0),
+                    header_margin_bottom: px(8.0),
+                    body_margin_bottom: px(8.0),
+                    actions_margin_top: px(12.0),
+                    actions_gap: px(8.0),
+                    close_size: px(26.0),
+                    close_icon_size: px(14.0),
                 },
                 toast: ToastTokens {
                     info_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Blue)[0 as usize])
@@ -1555,6 +2060,14 @@ impl ComponentTokens {
                     body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    title_size: px(16.0),
+                    title_weight: FontWeight::SEMIBOLD,
+                    body_size: px(14.0),
+                    panel_padding: px(16.0),
+                    panel_radius: px(0.0),
+                    header_margin_bottom: px(8.0),
+                    close_size: px(28.0),
+                    close_icon_size: px(14.0),
                 },
                 app_shell: AppShellTokens { bg: white() },
                 title_bar: TitleBarTokens {
@@ -1570,6 +2083,21 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    title_size: px(14.0),
+                    title_weight: FontWeight::MEDIUM,
+                    windows_button_width: px(45.0),
+                    windows_icon_size: px(10.0),
+                    linux_button_width: px(28.0),
+                    linux_button_height: px(24.0),
+                    linux_buttons_gap: px(6.0),
+                    macos_controls_reserve: px(72.0),
+                    title_padding_right: px(12.0),
+                    title_max_width: px(320.0),
+                    title_min_width: px(72.0),
+                    platform_padding_left: px(12.0),
+                    platform_padding_right: px(12.0),
+                    controls_slot_gap: px(10.0),
+                    control_button_radius: px(6.0),
                 },
                 sidebar: SidebarTokens {
                     bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
@@ -1593,6 +2121,11 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    inline_radius: px(10.0),
+                    overlay_radius: px(18.0),
+                    section_padding: px(12.0),
+                    footer_size: px(14.0),
+                    scroll_padding: Size::Md,
                 },
                 text: TextTokens {
                     fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
@@ -1781,14 +2314,22 @@ impl ComponentTokens {
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    label_size: px(14.0),
+                    label_weight: FontWeight::MEDIUM,
                     description: (Rgba::try_from(
                         PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    description_size: px(13.0),
                     error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[6 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    error_size: px(13.0),
+                    layout_gap_vertical: px(8.0),
+                    layout_gap_horizontal: px(12.0),
+                    horizontal_label_width: px(168.0),
+                    sizes: default_field_size_scale(),
                 },
                 number_input: NumberInputTokens {
                     bg: white(),
@@ -1829,14 +2370,23 @@ impl ComponentTokens {
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    label_size: px(14.0),
+                    label_weight: FontWeight::MEDIUM,
                     description: (Rgba::try_from(
                         PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    description_size: px(13.0),
                     error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[6 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    error_size: px(13.0),
+                    controls_width: px(18.0),
+                    controls_height: px(12.0),
+                    controls_icon_size: px(12.0),
+                    controls_gap: px(8.0),
+                    sizes: default_field_size_scale(),
                 },
                 range_slider: RangeSliderTokens {
                     track_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
@@ -1855,6 +2405,11 @@ impl ComponentTokens {
                     value: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[7 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    label_size: px(14.0),
+                    value_size: px(14.0),
+                    header_gap_vertical: px(6.0),
+                    header_gap_horizontal: px(8.0),
+                    sizes: default_slider_size_scale(),
                 },
                 rating: RatingTokens {
                     active: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Yellow)[6 as usize])
@@ -1983,6 +2538,20 @@ impl ComponentTokens {
                     caption: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[6 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    caption_size: px(13.0),
+                    row_gap: px(0.0),
+                    pagination_summary_size: px(13.0),
+                    page_chip_size: px(12.0),
+                    page_chip_padding_x: px(8.0),
+                    page_chip_padding_y: px(4.0),
+                    page_chip_radius: px(6.0),
+                    page_chip_gap: px(4.0),
+                    pagination_items_gap: px(8.0),
+                    pagination_padding_x: px(12.0),
+                    pagination_padding_y: px(8.0),
+                    pagination_gap: px(8.0),
+                    virtualization_padding: px(4.0),
+                    sizes: default_table_size_scale(),
                 },
                 stepper: StepperTokens {
                     step_bg: white(),
@@ -2105,6 +2674,9 @@ impl ComponentTokens {
                     line: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    root_gap: px(2.0),
+                    children_gap: px(0.0),
+                    sizes: default_tree_size_scale(),
                 },
             },
             ColorScheme::Dark => Self {
@@ -2179,14 +2751,27 @@ impl ComponentTokens {
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[1 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    label_size: px(14.0),
+                    label_weight: FontWeight::MEDIUM,
                     description: (Rgba::try_from(
                         PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    description_size: px(13.0),
                     error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    error_size: px(13.0),
+                    slot_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    slot_gap: px(8.0),
+                    slot_min_width: px(16.0),
+                    layout_gap_vertical: px(8.0),
+                    layout_gap_horizontal: px(12.0),
+                    horizontal_label_width: px(168.0),
+                    sizes: default_field_size_scale(),
                 },
                 radio: RadioTokens {
                     control_bg: (Rgba::try_from(
@@ -2418,17 +3003,30 @@ impl ComponentTokens {
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    label_size: px(14.0),
                     description: (Rgba::try_from(
                         PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    description_size: px(13.0),
                     content: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    content_size: px(14.0),
                     chevron: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    chevron_size: px(14.0),
+                    stack_gap: px(8.0),
+                    header_gap: px(8.0),
+                    label_stack_gap: px(2.0),
+                    header_padding_x: px(12.0),
+                    header_padding_y: px(10.0),
+                    panel_gap: px(4.0),
+                    panel_padding_x: px(12.0),
+                    panel_padding_bottom: px(10.0),
+                    panel_padding_top: px(2.0),
                 },
                 menu: MenuTokens {
                     dropdown_bg: (Rgba::try_from(
@@ -2488,6 +3086,11 @@ impl ComponentTokens {
                     value: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    label_size: px(14.0),
+                    value_size: px(14.0),
+                    header_gap_vertical: px(6.0),
+                    header_gap_horizontal: px(8.0),
+                    sizes: default_slider_size_scale(),
                 },
                 overlay: OverlayTokens {
                     bg: (Rgba::try_from("#000000E6")
@@ -2529,6 +3132,11 @@ impl ComponentTokens {
                     border: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    text_size: px(12.0),
+                    padding_x: px(8.0),
+                    padding_y: px(5.0),
+                    radius: px(8.0),
+                    max_width: px(240.0),
                 },
                 hover_card: HoverCardTokens {
                     bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
@@ -2543,6 +3151,14 @@ impl ComponentTokens {
                     body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    title_size: px(15.0),
+                    title_weight: FontWeight::SEMIBOLD,
+                    body_size: px(14.0),
+                    min_width: px(120.0),
+                    max_width: px(360.0),
+                    padding: px(12.0),
+                    gap: px(6.0),
+                    radius: px(8.0),
                 },
                 select: SelectTokens {
                     bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
@@ -2607,14 +3223,36 @@ impl ComponentTokens {
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[1 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    label_size: px(14.0),
+                    label_weight: FontWeight::MEDIUM,
                     description: (Rgba::try_from(
                         PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    description_size: px(13.0),
                     error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    error_size: px(13.0),
+                    slot_gap: px(8.0),
+                    slot_min_width: px(16.0),
+                    layout_gap_vertical: px(8.0),
+                    layout_gap_horizontal: px(12.0),
+                    horizontal_label_width: px(168.0),
+                    icon_size: px(14.0),
+                    option_size: px(14.0),
+                    option_padding_x: px(10.0),
+                    option_padding_y: px(8.0),
+                    option_check_size: px(12.0),
+                    dropdown_padding: px(6.0),
+                    dropdown_gap: px(4.0),
+                    dropdown_max_height: px(280.0),
+                    tag_size: px(12.0),
+                    tag_padding_x: px(8.0),
+                    tag_padding_y: px(3.0),
+                    tag_max_width: px(120.0),
+                    sizes: default_field_size_scale(),
                 },
                 modal: ModalTokens {
                     panel_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
@@ -2634,6 +3272,17 @@ impl ComponentTokens {
                     body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    title_size: px(18.0),
+                    title_weight: FontWeight::SEMIBOLD,
+                    body_size: px(14.0),
+                    panel_radius: px(12.0),
+                    panel_padding: px(16.0),
+                    header_margin_bottom: px(8.0),
+                    body_margin_bottom: px(8.0),
+                    actions_margin_top: px(12.0),
+                    actions_gap: px(8.0),
+                    close_size: px(26.0),
+                    close_icon_size: px(14.0),
                 },
                 toast: ToastTokens {
                     info_bg: resolve_palette_hsla(PaletteKey::Blue, 4).opacity(0.15),
@@ -2679,6 +3328,14 @@ impl ComponentTokens {
                     body: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    title_size: px(16.0),
+                    title_weight: FontWeight::SEMIBOLD,
+                    body_size: px(14.0),
+                    panel_padding: px(16.0),
+                    panel_radius: px(0.0),
+                    header_margin_bottom: px(8.0),
+                    close_size: px(28.0),
+                    close_icon_size: px(14.0),
                 },
                 app_shell: AppShellTokens {
                     bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
@@ -2698,6 +3355,21 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    title_size: px(14.0),
+                    title_weight: FontWeight::MEDIUM,
+                    windows_button_width: px(45.0),
+                    windows_icon_size: px(10.0),
+                    linux_button_width: px(28.0),
+                    linux_button_height: px(24.0),
+                    linux_buttons_gap: px(6.0),
+                    macos_controls_reserve: px(72.0),
+                    title_padding_right: px(12.0),
+                    title_max_width: px(320.0),
+                    title_min_width: px(72.0),
+                    platform_padding_left: px(12.0),
+                    platform_padding_right: px(12.0),
+                    controls_slot_gap: px(10.0),
+                    control_button_radius: px(6.0),
                 },
                 sidebar: SidebarTokens {
                     bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
@@ -2721,6 +3393,11 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    inline_radius: px(10.0),
+                    overlay_radius: px(18.0),
+                    section_padding: px(12.0),
+                    footer_size: px(14.0),
+                    scroll_padding: Size::Md,
                 },
                 text: TextTokens {
                     fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
@@ -2921,14 +3598,22 @@ impl ComponentTokens {
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[1 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    label_size: px(14.0),
+                    label_weight: FontWeight::MEDIUM,
                     description: (Rgba::try_from(
                         PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    description_size: px(13.0),
                     error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    error_size: px(13.0),
+                    layout_gap_vertical: px(8.0),
+                    layout_gap_horizontal: px(12.0),
+                    horizontal_label_width: px(168.0),
+                    sizes: default_field_size_scale(),
                 },
                 number_input: NumberInputTokens {
                     bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
@@ -2971,14 +3656,23 @@ impl ComponentTokens {
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[1 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    label_size: px(14.0),
+                    label_weight: FontWeight::MEDIUM,
                     description: (Rgba::try_from(
                         PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    description_size: px(13.0),
                     error: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Red)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    error_size: px(13.0),
+                    controls_width: px(18.0),
+                    controls_height: px(12.0),
+                    controls_icon_size: px(12.0),
+                    controls_gap: px(8.0),
+                    sizes: default_field_size_scale(),
                 },
                 range_slider: RangeSliderTokens {
                     track_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[5 as usize])
@@ -2999,6 +3693,11 @@ impl ComponentTokens {
                     value: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    label_size: px(14.0),
+                    value_size: px(14.0),
+                    header_gap_vertical: px(6.0),
+                    header_gap_horizontal: px(8.0),
+                    sizes: default_slider_size_scale(),
                 },
                 rating: RatingTokens {
                     active: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Yellow)[4 as usize])
@@ -3137,6 +3836,20 @@ impl ComponentTokens {
                     caption: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[5 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    caption_size: px(13.0),
+                    row_gap: px(0.0),
+                    pagination_summary_size: px(13.0),
+                    page_chip_size: px(12.0),
+                    page_chip_padding_x: px(8.0),
+                    page_chip_padding_y: px(4.0),
+                    page_chip_radius: px(6.0),
+                    page_chip_gap: px(4.0),
+                    pagination_items_gap: px(8.0),
+                    pagination_padding_x: px(12.0),
+                    pagination_padding_y: px(8.0),
+                    pagination_gap: px(8.0),
+                    virtualization_padding: px(4.0),
+                    sizes: default_table_size_scale(),
                 },
                 stepper: StepperTokens {
                     step_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[7 as usize])
@@ -3267,6 +3980,9 @@ impl ComponentTokens {
                     line: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    root_gap: px(2.0),
+                    children_gap: px(0.0),
+                    sizes: default_tree_size_scale(),
                 },
             },
         }
@@ -3555,8 +4271,19 @@ pub struct InputOverrides {
     pub border_focus: Option<Hsla>,
     pub border_error: Option<Hsla>,
     pub label: Option<Hsla>,
+    pub label_size: Option<Pixels>,
+    pub label_weight: Option<FontWeight>,
     pub description: Option<Hsla>,
+    pub description_size: Option<Pixels>,
     pub error: Option<Hsla>,
+    pub error_size: Option<Pixels>,
+    pub slot_fg: Option<Hsla>,
+    pub slot_gap: Option<Pixels>,
+    pub slot_min_width: Option<Pixels>,
+    pub layout_gap_vertical: Option<Pixels>,
+    pub layout_gap_horizontal: Option<Pixels>,
+    pub horizontal_label_width: Option<Pixels>,
+    pub sizes: Option<FieldSizeScale>,
 }
 
 impl InputOverrides {
@@ -3582,11 +4309,44 @@ impl InputOverrides {
         if let Some(value) = &self.label {
             current.label = value.clone();
         }
+        if let Some(value) = self.label_size {
+            current.label_size = value;
+        }
+        if let Some(value) = self.label_weight {
+            current.label_weight = value;
+        }
         if let Some(value) = &self.description {
             current.description = value.clone();
         }
+        if let Some(value) = self.description_size {
+            current.description_size = value;
+        }
         if let Some(value) = &self.error {
             current.error = value.clone();
+        }
+        if let Some(value) = self.error_size {
+            current.error_size = value;
+        }
+        if let Some(value) = &self.slot_fg {
+            current.slot_fg = value.clone();
+        }
+        if let Some(value) = self.slot_gap {
+            current.slot_gap = value;
+        }
+        if let Some(value) = self.slot_min_width {
+            current.slot_min_width = value;
+        }
+        if let Some(value) = self.layout_gap_vertical {
+            current.layout_gap_vertical = value;
+        }
+        if let Some(value) = self.layout_gap_horizontal {
+            current.layout_gap_horizontal = value;
+        }
+        if let Some(value) = self.horizontal_label_width {
+            current.horizontal_label_width = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
         }
         current
     }
@@ -3855,9 +4615,22 @@ pub struct AccordionOverrides {
     pub item_bg: Option<Hsla>,
     pub item_border: Option<Hsla>,
     pub label: Option<Hsla>,
+    pub label_size: Option<Pixels>,
     pub description: Option<Hsla>,
+    pub description_size: Option<Pixels>,
     pub content: Option<Hsla>,
+    pub content_size: Option<Pixels>,
     pub chevron: Option<Hsla>,
+    pub chevron_size: Option<Pixels>,
+    pub stack_gap: Option<Pixels>,
+    pub header_gap: Option<Pixels>,
+    pub label_stack_gap: Option<Pixels>,
+    pub header_padding_x: Option<Pixels>,
+    pub header_padding_y: Option<Pixels>,
+    pub panel_gap: Option<Pixels>,
+    pub panel_padding_x: Option<Pixels>,
+    pub panel_padding_bottom: Option<Pixels>,
+    pub panel_padding_top: Option<Pixels>,
 }
 
 impl AccordionOverrides {
@@ -3871,14 +4644,53 @@ impl AccordionOverrides {
         if let Some(value) = &self.label {
             current.label = value.clone();
         }
+        if let Some(value) = self.label_size {
+            current.label_size = value;
+        }
         if let Some(value) = &self.description {
             current.description = value.clone();
+        }
+        if let Some(value) = self.description_size {
+            current.description_size = value;
         }
         if let Some(value) = &self.content {
             current.content = value.clone();
         }
+        if let Some(value) = self.content_size {
+            current.content_size = value;
+        }
         if let Some(value) = &self.chevron {
             current.chevron = value.clone();
+        }
+        if let Some(value) = self.chevron_size {
+            current.chevron_size = value;
+        }
+        if let Some(value) = self.stack_gap {
+            current.stack_gap = value;
+        }
+        if let Some(value) = self.header_gap {
+            current.header_gap = value;
+        }
+        if let Some(value) = self.label_stack_gap {
+            current.label_stack_gap = value;
+        }
+        if let Some(value) = self.header_padding_x {
+            current.header_padding_x = value;
+        }
+        if let Some(value) = self.header_padding_y {
+            current.header_padding_y = value;
+        }
+        if let Some(value) = self.panel_gap {
+            current.panel_gap = value;
+        }
+        if let Some(value) = self.panel_padding_x {
+            current.panel_padding_x = value;
+        }
+        if let Some(value) = self.panel_padding_bottom {
+            current.panel_padding_bottom = value;
+        }
+        if let Some(value) = self.panel_padding_top {
+            current.panel_padding_top = value;
         }
         current
     }
@@ -3948,6 +4760,11 @@ pub struct SliderOverrides {
     pub thumb_border: Option<Hsla>,
     pub label: Option<Hsla>,
     pub value: Option<Hsla>,
+    pub label_size: Option<Pixels>,
+    pub value_size: Option<Pixels>,
+    pub header_gap_vertical: Option<Pixels>,
+    pub header_gap_horizontal: Option<Pixels>,
+    pub sizes: Option<SliderSizeScale>,
 }
 
 impl SliderOverrides {
@@ -3969,6 +4786,21 @@ impl SliderOverrides {
         }
         if let Some(value) = &self.value {
             current.value = value.clone();
+        }
+        if let Some(value) = self.label_size {
+            current.label_size = value;
+        }
+        if let Some(value) = self.value_size {
+            current.value_size = value;
+        }
+        if let Some(value) = self.header_gap_vertical {
+            current.header_gap_vertical = value;
+        }
+        if let Some(value) = self.header_gap_horizontal {
+            current.header_gap_horizontal = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
         }
         current
     }
@@ -4041,6 +4873,11 @@ pub struct TooltipOverrides {
     pub bg: Option<Hsla>,
     pub fg: Option<Hsla>,
     pub border: Option<Hsla>,
+    pub text_size: Option<Pixels>,
+    pub padding_x: Option<Pixels>,
+    pub padding_y: Option<Pixels>,
+    pub radius: Option<Pixels>,
+    pub max_width: Option<Pixels>,
 }
 
 impl TooltipOverrides {
@@ -4054,6 +4891,21 @@ impl TooltipOverrides {
         if let Some(value) = &self.border {
             current.border = value.clone();
         }
+        if let Some(value) = self.text_size {
+            current.text_size = value;
+        }
+        if let Some(value) = self.padding_x {
+            current.padding_x = value;
+        }
+        if let Some(value) = self.padding_y {
+            current.padding_y = value;
+        }
+        if let Some(value) = self.radius {
+            current.radius = value;
+        }
+        if let Some(value) = self.max_width {
+            current.max_width = value;
+        }
         current
     }
 }
@@ -4064,6 +4916,14 @@ pub struct HoverCardOverrides {
     pub border: Option<Hsla>,
     pub title: Option<Hsla>,
     pub body: Option<Hsla>,
+    pub title_size: Option<Pixels>,
+    pub title_weight: Option<FontWeight>,
+    pub body_size: Option<Pixels>,
+    pub min_width: Option<Pixels>,
+    pub max_width: Option<Pixels>,
+    pub padding: Option<Pixels>,
+    pub gap: Option<Pixels>,
+    pub radius: Option<Pixels>,
 }
 
 impl HoverCardOverrides {
@@ -4079,6 +4939,30 @@ impl HoverCardOverrides {
         }
         if let Some(value) = &self.body {
             current.body = value.clone();
+        }
+        if let Some(value) = self.title_size {
+            current.title_size = value;
+        }
+        if let Some(value) = self.title_weight {
+            current.title_weight = value;
+        }
+        if let Some(value) = self.body_size {
+            current.body_size = value;
+        }
+        if let Some(value) = self.min_width {
+            current.min_width = value;
+        }
+        if let Some(value) = self.max_width {
+            current.max_width = value;
+        }
+        if let Some(value) = self.padding {
+            current.padding = value;
+        }
+        if let Some(value) = self.gap {
+            current.gap = value;
+        }
+        if let Some(value) = self.radius {
+            current.radius = value;
         }
         current
     }
@@ -4102,8 +4986,30 @@ pub struct SelectOverrides {
     pub tag_border: Option<Hsla>,
     pub icon: Option<Hsla>,
     pub label: Option<Hsla>,
+    pub label_size: Option<Pixels>,
+    pub label_weight: Option<FontWeight>,
     pub description: Option<Hsla>,
+    pub description_size: Option<Pixels>,
     pub error: Option<Hsla>,
+    pub error_size: Option<Pixels>,
+    pub slot_gap: Option<Pixels>,
+    pub slot_min_width: Option<Pixels>,
+    pub layout_gap_vertical: Option<Pixels>,
+    pub layout_gap_horizontal: Option<Pixels>,
+    pub horizontal_label_width: Option<Pixels>,
+    pub icon_size: Option<Pixels>,
+    pub option_size: Option<Pixels>,
+    pub option_padding_x: Option<Pixels>,
+    pub option_padding_y: Option<Pixels>,
+    pub option_check_size: Option<Pixels>,
+    pub dropdown_padding: Option<Pixels>,
+    pub dropdown_gap: Option<Pixels>,
+    pub dropdown_max_height: Option<Pixels>,
+    pub tag_size: Option<Pixels>,
+    pub tag_padding_x: Option<Pixels>,
+    pub tag_padding_y: Option<Pixels>,
+    pub tag_max_width: Option<Pixels>,
+    pub sizes: Option<FieldSizeScale>,
 }
 
 impl SelectOverrides {
@@ -4156,11 +5062,77 @@ impl SelectOverrides {
         if let Some(value) = &self.label {
             current.label = value.clone();
         }
+        if let Some(value) = self.label_size {
+            current.label_size = value;
+        }
+        if let Some(value) = self.label_weight {
+            current.label_weight = value;
+        }
         if let Some(value) = &self.description {
             current.description = value.clone();
         }
+        if let Some(value) = self.description_size {
+            current.description_size = value;
+        }
         if let Some(value) = &self.error {
             current.error = value.clone();
+        }
+        if let Some(value) = self.error_size {
+            current.error_size = value;
+        }
+        if let Some(value) = self.slot_gap {
+            current.slot_gap = value;
+        }
+        if let Some(value) = self.slot_min_width {
+            current.slot_min_width = value;
+        }
+        if let Some(value) = self.layout_gap_vertical {
+            current.layout_gap_vertical = value;
+        }
+        if let Some(value) = self.layout_gap_horizontal {
+            current.layout_gap_horizontal = value;
+        }
+        if let Some(value) = self.horizontal_label_width {
+            current.horizontal_label_width = value;
+        }
+        if let Some(value) = self.icon_size {
+            current.icon_size = value;
+        }
+        if let Some(value) = self.option_size {
+            current.option_size = value;
+        }
+        if let Some(value) = self.option_padding_x {
+            current.option_padding_x = value;
+        }
+        if let Some(value) = self.option_padding_y {
+            current.option_padding_y = value;
+        }
+        if let Some(value) = self.option_check_size {
+            current.option_check_size = value;
+        }
+        if let Some(value) = self.dropdown_padding {
+            current.dropdown_padding = value;
+        }
+        if let Some(value) = self.dropdown_gap {
+            current.dropdown_gap = value;
+        }
+        if let Some(value) = self.dropdown_max_height {
+            current.dropdown_max_height = value;
+        }
+        if let Some(value) = self.tag_size {
+            current.tag_size = value;
+        }
+        if let Some(value) = self.tag_padding_x {
+            current.tag_padding_x = value;
+        }
+        if let Some(value) = self.tag_padding_y {
+            current.tag_padding_y = value;
+        }
+        if let Some(value) = self.tag_max_width {
+            current.tag_max_width = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
         }
         current
     }
@@ -4173,6 +5145,17 @@ pub struct ModalOverrides {
     pub overlay_bg: Option<Hsla>,
     pub title: Option<Hsla>,
     pub body: Option<Hsla>,
+    pub title_size: Option<Pixels>,
+    pub title_weight: Option<FontWeight>,
+    pub body_size: Option<Pixels>,
+    pub panel_radius: Option<Pixels>,
+    pub panel_padding: Option<Pixels>,
+    pub header_margin_bottom: Option<Pixels>,
+    pub body_margin_bottom: Option<Pixels>,
+    pub actions_margin_top: Option<Pixels>,
+    pub actions_gap: Option<Pixels>,
+    pub close_size: Option<Pixels>,
+    pub close_icon_size: Option<Pixels>,
 }
 
 impl ModalOverrides {
@@ -4191,6 +5174,39 @@ impl ModalOverrides {
         }
         if let Some(value) = &self.body {
             current.body = value.clone();
+        }
+        if let Some(value) = self.title_size {
+            current.title_size = value;
+        }
+        if let Some(value) = self.title_weight {
+            current.title_weight = value;
+        }
+        if let Some(value) = self.body_size {
+            current.body_size = value;
+        }
+        if let Some(value) = self.panel_radius {
+            current.panel_radius = value;
+        }
+        if let Some(value) = self.panel_padding {
+            current.panel_padding = value;
+        }
+        if let Some(value) = self.header_margin_bottom {
+            current.header_margin_bottom = value;
+        }
+        if let Some(value) = self.body_margin_bottom {
+            current.body_margin_bottom = value;
+        }
+        if let Some(value) = self.actions_margin_top {
+            current.actions_margin_top = value;
+        }
+        if let Some(value) = self.actions_gap {
+            current.actions_gap = value;
+        }
+        if let Some(value) = self.close_size {
+            current.close_size = value;
+        }
+        if let Some(value) = self.close_icon_size {
+            current.close_icon_size = value;
         }
         current
     }
@@ -4281,6 +5297,14 @@ pub struct DrawerOverrides {
     pub overlay_bg: Option<Hsla>,
     pub title: Option<Hsla>,
     pub body: Option<Hsla>,
+    pub title_size: Option<Pixels>,
+    pub title_weight: Option<FontWeight>,
+    pub body_size: Option<Pixels>,
+    pub panel_padding: Option<Pixels>,
+    pub panel_radius: Option<Pixels>,
+    pub header_margin_bottom: Option<Pixels>,
+    pub close_size: Option<Pixels>,
+    pub close_icon_size: Option<Pixels>,
 }
 
 impl DrawerOverrides {
@@ -4299,6 +5323,30 @@ impl DrawerOverrides {
         }
         if let Some(value) = &self.body {
             current.body = value.clone();
+        }
+        if let Some(value) = self.title_size {
+            current.title_size = value;
+        }
+        if let Some(value) = self.title_weight {
+            current.title_weight = value;
+        }
+        if let Some(value) = self.body_size {
+            current.body_size = value;
+        }
+        if let Some(value) = self.panel_padding {
+            current.panel_padding = value;
+        }
+        if let Some(value) = self.panel_radius {
+            current.panel_radius = value;
+        }
+        if let Some(value) = self.header_margin_bottom {
+            current.header_margin_bottom = value;
+        }
+        if let Some(value) = self.close_size {
+            current.close_size = value;
+        }
+        if let Some(value) = self.close_icon_size {
+            current.close_icon_size = value;
         }
         current
     }
@@ -4324,6 +5372,21 @@ pub struct TitleBarOverrides {
     pub border: Option<Hsla>,
     pub fg: Option<Hsla>,
     pub controls_bg: Option<Hsla>,
+    pub title_size: Option<Pixels>,
+    pub title_weight: Option<FontWeight>,
+    pub windows_button_width: Option<Pixels>,
+    pub windows_icon_size: Option<Pixels>,
+    pub linux_button_width: Option<Pixels>,
+    pub linux_button_height: Option<Pixels>,
+    pub linux_buttons_gap: Option<Pixels>,
+    pub macos_controls_reserve: Option<Pixels>,
+    pub title_padding_right: Option<Pixels>,
+    pub title_max_width: Option<Pixels>,
+    pub title_min_width: Option<Pixels>,
+    pub platform_padding_left: Option<Pixels>,
+    pub platform_padding_right: Option<Pixels>,
+    pub controls_slot_gap: Option<Pixels>,
+    pub control_button_radius: Option<Pixels>,
 }
 
 impl TitleBarOverrides {
@@ -4340,6 +5403,51 @@ impl TitleBarOverrides {
         if let Some(value) = &self.controls_bg {
             current.controls_bg = value.clone();
         }
+        if let Some(value) = self.title_size {
+            current.title_size = value;
+        }
+        if let Some(value) = self.title_weight {
+            current.title_weight = value;
+        }
+        if let Some(value) = self.windows_button_width {
+            current.windows_button_width = value;
+        }
+        if let Some(value) = self.windows_icon_size {
+            current.windows_icon_size = value;
+        }
+        if let Some(value) = self.linux_button_width {
+            current.linux_button_width = value;
+        }
+        if let Some(value) = self.linux_button_height {
+            current.linux_button_height = value;
+        }
+        if let Some(value) = self.linux_buttons_gap {
+            current.linux_buttons_gap = value;
+        }
+        if let Some(value) = self.macos_controls_reserve {
+            current.macos_controls_reserve = value;
+        }
+        if let Some(value) = self.title_padding_right {
+            current.title_padding_right = value;
+        }
+        if let Some(value) = self.title_max_width {
+            current.title_max_width = value;
+        }
+        if let Some(value) = self.title_min_width {
+            current.title_min_width = value;
+        }
+        if let Some(value) = self.platform_padding_left {
+            current.platform_padding_left = value;
+        }
+        if let Some(value) = self.platform_padding_right {
+            current.platform_padding_right = value;
+        }
+        if let Some(value) = self.controls_slot_gap {
+            current.controls_slot_gap = value;
+        }
+        if let Some(value) = self.control_button_radius {
+            current.control_button_radius = value;
+        }
         current
     }
 }
@@ -4351,6 +5459,11 @@ pub struct SidebarOverrides {
     pub header_fg: Option<Hsla>,
     pub content_fg: Option<Hsla>,
     pub footer_fg: Option<Hsla>,
+    pub inline_radius: Option<Pixels>,
+    pub overlay_radius: Option<Pixels>,
+    pub section_padding: Option<Pixels>,
+    pub footer_size: Option<Pixels>,
+    pub scroll_padding: Option<Size>,
 }
 
 impl SidebarOverrides {
@@ -4369,6 +5482,21 @@ impl SidebarOverrides {
         }
         if let Some(value) = &self.footer_fg {
             current.footer_fg = value.clone();
+        }
+        if let Some(value) = self.inline_radius {
+            current.inline_radius = value;
+        }
+        if let Some(value) = self.overlay_radius {
+            current.overlay_radius = value;
+        }
+        if let Some(value) = self.section_padding {
+            current.section_padding = value;
+        }
+        if let Some(value) = self.footer_size {
+            current.footer_size = value;
+        }
+        if let Some(value) = self.scroll_padding {
+            current.scroll_padding = value;
         }
         current
     }
@@ -4615,8 +5743,16 @@ pub struct TextareaOverrides {
     pub border_focus: Option<Hsla>,
     pub border_error: Option<Hsla>,
     pub label: Option<Hsla>,
+    pub label_size: Option<Pixels>,
+    pub label_weight: Option<FontWeight>,
     pub description: Option<Hsla>,
+    pub description_size: Option<Pixels>,
     pub error: Option<Hsla>,
+    pub error_size: Option<Pixels>,
+    pub layout_gap_vertical: Option<Pixels>,
+    pub layout_gap_horizontal: Option<Pixels>,
+    pub horizontal_label_width: Option<Pixels>,
+    pub sizes: Option<FieldSizeScale>,
 }
 
 impl TextareaOverrides {
@@ -4642,11 +5778,35 @@ impl TextareaOverrides {
         if let Some(value) = &self.label {
             current.label = value.clone();
         }
+        if let Some(value) = self.label_size {
+            current.label_size = value;
+        }
+        if let Some(value) = self.label_weight {
+            current.label_weight = value;
+        }
         if let Some(value) = &self.description {
             current.description = value.clone();
         }
+        if let Some(value) = self.description_size {
+            current.description_size = value;
+        }
         if let Some(value) = &self.error {
             current.error = value.clone();
+        }
+        if let Some(value) = self.error_size {
+            current.error_size = value;
+        }
+        if let Some(value) = self.layout_gap_vertical {
+            current.layout_gap_vertical = value;
+        }
+        if let Some(value) = self.layout_gap_horizontal {
+            current.layout_gap_horizontal = value;
+        }
+        if let Some(value) = self.horizontal_label_width {
+            current.horizontal_label_width = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
         }
         current
     }
@@ -4664,8 +5824,17 @@ pub struct NumberInputOverrides {
     pub controls_fg: Option<Hsla>,
     pub controls_border: Option<Hsla>,
     pub label: Option<Hsla>,
+    pub label_size: Option<Pixels>,
+    pub label_weight: Option<FontWeight>,
     pub description: Option<Hsla>,
+    pub description_size: Option<Pixels>,
     pub error: Option<Hsla>,
+    pub error_size: Option<Pixels>,
+    pub controls_width: Option<Pixels>,
+    pub controls_height: Option<Pixels>,
+    pub controls_icon_size: Option<Pixels>,
+    pub controls_gap: Option<Pixels>,
+    pub sizes: Option<FieldSizeScale>,
 }
 
 impl NumberInputOverrides {
@@ -4700,11 +5869,38 @@ impl NumberInputOverrides {
         if let Some(value) = &self.label {
             current.label = value.clone();
         }
+        if let Some(value) = self.label_size {
+            current.label_size = value;
+        }
+        if let Some(value) = self.label_weight {
+            current.label_weight = value;
+        }
         if let Some(value) = &self.description {
             current.description = value.clone();
         }
+        if let Some(value) = self.description_size {
+            current.description_size = value;
+        }
         if let Some(value) = &self.error {
             current.error = value.clone();
+        }
+        if let Some(value) = self.error_size {
+            current.error_size = value;
+        }
+        if let Some(value) = self.controls_width {
+            current.controls_width = value;
+        }
+        if let Some(value) = self.controls_height {
+            current.controls_height = value;
+        }
+        if let Some(value) = self.controls_icon_size {
+            current.controls_icon_size = value;
+        }
+        if let Some(value) = self.controls_gap {
+            current.controls_gap = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
         }
         current
     }
@@ -4718,6 +5914,11 @@ pub struct RangeSliderOverrides {
     pub thumb_border: Option<Hsla>,
     pub label: Option<Hsla>,
     pub value: Option<Hsla>,
+    pub label_size: Option<Pixels>,
+    pub value_size: Option<Pixels>,
+    pub header_gap_vertical: Option<Pixels>,
+    pub header_gap_horizontal: Option<Pixels>,
+    pub sizes: Option<SliderSizeScale>,
 }
 
 impl RangeSliderOverrides {
@@ -4739,6 +5940,21 @@ impl RangeSliderOverrides {
         }
         if let Some(value) = &self.value {
             current.value = value.clone();
+        }
+        if let Some(value) = self.label_size {
+            current.label_size = value;
+        }
+        if let Some(value) = self.value_size {
+            current.value_size = value;
+        }
+        if let Some(value) = self.header_gap_vertical {
+            current.header_gap_vertical = value;
+        }
+        if let Some(value) = self.header_gap_horizontal {
+            current.header_gap_horizontal = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
         }
         current
     }
@@ -4890,6 +6106,20 @@ pub struct TableOverrides {
     pub row_border: Option<Hsla>,
     pub cell_fg: Option<Hsla>,
     pub caption: Option<Hsla>,
+    pub caption_size: Option<Pixels>,
+    pub row_gap: Option<Pixels>,
+    pub pagination_summary_size: Option<Pixels>,
+    pub page_chip_size: Option<Pixels>,
+    pub page_chip_padding_x: Option<Pixels>,
+    pub page_chip_padding_y: Option<Pixels>,
+    pub page_chip_radius: Option<Pixels>,
+    pub page_chip_gap: Option<Pixels>,
+    pub pagination_items_gap: Option<Pixels>,
+    pub pagination_padding_x: Option<Pixels>,
+    pub pagination_padding_y: Option<Pixels>,
+    pub pagination_gap: Option<Pixels>,
+    pub virtualization_padding: Option<Pixels>,
+    pub sizes: Option<TableSizeScale>,
 }
 
 impl TableOverrides {
@@ -4917,6 +6147,48 @@ impl TableOverrides {
         }
         if let Some(value) = &self.caption {
             current.caption = value.clone();
+        }
+        if let Some(value) = self.caption_size {
+            current.caption_size = value;
+        }
+        if let Some(value) = self.row_gap {
+            current.row_gap = value;
+        }
+        if let Some(value) = self.pagination_summary_size {
+            current.pagination_summary_size = value;
+        }
+        if let Some(value) = self.page_chip_size {
+            current.page_chip_size = value;
+        }
+        if let Some(value) = self.page_chip_padding_x {
+            current.page_chip_padding_x = value;
+        }
+        if let Some(value) = self.page_chip_padding_y {
+            current.page_chip_padding_y = value;
+        }
+        if let Some(value) = self.page_chip_radius {
+            current.page_chip_radius = value;
+        }
+        if let Some(value) = self.page_chip_gap {
+            current.page_chip_gap = value;
+        }
+        if let Some(value) = self.pagination_items_gap {
+            current.pagination_items_gap = value;
+        }
+        if let Some(value) = self.pagination_padding_x {
+            current.pagination_padding_x = value;
+        }
+        if let Some(value) = self.pagination_padding_y {
+            current.pagination_padding_y = value;
+        }
+        if let Some(value) = self.pagination_gap {
+            current.pagination_gap = value;
+        }
+        if let Some(value) = self.virtualization_padding {
+            current.virtualization_padding = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
         }
         current
     }
@@ -5062,6 +6334,9 @@ pub struct TreeOverrides {
     pub row_hover_bg: Option<Hsla>,
     pub row_disabled_fg: Option<Hsla>,
     pub line: Option<Hsla>,
+    pub root_gap: Option<Pixels>,
+    pub children_gap: Option<Pixels>,
+    pub sizes: Option<TreeSizeScale>,
 }
 
 impl TreeOverrides {
@@ -5083,6 +6358,15 @@ impl TreeOverrides {
         }
         if let Some(value) = &self.line {
             current.line = value.clone();
+        }
+        if let Some(value) = self.root_gap {
+            current.root_gap = value;
+        }
+        if let Some(value) = self.children_gap {
+            current.children_gap = value;
+        }
+        if let Some(value) = self.sizes {
+            current.sizes = value;
         }
         current
     }
@@ -5357,5 +6641,28 @@ mod tests {
             resolve_palette_hsla(PaletteKey::Red, 4).opacity(0.15)
         );
         assert_eq!(toast.error_fg, resolve_palette_hsla(PaletteKey::Red, 4));
+    }
+
+    #[test]
+    fn input_dimension_overrides_are_applied() {
+        let mut scale = default_field_size_scale();
+        scale.md.font_size = px(17.0);
+        scale.md.padding_x = px(13.0);
+
+        let themed = Theme::default().with_overrides(|overrides| {
+            overrides.input(|input| {
+                input
+                    .label_size(px(15.0))
+                    .horizontal_label_width(px(196.0))
+                    .slot_gap(px(10.0))
+                    .sizes(scale)
+            })
+        });
+
+        assert_eq!(themed.components.input.label_size, px(15.0));
+        assert_eq!(themed.components.input.horizontal_label_width, px(196.0));
+        assert_eq!(themed.components.input.slot_gap, px(10.0));
+        assert_eq!(themed.components.input.sizes.md.font_size, px(17.0));
+        assert_eq!(themed.components.input.sizes.md.padding_x, px(13.0));
     }
 }

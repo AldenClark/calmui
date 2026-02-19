@@ -11,9 +11,9 @@ use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
 
 use super::Stack;
-use super::control;
 use super::icon::Icon;
 use super::transition::TransitionExt;
+use super::tree_state::{self, TreeVisibleNode};
 use super::utils::{apply_radius, resolve_hsla};
 
 type SelectHandler = Rc<dyn Fn(Option<SharedString>, &mut Window, &mut gpui::App)>;
@@ -174,17 +174,6 @@ impl Tree {
         self
     }
 
-    fn resolved_value(&self) -> Option<SharedString> {
-        control::optional_text_state(
-            &self.id,
-            "value",
-            self.value_controlled
-                .then_some(self.value.as_ref().map(|value| value.to_string())),
-            self.default_value.as_ref().map(|value| value.to_string()),
-        )
-        .map(SharedString::from)
-    }
-
     fn collect_default_expanded(nodes: &[TreeNode], output: &mut Vec<SharedString>) {
         for node in nodes {
             if node.default_expanded {
@@ -193,45 +182,6 @@ impl Tree {
             if !node.children.is_empty() {
                 Self::collect_default_expanded(&node.children, output);
             }
-        }
-    }
-
-    fn resolved_expanded(&self) -> Vec<SharedString> {
-        let controlled = if self.expanded_controlled {
-            Some(
-                self.expanded_values
-                    .iter()
-                    .map(|value| value.to_string())
-                    .collect::<Vec<_>>(),
-            )
-        } else {
-            None
-        };
-
-        let default = if self.default_expanded_values.is_empty() {
-            let mut values = Vec::new();
-            Self::collect_default_expanded(&self.nodes, &mut values);
-            values
-        } else {
-            self.default_expanded_values.clone()
-        }
-        .into_iter()
-        .map(|value| value.to_string())
-        .collect::<Vec<_>>();
-
-        control::list_state(&self.id, "expanded", controlled, default)
-            .into_iter()
-            .map(SharedString::from)
-            .collect()
-    }
-
-    fn indent_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 14.0,
-            Size::Sm => 16.0,
-            Size::Md => 18.0,
-            Size::Lg => 20.0,
-            Size::Xl => 22.0,
         }
     }
 
@@ -261,7 +211,6 @@ impl Tree {
                 parent: parent.map(ToOwned::to_owned),
                 disabled: node.disabled,
                 has_children: !node.children.is_empty(),
-                expanded: is_expanded,
                 first_child,
             });
             if is_expanded && !node.children.is_empty() {
@@ -308,16 +257,6 @@ pub enum TreeTogglePosition {
     Right,
 }
 
-#[derive(Clone, Debug)]
-struct TreeVisibleNode {
-    value: String,
-    parent: Option<String>,
-    disabled: bool,
-    has_children: bool,
-    expanded: bool,
-    first_child: Option<String>,
-}
-
 #[derive(Clone)]
 struct TreeRenderCtx {
     tree_id: ComponentId,
@@ -330,7 +269,7 @@ struct TreeRenderCtx {
     expanded_controlled: bool,
     show_lines: bool,
     toggle_position: TreeTogglePosition,
-    indent_px: f32,
+    size_preset: crate::theme::TreeSizePreset,
     radius: Radius,
     selected_bg: gpui::Hsla,
     on_select: Option<SelectHandler>,
@@ -338,15 +277,6 @@ struct TreeRenderCtx {
 }
 
 impl TreeRenderCtx {
-    fn toggled_values(mut current: Vec<String>, value: &str) -> Vec<String> {
-        if let Some(index) = current.iter().position(|item| item == value) {
-            current.remove(index);
-        } else {
-            current.push(value.to_string());
-        }
-        current
-    }
-
     fn render_node(
         &self,
         window: &gpui::Window,
@@ -367,10 +297,10 @@ impl TreeRenderCtx {
             .w_full()
             .flex()
             .items_center()
-            .gap_1()
-            .pl(px(depth as f32 * self.indent_px))
-            .pr(px(6.0))
-            .py(px(4.0))
+            .gap(self.size_preset.row_inner_gap)
+            .pl(px(depth as f32 * f32::from(self.size_preset.indent)))
+            .pr(self.size_preset.row_padding_right)
+            .py(self.size_preset.row_padding_y)
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(if is_selected {
                 resolve_hsla(&self.theme, &self.tokens.row_selected_fg)
@@ -393,8 +323,8 @@ impl TreeRenderCtx {
 
         let mut toggle = div()
             .id(self.tree_id.slot_index("toggle", path.clone()))
-            .w(px(16.0))
-            .h(px(16.0))
+            .w(self.size_preset.toggle_size)
+            .h(self.size_preset.toggle_size)
             .flex()
             .items_center()
             .justify_center();
@@ -406,7 +336,7 @@ impl TreeRenderCtx {
                     "chevron-right"
                 })
                 .with_id(self.tree_id.slot_index("chevron", path.clone()))
-                .size(13.0),
+                .size(f32::from(self.size_preset.toggle_icon_size)),
             );
             if !node.disabled {
                 let tree_id = self.tree_id.clone();
@@ -417,27 +347,24 @@ impl TreeRenderCtx {
                 toggle = toggle
                     .cursor_pointer()
                     .on_click(move |_: &ClickEvent, window, cx| {
-                        let current = if controlled {
-                            expanded_snapshot.clone()
-                        } else {
-                            control::list_state(
-                                &tree_id,
-                                "expanded",
-                                None,
-                                expanded_snapshot.clone(),
-                            )
-                        };
-                        let next = Self::toggled_values(current, value.as_ref());
-                        if !controlled {
-                            control::set_list_state(&tree_id, "expanded", next.clone());
-                            window.refresh();
-                        }
+                        let current = tree_state::resolve_expanded(
+                            &tree_id,
+                            controlled,
+                            expanded_snapshot.clone(),
+                            expanded_snapshot.clone(),
+                        );
+                        let next = tree_state::toggled_values(current, value.as_ref());
+                        let should_refresh =
+                            tree_state::apply_expanded(&tree_id, controlled, next.clone());
                         if let Some(handler) = on_expanded_change.as_ref() {
                             (handler)(
                                 next.into_iter().map(SharedString::from).collect(),
                                 window,
                                 cx,
                             );
+                        }
+                        if should_refresh {
+                            window.refresh();
                         }
                     });
             }
@@ -447,7 +374,7 @@ impl TreeRenderCtx {
             Some(
                 div()
                     .id(self.tree_id.slot_index("line-h", path.clone()))
-                    .w(px(8.0))
+                    .w(self.size_preset.connector_stub_width)
                     .h(super::utils::hairline_px(window))
                     .bg(resolve_hsla(&self.theme, &self.tokens.line)),
             )
@@ -459,6 +386,7 @@ impl TreeRenderCtx {
             .id(self.tree_id.slot_index("label", path.clone()))
             .flex_1()
             .min_w_0()
+            .text_size(self.size_preset.label_size)
             .truncate()
             .child(node.label.clone());
 
@@ -480,16 +408,13 @@ impl TreeRenderCtx {
             row = row
                 .cursor_pointer()
                 .on_click(move |_: &ClickEvent, window, cx| {
-                    if !controlled {
-                        control::set_optional_text_state(
-                            &tree_id,
-                            "value",
-                            Some(value.to_string()),
-                        );
-                        window.refresh();
-                    }
+                    let should_refresh =
+                        tree_state::apply_selected(&tree_id, controlled, Some(value.to_string()));
                     if let Some(handler) = on_select.as_ref() {
                         (handler)(Some(value.clone()), window, cx);
+                    }
+                    if should_refresh {
+                        window.refresh();
                     }
                 });
         } else {
@@ -499,19 +424,20 @@ impl TreeRenderCtx {
         let mut wrapper = Stack::vertical()
             .id(self.tree_id.slot_index("node", path.clone()))
             .w_full()
-            .gap_0()
+            .gap(self.tokens.children_gap)
             .child(row);
 
         if has_children && is_expanded {
             let mut child_list = Stack::vertical()
                 .id(self.tree_id.slot_index("children", path.clone()))
                 .w_full()
-                .gap_0();
+                .gap(self.tokens.children_gap);
             if self.show_lines {
                 child_list = child_list
                     .relative()
-                    .ml(px((depth as f32 * self.indent_px) + 8.0))
-                    .pl(px(10.0))
+                    .ml(px((depth as f32 * f32::from(self.size_preset.indent))
+                        + f32::from(self.size_preset.child_line_margin)))
+                    .pl(self.size_preset.child_line_padding)
                     .child(
                         div()
                             .absolute()
@@ -540,19 +466,45 @@ impl TreeRenderCtx {
 impl RenderOnce for Tree {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let selected = self.resolved_value();
-        let expanded_values = self
-            .resolved_expanded()
-            .into_iter()
+        let selected_controlled_value = self.value.as_ref().map(|value| value.to_string());
+        let selected_default_value = self.default_value.as_ref().map(|value| value.to_string());
+        let selected = tree_state::resolve_selected(
+            &self.id,
+            self.value_controlled,
+            selected_controlled_value.clone(),
+            selected_default_value.clone(),
+        )
+        .map(SharedString::from);
+        let expanded_controlled_values = self
+            .expanded_values
+            .iter()
             .map(|value| value.to_string())
             .collect::<Vec<_>>();
+        let expanded_default_values = if self.default_expanded_values.is_empty() {
+            let mut values = Vec::new();
+            Self::collect_default_expanded(&self.nodes, &mut values);
+            values
+        } else {
+            self.default_expanded_values.clone()
+        }
+        .into_iter()
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>();
+        let expanded_values = tree_state::resolve_expanded(
+            &self.id,
+            self.expanded_controlled,
+            expanded_controlled_values,
+            expanded_default_values,
+        );
         let expanded_set = expanded_values.iter().cloned().collect::<BTreeSet<_>>();
+        let tokens = self.theme.components.tree.clone();
+        let tree_size_preset = tokens.sizes.for_size(self.size);
         let mut visible_nodes = Vec::new();
         Self::collect_visible_nodes(&self.nodes, &expanded_set, None, &mut visible_nodes);
         let ctx = TreeRenderCtx {
             tree_id: self.id.clone(),
             theme: self.theme.clone(),
-            tokens: self.theme.components.tree.clone(),
+            tokens: tokens.clone(),
             selected: selected.clone(),
             expanded: expanded_set,
             expanded_values,
@@ -560,7 +512,7 @@ impl RenderOnce for Tree {
             expanded_controlled: self.expanded_controlled,
             show_lines: self.show_lines,
             toggle_position: self.toggle_position,
-            indent_px: self.indent_px(),
+            size_preset: tree_size_preset,
             radius: self.radius,
             selected_bg: self.selected_bg(),
             on_select: self.on_select.clone(),
@@ -568,8 +520,8 @@ impl RenderOnce for Tree {
         };
 
         let tree_id = self.id.clone();
-        let selected_snapshot = selected.as_ref().map(|value| value.to_string());
-        let expanded_snapshot = ctx.expanded_values.clone();
+        let selected_state_snapshot = selected.as_ref().map(|value| value.to_string());
+        let expanded_state_snapshot = ctx.expanded_values.clone();
         let visible_snapshot = visible_nodes.clone();
         let selected_controlled = self.value_controlled;
         let expanded_controlled = self.expanded_controlled;
@@ -579,7 +531,7 @@ impl RenderOnce for Tree {
         let mut root = Stack::vertical()
             .id(self.id.clone())
             .w_full()
-            .gap_0p5()
+            .gap(tokens.root_gap)
             .focusable()
             .on_key_down(move |event, window, cx| {
                 let key = event.keystroke.key.as_str();
@@ -587,160 +539,54 @@ impl RenderOnce for Tree {
                     return;
                 }
 
-                let current_selected = control::optional_text_state(
+                let current_selected = tree_state::resolve_selected(
                     &tree_id,
-                    "value",
-                    selected_controlled.then_some(selected_snapshot.clone()),
-                    selected_snapshot.clone(),
+                    selected_controlled,
+                    selected_state_snapshot.clone(),
+                    selected_state_snapshot.clone(),
                 );
-                let enabled_values = visible_snapshot
-                    .iter()
-                    .filter(|node| !node.disabled)
-                    .map(|node| node.value.as_str())
-                    .collect::<Vec<_>>();
-                if enabled_values.is_empty() {
-                    return;
-                }
+                let current_expanded = tree_state::resolve_expanded(
+                    &tree_id,
+                    expanded_controlled,
+                    expanded_state_snapshot.clone(),
+                    expanded_state_snapshot.clone(),
+                );
+                let next = tree_state::key_transition(
+                    key,
+                    current_selected.as_deref(),
+                    &visible_snapshot,
+                    &current_expanded,
+                );
 
-                let current_index = current_selected.as_ref().and_then(|selected| {
-                    enabled_values
-                        .iter()
-                        .position(|value| *value == selected.as_str())
-                });
-                let mut next_selected = None::<String>;
-                let mut next_expanded = None::<Vec<String>>;
-
-                match key {
-                    "up" => {
-                        if let Some(index) = current_index {
-                            if index > 0 {
-                                next_selected = Some(enabled_values[index - 1].to_string());
-                            } else {
-                                next_selected = Some(enabled_values[0].to_string());
-                            }
-                        } else {
-                            next_selected = Some(enabled_values[0].to_string());
-                        }
-                    }
-                    "down" => {
-                        if let Some(index) = current_index {
-                            let next_index =
-                                (index + 1).min(enabled_values.len().saturating_sub(1));
-                            next_selected = Some(enabled_values[next_index].to_string());
-                        } else {
-                            next_selected = Some(enabled_values[0].to_string());
-                        }
-                    }
-                    "home" => {
-                        next_selected = Some(enabled_values[0].to_string());
-                    }
-                    "end" => {
-                        if let Some(last) = enabled_values.last() {
-                            next_selected = Some((*last).to_string());
-                        }
-                    }
-                    "right" => {
-                        if let Some(selected_value) = current_selected.as_ref()
-                            && let Some(node) = visible_snapshot
-                                .iter()
-                                .find(|node| node.value == *selected_value)
-                        {
-                            if node.has_children && !node.expanded {
-                                let current = if expanded_controlled {
-                                    expanded_snapshot.clone()
-                                } else {
-                                    control::list_state(
-                                        &tree_id,
-                                        "expanded",
-                                        None,
-                                        expanded_snapshot.clone(),
-                                    )
-                                };
-                                let mut set = current.into_iter().collect::<BTreeSet<_>>();
-                                set.insert(node.value.clone());
-                                next_expanded = Some(set.into_iter().collect());
-                            } else if node.has_children
-                                && node.expanded
-                                && let Some(first_child) = node.first_child.as_ref()
-                            {
-                                next_selected = Some(first_child.clone());
-                            }
-                        }
-                    }
-                    "left" => {
-                        if let Some(selected_value) = current_selected.as_ref()
-                            && let Some(node) = visible_snapshot
-                                .iter()
-                                .find(|node| node.value == *selected_value)
-                        {
-                            if node.has_children && node.expanded {
-                                let current = if expanded_controlled {
-                                    expanded_snapshot.clone()
-                                } else {
-                                    control::list_state(
-                                        &tree_id,
-                                        "expanded",
-                                        None,
-                                        expanded_snapshot.clone(),
-                                    )
-                                };
-                                let mut set = current.into_iter().collect::<BTreeSet<_>>();
-                                set.remove(node.value.as_str());
-                                next_expanded = Some(set.into_iter().collect());
-                            } else if let Some(parent) = node.parent.as_ref() {
-                                next_selected = Some(parent.clone());
-                            }
-                        }
-                    }
-                    "enter" | "space" => {
-                        if current_selected.is_none() {
-                            next_selected = Some(enabled_values[0].to_string());
-                        } else if key == "space"
-                            && let Some(selected_value) = current_selected.as_ref()
-                            && let Some(node) = visible_snapshot
-                                .iter()
-                                .find(|node| node.value == *selected_value)
-                            && node.has_children
-                        {
-                            let current = if expanded_controlled {
-                                expanded_snapshot.clone()
-                            } else {
-                                control::list_state(
-                                    &tree_id,
-                                    "expanded",
-                                    None,
-                                    expanded_snapshot.clone(),
-                                )
-                            };
-                            let next = TreeRenderCtx::toggled_values(current, node.value.as_str());
-                            next_expanded = Some(next);
-                        }
-                    }
-                    _ => {}
-                }
-
-                if let Some(next) = next_selected {
-                    if !selected_controlled {
-                        control::set_optional_text_state(&tree_id, "value", Some(next.clone()));
-                        window.refresh();
-                    }
+                let mut should_refresh = false;
+                if let Some(next_selected) = next.next_selected {
+                    should_refresh |= tree_state::apply_selected(
+                        &tree_id,
+                        selected_controlled,
+                        Some(next_selected.clone()),
+                    );
                     if let Some(handler) = on_select.as_ref() {
-                        (handler)(Some(SharedString::from(next)), window, cx);
+                        (handler)(Some(SharedString::from(next_selected)), window, cx);
                     }
                 }
 
-                if let Some(next) = next_expanded {
-                    if !expanded_controlled {
-                        control::set_list_state(&tree_id, "expanded", next.clone());
-                        window.refresh();
-                    }
+                if let Some(next_expanded) = next.next_expanded {
+                    should_refresh |= tree_state::apply_expanded(
+                        &tree_id,
+                        expanded_controlled,
+                        next_expanded.clone(),
+                    );
                     if let Some(handler) = on_expanded_change.as_ref() {
                         (handler)(
-                            next.into_iter().map(SharedString::from).collect(),
+                            next_expanded.into_iter().map(SharedString::from).collect(),
                             window,
                             cx,
                         );
                     }
+                }
+
+                if should_refresh {
+                    window.refresh();
                 }
             });
 

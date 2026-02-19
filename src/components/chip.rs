@@ -12,6 +12,7 @@ use crate::style::{GroupOrientation, Radius, Size, Variant};
 
 use super::Stack;
 use super::control;
+use super::selection_state;
 use super::toggle::{ToggleConfig, wire_toggle_handlers};
 use super::transition::TransitionExt;
 use super::utils::{apply_button_size, apply_radius, resolve_hsla, variant_text_weight};
@@ -29,7 +30,7 @@ pub enum ChipSelectionMode {
 pub struct Chip {
     id: ComponentId,
     value: SharedString,
-    label: SharedString,
+    label: Option<SharedString>,
     checked: Option<bool>,
     default_checked: bool,
     disabled: bool,
@@ -44,12 +45,11 @@ pub struct Chip {
 
 impl Chip {
     #[track_caller]
-    pub fn new(label: impl Into<SharedString>) -> Self {
-        let label = label.into();
+    pub fn new() -> Self {
         Self {
             id: ComponentId::default(),
-            value: label.clone(),
-            label,
+            value: SharedString::from(""),
+            label: None,
             checked: None,
             default_checked: false,
             disabled: false,
@@ -61,6 +61,22 @@ impl Chip {
             motion: MotionConfig::default(),
             on_change: None,
         }
+    }
+
+    #[track_caller]
+    pub fn labeled(label: impl Into<SharedString>) -> Self {
+        let label = label.into();
+        Self::new().value(label.clone()).label(label)
+    }
+
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
+    }
+
+    pub fn clear_label(mut self) -> Self {
+        self.label = None;
+        self
     }
 
     pub fn value(mut self, value: impl Into<SharedString>) -> Self {
@@ -202,11 +218,14 @@ impl RenderOnce for Chip {
                 if checked {
                     content = content.child(div().text_sm().child("✓"));
                 }
-                content.child(
-                    div()
-                        .font_weight(variant_text_weight(self.variant))
-                        .child(self.label),
-                )
+                if let Some(label) = self.label {
+                    content = content.child(
+                        div()
+                            .font_weight(variant_text_weight(self.variant))
+                            .child(label),
+                    );
+                }
+                content
             });
 
         chip = apply_button_size(chip, self.size);
@@ -369,24 +388,23 @@ impl ChipGroup {
     fn resolved_selected_values(&self) -> Vec<SharedString> {
         match self.mode {
             ChipSelectionMode::Single => {
-                let value = control::optional_text_state(
+                let value = selection_state::resolve_optional_text(
                     &self.id,
                     "value",
-                    self.value_controlled
-                        .then_some(self.value.as_ref().map(|value| value.to_string())),
+                    self.value_controlled,
+                    self.value.as_ref().map(|value| value.to_string()),
                     self.default_value.as_ref().map(|value| value.to_string()),
                 );
                 value.map(SharedString::from).into_iter().collect()
             }
-            ChipSelectionMode::Multiple => control::list_state(
+            ChipSelectionMode::Multiple => selection_state::resolve_list(
                 &self.id,
                 "values",
-                self.values_controlled.then_some(
-                    self.values
-                        .iter()
-                        .map(|value| value.to_string())
-                        .collect::<Vec<_>>(),
-                ),
+                self.values_controlled,
+                self.values
+                    .iter()
+                    .map(|value| value.to_string())
+                    .collect::<Vec<_>>(),
                 self.default_values
                     .iter()
                     .map(|value| value.to_string())
@@ -443,7 +461,8 @@ impl RenderOnce for ChipGroup {
             .enumerate()
             .map(|(index, option)| {
                 let checked = Self::contains(&selected_values, &option.value);
-                let mut chip = Chip::new(option.label)
+                let mut chip = Chip::new()
+                    .label(option.label.clone())
                     .with_id(self.id.slot_index("option", index.to_string()))
                     .value(option.value.clone())
                     .checked(checked)
@@ -471,20 +490,26 @@ impl RenderOnce for ChipGroup {
                         };
                         match mode {
                             ChipSelectionMode::Single if !single_controlled => {
-                                control::set_optional_text_state(
+                                let refresh = selection_state::apply_optional_text(
                                     &id,
                                     "value",
+                                    false,
                                     updated.first().map(|value| value.to_string()),
                                 );
-                                window.refresh();
+                                if refresh {
+                                    window.refresh();
+                                }
                             }
                             ChipSelectionMode::Multiple if !multiple_controlled => {
-                                control::set_list_state(
+                                let refresh = selection_state::apply_list(
                                     &id,
                                     "values",
+                                    false,
                                     updated.iter().map(|value| value.to_string()).collect(),
                                 );
-                                window.refresh();
+                                if refresh {
+                                    window.refresh();
+                                }
                             }
                             _ => {}
                         }
@@ -508,20 +533,26 @@ impl RenderOnce for ChipGroup {
                         };
                         match mode {
                             ChipSelectionMode::Single if !single_controlled => {
-                                control::set_optional_text_state(
+                                let refresh = selection_state::apply_optional_text(
                                     &id,
                                     "value",
+                                    false,
                                     updated.first().map(|value| value.to_string()),
                                 );
-                                window.refresh();
+                                if refresh {
+                                    window.refresh();
+                                }
                             }
                             ChipSelectionMode::Multiple if !multiple_controlled => {
-                                control::set_list_state(
+                                let refresh = selection_state::apply_list(
                                     &id,
                                     "values",
+                                    false,
                                     updated.iter().map(|value| value.to_string()).collect(),
                                 );
-                                window.refresh();
+                                if refresh {
+                                    window.refresh();
+                                }
                             }
                             _ => {}
                         }

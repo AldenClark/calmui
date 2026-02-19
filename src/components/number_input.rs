@@ -7,7 +7,7 @@ use gpui::{
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 
-use crate::contracts::{FieldLike, MotionAware};
+use crate::contracts::{FieldLike, MotionAware, Themable};
 use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{FieldLayout, Radius, Size, Variant};
@@ -374,13 +374,14 @@ impl NumberInput {
     fn compose_right_slot(
         user_right_slot: Option<AnyElement>,
         controls_slot: Option<AnyElement>,
+        gap: gpui::Pixels,
     ) -> Option<AnyElement> {
         match (user_right_slot, controls_slot) {
             (Some(user), Some(controls)) => Some(
                 div()
                     .flex()
                     .items_center()
-                    .gap_2()
+                    .gap(gap)
                     .child(user)
                     .child(controls)
                     .into_any_element(),
@@ -399,8 +400,8 @@ impl NumberInput {
 
         let mut up = div()
             .id(self.id.slot("control-up"))
-            .w(px(18.0))
-            .h(px(12.0))
+            .w(tokens.controls_width)
+            .h(tokens.controls_height)
             .flex()
             .items_center()
             .justify_center()
@@ -411,14 +412,14 @@ impl NumberInput {
             .child(
                 Icon::named("chevron-up")
                     .with_id(self.id.slot("chevron-up"))
-                    .size(12.0)
+                    .size(f32::from(tokens.controls_icon_size))
                     .color(controls_fg),
             );
 
         let mut down = div()
             .id(self.id.slot("control-down"))
-            .w(px(18.0))
-            .h(px(12.0))
+            .w(tokens.controls_width)
+            .h(tokens.controls_height)
             .flex()
             .items_center()
             .justify_center()
@@ -429,7 +430,7 @@ impl NumberInput {
             .child(
                 Icon::named("chevron-down")
                     .with_id(self.id.slot("chevron-down"))
-                    .size(12.0)
+                    .size(f32::from(tokens.controls_icon_size))
                     .color(controls_fg),
             );
 
@@ -570,6 +571,25 @@ impl RenderOnce for NumberInput {
             .with_id(self.id.clone())
             .value(current_text.clone());
 
+        let field_tokens = self.theme.components.number_input.clone();
+        input = input.themed(|overrides| {
+            overrides
+                .bg(field_tokens.bg)
+                .fg(field_tokens.fg)
+                .placeholder(field_tokens.placeholder)
+                .border(field_tokens.border)
+                .border_focus(field_tokens.border_focus)
+                .border_error(field_tokens.border_error)
+                .label(field_tokens.label)
+                .label_size(field_tokens.label_size)
+                .label_weight(field_tokens.label_weight)
+                .description(field_tokens.description)
+                .description_size(field_tokens.description_size)
+                .error(field_tokens.error)
+                .error_size(field_tokens.error_size)
+                .sizes(field_tokens.sizes)
+        });
+
         if let Some(placeholder) = self.placeholder.clone() {
             input = input.placeholder(placeholder);
         }
@@ -631,7 +651,11 @@ impl RenderOnce for NumberInput {
         let controls_slot = self
             .controls
             .then(|| self.render_controls_slot(current_text.clone()));
-        if let Some(right_slot) = Self::compose_right_slot(user_right_slot, controls_slot) {
+        if let Some(right_slot) = Self::compose_right_slot(
+            user_right_slot,
+            controls_slot,
+            self.theme.components.number_input.controls_gap,
+        ) {
             input = input.right_slot(right_slot);
         }
 
@@ -660,25 +684,15 @@ impl RenderOnce for NumberInput {
                     return;
                 }
 
-                let key = event.keystroke.key.as_str();
-                if key != "up" && key != "down" {
+                let Some(direction) = control::step_direction_from_vertical_key(event) else {
                     return;
-                }
-
-                if event.keystroke.modifiers.control
-                    || event.keystroke.modifiers.platform
-                    || event.keystroke.modifiers.function
-                    || event.keystroke.modifiers.alt
-                {
-                    return;
-                }
+                };
 
                 let current = Self::current_text_for(
                     &id_for_step,
                     &fallback_for_step,
                     value_controlled_for_step,
                 );
-                let direction = if key == "up" { 1.0 } else { -1.0 };
                 let (next_text, next_value) = Self::stepped_value_text_for(
                     &current,
                     direction,

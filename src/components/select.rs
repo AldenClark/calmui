@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, rc::Rc};
+use std::rc::Rc;
 
 use gpui::{
     AnyElement, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
@@ -12,12 +12,12 @@ use crate::style::{FieldLayout, Radius, Size, Variant};
 use crate::theme::{SelectTokens, Theme};
 
 use super::Stack;
-use super::control;
 use super::icon::Icon;
-use super::popup::{PopupPlacement, PopupState, anchored_host};
+use super::popup::{PopupPlacement, anchored_host};
+use super::select_state::{self, SelectState, SelectStateInput};
 use super::transition::TransitionExt;
 use super::utils::{
-    InteractionStyles, PressHandler, PressableBehavior, apply_input_size, apply_interaction_styles,
+    InteractionStyles, PressHandler, PressableBehavior, apply_field_size, apply_interaction_styles,
     apply_radius, interaction_style, resolve_hsla, wire_pressable,
 };
 
@@ -29,36 +29,6 @@ type OpenChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
 struct SelectRuntime;
 
 impl SelectRuntime {
-    fn should_open_dropdown_upward(event: &ClickEvent, window: &Window) -> bool {
-        let click_y = event.position().y;
-        let viewport_height = window.viewport_size().height;
-        let space_above = click_y;
-        let space_below = viewport_height - click_y;
-        let preferred_height = px(260.0);
-
-        space_below < preferred_height && space_above > space_below
-    }
-
-    fn capture_dropdown_metrics(id: &str, event: &ClickEvent, window: &Window) {
-        control::set_bool_state(
-            id,
-            "dropdown-upward",
-            Self::should_open_dropdown_upward(event, window),
-        );
-        if let ClickEvent::Keyboard(keyboard) = event {
-            control::set_f32_state(
-                id,
-                "dropdown-width-px",
-                f32::from(keyboard.bounds.size.width),
-            );
-        }
-    }
-
-    fn dropdown_width_px(id: &str) -> f32 {
-        let width = control::f32_state(id, "dropdown-width-px", None, 0.0);
-        if width >= 1.0 { width } else { 220.0 }
-    }
-
     fn control_bg_for_variant(
         theme: &Theme,
         tokens: &SelectTokens,
@@ -289,23 +259,22 @@ impl Select {
     }
 
     fn resolved_value(&self) -> Option<SharedString> {
-        control::optional_text_state(
+        select_state::resolve_single_value(
             &self.id,
-            "value",
-            self.value_controlled
-                .then_some(self.value.as_ref().map(|value| value.to_string())),
+            self.value_controlled,
+            self.value.as_ref().map(|value| value.to_string()),
             self.default_value.as_ref().map(|value| value.to_string()),
         )
         .map(SharedString::from)
     }
 
     fn resolved_opened(&self) -> bool {
-        PopupState::resolve(
-            &self.id,
-            self.opened_controlled
-                .then_some(self.opened.unwrap_or(false)),
-            self.default_opened,
-        )
+        SelectState::resolve(SelectStateInput {
+            id: &self.id,
+            opened_controlled: self.opened_controlled,
+            opened: self.opened,
+            default_opened: self.default_opened,
+        })
         .opened
     }
 
@@ -327,7 +296,8 @@ impl Select {
         if let Some(label) = self.label.clone() {
             let mut label_row = Stack::horizontal().gap_1().child(
                 div()
-                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_size(tokens.label_size)
+                    .font_weight(tokens.label_weight)
                     .text_color(resolve_hsla(&self.theme, &tokens.label))
                     .child(label),
             );
@@ -345,7 +315,7 @@ impl Select {
         if let Some(description) = self.description.clone() {
             block = block.child(
                 div()
-                    .text_sm()
+                    .text_size(tokens.description_size)
                     .text_color(resolve_hsla(&self.theme, &tokens.description))
                     .child(description),
             );
@@ -354,7 +324,7 @@ impl Select {
         if let Some(error) = self.error.clone() {
             block = block.child(
                 div()
-                    .text_sm()
+                    .text_size(tokens.error_size)
                     .text_color(resolve_hsla(&self.theme, &tokens.error))
                     .child(error),
             );
@@ -374,12 +344,12 @@ impl Select {
             .w_full()
             .flex()
             .items_center()
-            .gap_2()
+            .gap(tokens.slot_gap)
             .bg(control_bg)
             .text_color(resolve_hsla(&self.theme, &tokens.fg))
             .border(super::utils::quantized_stroke_px(window, 1.0));
 
-        control = apply_input_size(control, self.size);
+        control = apply_field_size(control, tokens.sizes.for_size(self.size));
         control = apply_radius(&self.theme, control, self.radius);
 
         let border = SelectRuntime::control_border_for_variant(
@@ -403,11 +373,13 @@ impl Select {
                 let opened_controlled = self.opened_controlled;
                 Some(Rc::new(
                     move |event: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
-                        if next {
-                            SelectRuntime::capture_dropdown_metrics(&id, event, window);
-                        }
-                        if !opened_controlled {
-                            control::set_bool_state(&id, "opened", next);
+                        if select_state::on_trigger_toggle(
+                            &id,
+                            opened_controlled,
+                            next,
+                            event,
+                            window,
+                        ) {
                             window.refresh();
                         }
                         (handler)(next, window, cx);
@@ -418,11 +390,9 @@ impl Select {
                 let next = !opened;
                 Some(Rc::new(
                     move |event: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
-                        if next {
-                            SelectRuntime::capture_dropdown_metrics(&id, event, window);
+                        if select_state::on_trigger_toggle(&id, false, next, event, window) {
+                            window.refresh();
                         }
-                        control::set_bool_state(&id, "opened", next);
-                        window.refresh();
                     },
                 ) as PressHandler)
             } else {
@@ -459,6 +429,7 @@ impl Select {
             control = control.child(
                 div()
                     .flex_none()
+                    .min_w(tokens.slot_min_width)
                     .text_color(resolve_hsla(&self.theme, &tokens.icon))
                     .child(left_slot()),
             );
@@ -488,6 +459,7 @@ impl Select {
                 div()
                     .ml_auto()
                     .flex_none()
+                    .min_w(tokens.slot_min_width)
                     .text_color(resolve_hsla(&self.theme, &tokens.icon))
                     .child(right_slot()),
             );
@@ -498,16 +470,15 @@ impl Select {
             .child(
                 Icon::named(if opened { "chevron-up" } else { "chevron-down" })
                     .with_id(self.id.slot("chevron"))
-                    .size(14.0)
+                    .size(f32::from(tokens.icon_size))
                     .color(resolve_hsla(&self.theme, &tokens.icon)),
             )
             .child(
                 canvas(
                     move |bounds, _, _cx| {
-                        control::set_text_state(
+                        select_state::set_dropdown_width(
                             &id_for_width,
-                            "dropdown-width-px",
-                            format!("{:.2}", f32::from(bounds.size.width)),
+                            f32::from(bounds.size.width),
                         );
                     },
                     |_, _, _, _| {},
@@ -540,10 +511,10 @@ impl Select {
 
                 let mut row = div()
                     .id(self.id.slot_index("option", (option.value).to_string()))
-                    .px(gpui::px(10.0))
-                    .py(gpui::px(8.0))
+                    .px(tokens.option_padding_x)
+                    .py(tokens.option_padding_y)
                     .rounded_sm()
-                    .text_sm()
+                    .text_size(tokens.option_size)
                     .text_color(resolve_hsla(&self.theme, &tokens.option_fg))
                     .bg(row_bg)
                     .child(
@@ -565,8 +536,8 @@ impl Select {
                                     .items_center()
                                     .justify_center()
                                     .flex_none()
-                                    .w(px(14.0))
-                                    .h(px(14.0))
+                                    .w(tokens.option_check_size)
+                                    .h(tokens.option_check_size)
                                     .children(
                                         selected.then_some(
                                             Icon::named("check")
@@ -593,17 +564,12 @@ impl Select {
                     let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
                     let click_handler: PressHandler = Rc::new(
                         move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
-                            if !value_controlled {
-                                control::set_optional_text_state(
-                                    &id,
-                                    "value",
-                                    Some(value.to_string()),
-                                );
-                            }
-                            if !opened_controlled {
-                                control::set_bool_state(&id, "opened", false);
-                            }
-                            if !value_controlled || !opened_controlled {
+                            if select_state::apply_single_option_commit(
+                                &id,
+                                value_controlled,
+                                opened_controlled,
+                                value.as_ref(),
+                            ) {
                                 window.refresh();
                             }
                             if let Some(handler) = on_change.as_ref() {
@@ -631,16 +597,16 @@ impl Select {
 
         let mut dropdown = div()
             .id(self.id.slot("dropdown"))
-            .w(px(SelectRuntime::dropdown_width_px(&self.id)))
+            .w(px(select_state::dropdown_width_px(&self.id)))
             .rounded_md()
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.dropdown_border))
             .bg(resolve_hsla(&self.theme, &tokens.dropdown_bg))
             .shadow_sm()
-            .max_h(px(280.0))
+            .max_h(tokens.dropdown_max_height)
             .overflow_y_scroll()
-            .p_1p5()
-            .child(Stack::vertical().gap_1().children(items));
+            .p(tokens.dropdown_padding)
+            .child(Stack::vertical().gap(tokens.dropdown_gap).children(items));
 
         if self.close_on_click_outside {
             if let Some(on_open_change) = self.on_open_change.clone() {
@@ -648,8 +614,7 @@ impl Select {
                 let opened_controlled = self.opened_controlled;
                 dropdown = dropdown.on_mouse_down_out(
                     move |_, window: &mut Window, cx: &mut gpui::App| {
-                        if !opened_controlled {
-                            control::set_bool_state(&id, "opened", false);
+                        if select_state::apply_opened(&id, opened_controlled, false) {
                             window.refresh();
                         }
                         (on_open_change)(false, window, cx);
@@ -659,8 +624,9 @@ impl Select {
                 let id = self.id.clone();
                 dropdown = dropdown.on_mouse_down_out(
                     move |_, window: &mut Window, _cx: &mut gpui::App| {
-                        control::set_bool_state(&id, "opened", false);
-                        window.refresh();
+                        if select_state::apply_opened(&id, false, false) {
+                            window.refresh();
+                        }
                     },
                 );
             }
@@ -733,17 +699,17 @@ impl MotionAware for Select {
 impl RenderOnce for Select {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let popup_state = PopupState::resolve(
-            &self.id,
-            self.opened_controlled
-                .then_some(self.opened.unwrap_or(false)),
-            self.default_opened,
-        );
-        let opened = popup_state.opened;
-        let dropdown_upward = control::bool_state(&self.id, "dropdown-upward", None, false);
+        let state = SelectState::resolve(SelectStateInput {
+            id: &self.id,
+            opened_controlled: self.opened_controlled,
+            opened: self.opened,
+            default_opened: self.default_opened,
+        });
+        let opened = state.opened;
+        let dropdown_upward = state.dropdown_upward;
         let mut container = Stack::vertical()
             .id(self.id.clone())
-            .gap_2()
+            .gap(self.theme.components.select.layout_gap_vertical)
             .relative()
             .w_full();
 
@@ -792,8 +758,12 @@ impl RenderOnce for Select {
             FieldLayout::Horizontal => Stack::horizontal()
                 .id(self.id.clone())
                 .items_start()
-                .gap_3()
-                .child(div().w(gpui::px(168.0)).child(self.render_label_block()))
+                .gap(self.theme.components.select.layout_gap_horizontal)
+                .child(
+                    div()
+                        .w(self.theme.components.select.horizontal_label_width)
+                        .child(self.render_label_block()),
+                )
                 .child(div().flex_1().child(field)),
         }
     }
@@ -960,42 +930,27 @@ impl MultiSelect {
         self
     }
 
-    fn contains(values: &[SharedString], value: &SharedString) -> bool {
-        values
-            .iter()
-            .any(|candidate| candidate.as_ref() == value.as_ref())
-    }
-
-    fn toggled_values(values: &[SharedString], value: &SharedString) -> Vec<SharedString> {
-        let mut set = values
-            .iter()
-            .map(|candidate| candidate.to_string())
-            .collect::<BTreeSet<_>>();
-        if !set.insert(value.to_string()) {
-            set.remove(value.as_ref());
-        }
-        set.into_iter().map(SharedString::from).collect()
-    }
-
     fn selected_labels(&self) -> Vec<SharedString> {
-        let values = self.resolved_values();
+        let values = self
+            .resolved_values()
+            .into_iter()
+            .map(|value| value.to_string())
+            .collect::<Vec<_>>();
         self.options
             .iter()
-            .filter(|option| Self::contains(&values, &option.value))
+            .filter(|option| select_state::contains(&values, option.value.as_ref()))
             .map(|option| option.label.clone())
             .collect()
     }
 
     fn resolved_values(&self) -> Vec<SharedString> {
-        control::list_state(
+        select_state::resolve_multi_values(
             &self.id,
-            "values",
-            self.values_controlled.then_some(
-                self.values
-                    .iter()
-                    .map(|value| value.to_string())
-                    .collect::<Vec<_>>(),
-            ),
+            self.values_controlled,
+            self.values
+                .iter()
+                .map(|value| value.to_string())
+                .collect::<Vec<_>>(),
             self.default_values
                 .iter()
                 .map(|value| value.to_string())
@@ -1007,12 +962,12 @@ impl MultiSelect {
     }
 
     fn resolved_opened(&self) -> bool {
-        PopupState::resolve(
-            &self.id,
-            self.opened_controlled
-                .then_some(self.opened.unwrap_or(false)),
-            self.default_opened,
-        )
+        SelectState::resolve(SelectStateInput {
+            id: &self.id,
+            opened_controlled: self.opened_controlled,
+            opened: self.opened,
+            default_opened: self.default_opened,
+        })
         .opened
     }
 
@@ -1027,7 +982,8 @@ impl MultiSelect {
         if let Some(label) = self.label.clone() {
             let mut label_row = Stack::horizontal().gap_1().child(
                 div()
-                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_size(tokens.label_size)
+                    .font_weight(tokens.label_weight)
                     .text_color(resolve_hsla(&self.theme, &tokens.label))
                     .child(label),
             );
@@ -1045,7 +1001,7 @@ impl MultiSelect {
         if let Some(description) = self.description.clone() {
             block = block.child(
                 div()
-                    .text_sm()
+                    .text_size(tokens.description_size)
                     .text_color(resolve_hsla(&self.theme, &tokens.description))
                     .child(description),
             );
@@ -1054,7 +1010,7 @@ impl MultiSelect {
         if let Some(error) = self.error.clone() {
             block = block.child(
                 div()
-                    .text_sm()
+                    .text_size(tokens.error_size)
                     .text_color(resolve_hsla(&self.theme, &tokens.error))
                     .child(error),
             );
@@ -1074,11 +1030,11 @@ impl MultiSelect {
             .w_full()
             .flex()
             .items_center()
-            .gap_2()
+            .gap(tokens.slot_gap)
             .bg(control_bg)
             .border(super::utils::quantized_stroke_px(window, 1.0));
 
-        control = apply_input_size(control, self.size);
+        control = apply_field_size(control, tokens.sizes.for_size(self.size));
         control = apply_radius(&self.theme, control, self.radius);
 
         let border = SelectRuntime::control_border_for_variant(
@@ -1102,11 +1058,13 @@ impl MultiSelect {
                 let opened_controlled = self.opened_controlled;
                 Some(Rc::new(
                     move |event: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
-                        if next {
-                            SelectRuntime::capture_dropdown_metrics(&id, event, window);
-                        }
-                        if !opened_controlled {
-                            control::set_bool_state(&id, "opened", next);
+                        if select_state::on_trigger_toggle(
+                            &id,
+                            opened_controlled,
+                            next,
+                            event,
+                            window,
+                        ) {
                             window.refresh();
                         }
                         (handler)(next, window, cx);
@@ -1117,11 +1075,9 @@ impl MultiSelect {
                 let id = self.id.clone();
                 Some(Rc::new(
                     move |event: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
-                        if next {
-                            SelectRuntime::capture_dropdown_metrics(&id, event, window);
+                        if select_state::on_trigger_toggle(&id, false, next, event, window) {
+                            window.refresh();
                         }
-                        control::set_bool_state(&id, "opened", next);
-                        window.refresh();
                     },
                 ) as PressHandler)
             } else {
@@ -1158,6 +1114,7 @@ impl MultiSelect {
             control = control.child(
                 div()
                     .flex_none()
+                    .min_w(tokens.slot_min_width)
                     .text_color(resolve_hsla(&self.theme, &tokens.icon))
                     .child(left_slot()),
             );
@@ -1180,15 +1137,15 @@ impl MultiSelect {
         } else {
             let tags = selected.into_iter().map(|label| {
                 div()
-                    .px(gpui::px(8.0))
-                    .py(gpui::px(3.0))
-                    .text_xs()
+                    .px(tokens.tag_padding_x)
+                    .py(tokens.tag_padding_y)
+                    .text_size(tokens.tag_size)
                     .rounded_full()
                     .border(super::utils::quantized_stroke_px(window, 1.0))
                     .border_color(resolve_hsla(&self.theme, &tokens.tag_border))
                     .bg(resolve_hsla(&self.theme, &tokens.tag_bg))
                     .text_color(resolve_hsla(&self.theme, &tokens.tag_fg))
-                    .child(div().max_w(px(120.0)).truncate().child(label))
+                    .child(div().max_w(tokens.tag_max_width).truncate().child(label))
             });
 
             control = control.child(
@@ -1206,6 +1163,7 @@ impl MultiSelect {
                 div()
                     .ml_auto()
                     .flex_none()
+                    .min_w(tokens.slot_min_width)
                     .text_color(resolve_hsla(&self.theme, &tokens.icon))
                     .child(right_slot()),
             );
@@ -1216,16 +1174,15 @@ impl MultiSelect {
             .child(
                 Icon::named(if opened { "chevron-up" } else { "chevron-down" })
                     .with_id(self.id.slot("chevron"))
-                    .size(14.0)
+                    .size(f32::from(tokens.icon_size))
                     .color(resolve_hsla(&self.theme, &tokens.icon)),
             )
             .child(
                 canvas(
                     move |bounds, _, _cx| {
-                        control::set_text_state(
+                        select_state::set_dropdown_width(
                             &id_for_width,
-                            "dropdown-width-px",
-                            format!("{:.2}", f32::from(bounds.size.width)),
+                            f32::from(bounds.size.width),
                         );
                     },
                     |_, _, _, _| {},
@@ -1245,7 +1202,9 @@ impl MultiSelect {
             .iter()
             .cloned()
             .map(|option| {
-                let checked = Self::contains(&current_values, &option.value);
+                let checked = current_values
+                    .iter()
+                    .any(|selected| selected.as_ref() == option.value.as_ref());
                 let row_bg = if checked {
                     resolve_hsla(&self.theme, &tokens.option_selected_bg)
                 } else {
@@ -1255,10 +1214,10 @@ impl MultiSelect {
 
                 let mut row = div()
                     .id(self.id.slot_index("option", (option.value).to_string()))
-                    .px(gpui::px(10.0))
-                    .py(gpui::px(8.0))
+                    .px(tokens.option_padding_x)
+                    .py(tokens.option_padding_y)
                     .rounded_sm()
-                    .text_sm()
+                    .text_size(tokens.option_size)
                     .text_color(resolve_hsla(&self.theme, &tokens.option_fg))
                     .bg(row_bg)
                     .child(
@@ -1280,8 +1239,8 @@ impl MultiSelect {
                                     .items_center()
                                     .justify_center()
                                     .flex_none()
-                                    .w(px(14.0))
-                                    .h(px(14.0))
+                                    .w(tokens.option_check_size)
+                                    .h(tokens.option_check_size)
                                     .children(
                                         checked.then_some(
                                             Icon::named("check")
@@ -1307,17 +1266,24 @@ impl MultiSelect {
                     let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
                     let click_handler: PressHandler = Rc::new(
                         move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
-                            let updated = Self::toggled_values(&selected_values, &value);
-                            if !values_controlled {
-                                control::set_list_state(
-                                    &id,
-                                    "values",
-                                    updated.iter().map(|value| value.to_string()).collect(),
-                                );
+                            let selected = selected_values
+                                .iter()
+                                .map(|value| value.to_string())
+                                .collect::<Vec<_>>();
+                            let updated = select_state::toggled_values(&selected, value.as_ref());
+                            if select_state::apply_multi_values(
+                                &id,
+                                values_controlled,
+                                updated.clone(),
+                            ) {
                                 window.refresh();
                             }
                             if let Some(handler) = on_change.as_ref() {
-                                (handler)(updated, window, cx);
+                                (handler)(
+                                    updated.into_iter().map(SharedString::from).collect(),
+                                    window,
+                                    cx,
+                                );
                             }
                         },
                     );
@@ -1338,16 +1304,16 @@ impl MultiSelect {
 
         let mut dropdown = div()
             .id(self.id.slot("dropdown"))
-            .w(px(SelectRuntime::dropdown_width_px(&self.id)))
+            .w(px(select_state::dropdown_width_px(&self.id)))
             .rounded_md()
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.dropdown_border))
             .bg(resolve_hsla(&self.theme, &tokens.dropdown_bg))
             .shadow_sm()
-            .max_h(px(280.0))
+            .max_h(tokens.dropdown_max_height)
             .overflow_y_scroll()
-            .p_1p5()
-            .child(Stack::vertical().gap_1().children(rows));
+            .p(tokens.dropdown_padding)
+            .child(Stack::vertical().gap(tokens.dropdown_gap).children(rows));
 
         if self.close_on_click_outside {
             if let Some(on_open_change) = self.on_open_change.clone() {
@@ -1355,8 +1321,7 @@ impl MultiSelect {
                 let opened_controlled = self.opened_controlled;
                 dropdown = dropdown.on_mouse_down_out(
                     move |_, window: &mut Window, cx: &mut gpui::App| {
-                        if !opened_controlled {
-                            control::set_bool_state(&id, "opened", false);
+                        if select_state::apply_opened(&id, opened_controlled, false) {
                             window.refresh();
                         }
                         (on_open_change)(false, window, cx);
@@ -1366,8 +1331,9 @@ impl MultiSelect {
                 let id = self.id.clone();
                 dropdown = dropdown.on_mouse_down_out(
                     move |_, window: &mut Window, _cx: &mut gpui::App| {
-                        control::set_bool_state(&id, "opened", false);
-                        window.refresh();
+                        if select_state::apply_opened(&id, false, false) {
+                            window.refresh();
+                        }
                     },
                 );
             }
@@ -1440,17 +1406,17 @@ impl MotionAware for MultiSelect {
 impl RenderOnce for MultiSelect {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let popup_state = PopupState::resolve(
-            &self.id,
-            self.opened_controlled
-                .then_some(self.opened.unwrap_or(false)),
-            self.default_opened,
-        );
-        let opened = popup_state.opened;
-        let dropdown_upward = control::bool_state(&self.id, "dropdown-upward", None, false);
+        let state = SelectState::resolve(SelectStateInput {
+            id: &self.id,
+            opened_controlled: self.opened_controlled,
+            opened: self.opened,
+            default_opened: self.default_opened,
+        });
+        let opened = state.opened;
+        let dropdown_upward = state.dropdown_upward;
         let mut container = Stack::vertical()
             .id(self.id.clone())
-            .gap_2()
+            .gap(self.theme.components.select.layout_gap_vertical)
             .relative()
             .w_full();
         if self.layout == FieldLayout::Vertical {
@@ -1498,8 +1464,12 @@ impl RenderOnce for MultiSelect {
             FieldLayout::Horizontal => Stack::horizontal()
                 .id(self.id.clone())
                 .items_start()
-                .gap_3()
-                .child(div().w(gpui::px(168.0)).child(self.render_label_block()))
+                .gap(self.theme.components.select.layout_gap_horizontal)
+                .child(
+                    div()
+                        .w(self.theme.components.select.horizontal_label_width)
+                        .child(self.render_label_block()),
+                )
                 .child(div().flex_1().child(field)),
         }
     }

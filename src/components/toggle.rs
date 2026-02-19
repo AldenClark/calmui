@@ -59,7 +59,7 @@ where
         }
     })
     .on_key_down(move |event, window, cx| {
-        if control::is_activation_key(event.keystroke.key.as_str()) {
+        if control::is_activation_keystroke(event) {
             control::set_focused_state(&id_for_key, true);
             window.refresh();
 

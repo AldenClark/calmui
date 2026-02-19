@@ -6,7 +6,7 @@ use gpui::{
 };
 
 use crate::style::{Radius, Size, Variant};
-use crate::theme::{ResolveWithTheme, SemanticRadiusToken, Theme};
+use crate::theme::{FieldSizePreset, ResolveWithTheme, SemanticRadiusToken, Theme};
 
 pub type PressHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut gpui::App)>;
 
@@ -154,14 +154,13 @@ pub fn apply_button_size<T: Styled>(div: T, size: Size) -> T {
     }
 }
 
-pub fn apply_input_size<T: Styled>(div: T, size: Size) -> T {
-    match size {
-        Size::Xs => div.text_xs().py(px(5.0)).px(px(8.0)),
-        Size::Sm => div.text_sm().py(px(6.0)).px(px(10.0)),
-        Size::Md => div.text_base().py(px(8.0)).px(px(12.0)),
-        Size::Lg => div.text_lg().py(px(10.0)).px(px(14.0)),
-        Size::Xl => div.text_xl().py(px(12.0)).px(px(16.0)),
-    }
+pub fn apply_field_size<T: Styled>(div: T, preset: FieldSizePreset) -> T {
+    let min_h = px(f32::from(preset.line_height) + f32::from(preset.padding_y) * 2.0);
+    div.text_size(preset.font_size)
+        .line_height(preset.line_height)
+        .py(preset.padding_y)
+        .px(preset.padding_x)
+        .min_h(min_h)
 }
 
 pub fn variant_text_weight(variant: Variant) -> FontWeight {

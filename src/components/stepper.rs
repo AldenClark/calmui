@@ -11,7 +11,7 @@ use crate::motion::MotionConfig;
 use crate::style::{GroupOrientation, Radius, Size, Variant};
 
 use super::Stack;
-use super::control;
+use super::selection_state;
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
 
@@ -20,21 +20,26 @@ type ChangeHandler = Rc<dyn Fn(usize, SharedString, &mut Window, &mut gpui::App)
 
 pub struct StepperStep {
     pub value: SharedString,
-    pub label: SharedString,
+    pub label: Option<SharedString>,
     pub description: Option<SharedString>,
     pub disabled: bool,
     content: Option<SlotRenderer>,
 }
 
 impl StepperStep {
-    pub fn new(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+    pub fn new(value: impl Into<SharedString>) -> Self {
         Self {
             value: value.into(),
-            label: label.into(),
+            label: None,
             description: None,
             disabled: false,
             content: None,
         }
+    }
+
+    pub fn labeled(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
     }
 
     pub fn description(mut self, value: impl Into<SharedString>) -> Self {
@@ -133,11 +138,16 @@ impl Stepper {
 
     fn resolved_active(&self) -> usize {
         let max_index = self.steps.len().saturating_sub(1);
-        let controlled = self
-            .active_controlled
-            .then_some(self.active.unwrap_or(self.default_active).min(max_index));
+        let controlled = self.active.unwrap_or(self.default_active).min(max_index);
         let default = self.default_active.min(max_index);
-        control::usize_state(&self.id, "active", controlled, default).min(max_index)
+        selection_state::resolve_usize(
+            &self.id,
+            "active",
+            self.active_controlled,
+            controlled,
+            default,
+        )
+        .min(max_index)
     }
 
     fn indicator_size_px(&self) -> f32 {
@@ -296,16 +306,19 @@ impl RenderOnce for Stepper {
                     .child(indicator_text);
                 indicator = apply_radius(&self.theme, indicator, Radius::Pill);
 
-                let mut text_block = Stack::vertical().gap_0p5().child(
-                    div()
-                        .text_color(resolve_hsla(&theme, &tokens.label))
-                        .font_weight(if is_active {
-                            gpui::FontWeight::SEMIBOLD
-                        } else {
-                            gpui::FontWeight::NORMAL
-                        })
-                        .child(step.label.clone()),
-                );
+                let mut text_block =
+                    Stack::vertical()
+                        .gap_0p5()
+                        .child(div().children(step.label.clone().map(|label| {
+                            div()
+                                .text_color(resolve_hsla(&theme, &tokens.label))
+                                .font_weight(if is_active {
+                                    gpui::FontWeight::SEMIBOLD
+                                } else {
+                                    gpui::FontWeight::NORMAL
+                                })
+                                .child(label)
+                        })));
                 if let Some(description) = step.description.clone() {
                     text_block = text_block.child(
                         div()
@@ -358,8 +371,7 @@ impl RenderOnce for Stepper {
                         .cursor_pointer()
                         .hover(move |style| style.bg(hover_bg))
                         .on_click(move |_: &ClickEvent, window, cx| {
-                            if !controlled {
-                                control::set_text_state(&id, "active", index.to_string());
+                            if selection_state::apply_usize(&id, "active", controlled, index) {
                                 window.refresh();
                             }
                             if let Some(handler) = on_change.as_ref() {
@@ -443,9 +455,11 @@ impl RenderOnce for Stepper {
         panel = apply_radius(&self.theme, panel, self.radius);
         panel = panel.child(panel_content.unwrap_or_else(|| {
             if let Some((label, description)) = active_step_meta.clone() {
-                let mut fallback = Stack::vertical()
-                    .gap_1()
-                    .child(div().font_weight(gpui::FontWeight::MEDIUM).child(label));
+                let mut fallback = Stack::vertical().gap_1();
+                if let Some(label) = label {
+                    fallback =
+                        fallback.child(div().font_weight(gpui::FontWeight::MEDIUM).child(label));
+                }
                 if let Some(description) = description {
                     fallback = fallback.child(
                         div()

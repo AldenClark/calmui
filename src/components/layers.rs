@@ -13,6 +13,7 @@ use crate::overlay::{ManagedModal, ModalCloseReason, ModalKind, ModalManager};
 
 use super::Stack;
 use super::button::Button;
+use super::control;
 use super::icon::Icon;
 use super::overlay::{Overlay, OverlayCoverage, OverlayMaterialMode};
 use super::transition::TransitionExt;
@@ -403,10 +404,11 @@ impl ModalLayer {
         let id = managed.id();
         let modal = managed.modal_arc();
         let entry = modal.as_ref();
-        let panel_bg = resolve_hsla(&self.theme, &self.theme.components.modal.panel_bg);
-        let panel_border = resolve_hsla(&self.theme, &self.theme.components.modal.panel_border);
-        let title_color = resolve_hsla(&self.theme, &self.theme.components.modal.title);
-        let body_color = resolve_hsla(&self.theme, &self.theme.components.modal.body);
+        let modal_tokens = &self.theme.components.modal;
+        let panel_bg = resolve_hsla(&self.theme, &modal_tokens.panel_bg);
+        let panel_border = resolve_hsla(&self.theme, &modal_tokens.panel_border);
+        let title_color = resolve_hsla(&self.theme, &modal_tokens.title);
+        let body_color = resolve_hsla(&self.theme, &modal_tokens.body);
 
         let manager_for_overlay = self.manager.clone();
         let manager_for_close = self.manager.clone();
@@ -443,22 +445,32 @@ impl ModalLayer {
                 ),
             );
         }
-        header_title = header_title.child(
-            div()
-                .text_color(title_color)
-                .font_weight(gpui::FontWeight::SEMIBOLD)
-                .child(entry.title_ref().clone()),
-        );
+        if let Some(title) = entry.title_ref() {
+            header_title = header_title.child(
+                div()
+                    .text_size(modal_tokens.title_size)
+                    .text_color(title_color)
+                    .font_weight(modal_tokens.title_weight)
+                    .child(title.clone()),
+            );
+        } else {
+            header_title = header_title.child(div().flex_1());
+        }
 
         let mut close_action: AnyElement = div().into_any_element();
         if entry.close_button_enabled() {
             close_action = div()
                 .id(self.id.slot_index("modal-close", (id.0).to_string()))
+                .w(modal_tokens.close_size)
+                .h(modal_tokens.close_size)
+                .flex()
+                .items_center()
+                .justify_center()
                 .cursor_pointer()
                 .child(
                     Icon::named("x")
                         .with_id(self.id.slot_index("modal-close-icon", (id.0).to_string()))
-                        .size(14.0)
+                        .size(f32::from(modal_tokens.close_icon_size))
                         .color(title_color)
                         .registry(icons.clone()),
                 )
@@ -478,23 +490,28 @@ impl ModalLayer {
             .bg(panel_bg)
             .border(super::utils::quantized_stroke_px(window, 1.0))
             .border_color(panel_border)
-            .rounded_lg()
-            .p_4()
-            .child(
+            .rounded(modal_tokens.panel_radius)
+            .p(modal_tokens.panel_padding);
+
+        if entry.title_ref().is_some() || entry.close_button_enabled() {
+            panel = panel.child(
                 div()
                     .flex()
                     .flex_row()
                     .justify_between()
                     .items_center()
-                    .mb_2()
+                    .mb(modal_tokens.header_margin_bottom)
                     .child(header_title)
                     .child(close_action),
-            )
+            );
+        }
+
+        panel = panel
             .children(entry.body_ref().map(|body| {
                 div()
-                    .mb_2()
+                    .mb(modal_tokens.body_margin_bottom)
                     .text_color(body_color)
-                    .text_sm()
+                    .text_size(modal_tokens.body_size)
                     .child(body.clone())
             }))
             .children(entry.render_content());
@@ -502,12 +519,13 @@ impl ModalLayer {
         if entry.is_confirm_kind() {
             panel = panel.child(
                 div()
-                    .mt_3()
+                    .mt(modal_tokens.actions_margin_top)
                     .flex()
                     .justify_end()
-                    .gap_2()
+                    .gap(modal_tokens.actions_gap)
                     .child(
-                        Button::new(entry.cancel_label_ref().clone())
+                        Button::new()
+                            .label(entry.cancel_label_ref().clone())
                             .with_variant(crate::style::Variant::Default)
                             .on_click(move |_, window, _| {
                                 manager_for_cancel.cancel(id);
@@ -515,7 +533,8 @@ impl ModalLayer {
                             }),
                     )
                     .child(
-                        Button::new(entry.confirm_label_ref().clone())
+                        Button::new()
+                            .label(entry.confirm_label_ref().clone())
                             .with_variant(crate::style::Variant::Filled)
                             .on_click(move |_, window, _| {
                                 manager_for_confirm.confirm(id);
@@ -525,14 +544,19 @@ impl ModalLayer {
             );
         } else if entry.has_complete_action() {
             panel = panel.child(
-                div().mt_3().flex().justify_end().child(
-                    Button::new(entry.complete_label_ref().clone())
-                        .with_variant(crate::style::Variant::Filled)
-                        .on_click(move |_, window, _| {
-                            manager_for_complete.complete(id);
-                            window.refresh();
-                        }),
-                ),
+                div()
+                    .mt(modal_tokens.actions_margin_top)
+                    .flex()
+                    .justify_end()
+                    .child(
+                        Button::new()
+                            .label(entry.complete_label_ref().clone())
+                            .with_variant(crate::style::Variant::Filled)
+                            .on_click(move |_, window, _| {
+                                manager_for_complete.complete(id);
+                                window.refresh();
+                            }),
+                    ),
             );
         }
 
@@ -550,7 +574,7 @@ impl ModalLayer {
             .top_0()
             .left_0()
             .on_key_down(move |event, window, _cx| {
-                if close_on_escape && event.keystroke.key == "escape" {
+                if close_on_escape && control::is_escape_keystroke(event) {
                     manager_for_escape.close_with_reason(id, ModalCloseReason::EscapeKey);
                     window.refresh();
                 }

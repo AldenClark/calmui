@@ -28,7 +28,7 @@ struct SliderDragState {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SliderOrientation {
+enum SliderOrientation {
     Horizontal,
     Vertical,
 }
@@ -80,6 +80,14 @@ impl Slider {
             motion: MotionConfig::default(),
             on_change: None,
         }
+    }
+
+    pub fn horizontal() -> Self {
+        Self::new().with_orientation(SliderOrientation::Horizontal)
+    }
+
+    pub fn vertical() -> Self {
+        Self::new().with_orientation(SliderOrientation::Vertical)
     }
 
     pub fn value(mut self, value: f32) -> Self {
@@ -141,7 +149,7 @@ impl Slider {
         self
     }
 
-    pub fn orientation(mut self, value: SliderOrientation) -> Self {
+    fn with_orientation(mut self, value: SliderOrientation) -> Self {
         self.orientation = value;
         self
     }
@@ -171,26 +179,6 @@ impl Slider {
     fn segments(&self) -> usize {
         let span = (self.max - self.min).max(self.step.max(0.001));
         ((span / self.step.max(0.001)).round() as usize).clamp(1, 80)
-    }
-
-    fn track_height_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 4.0,
-            Size::Sm => 5.0,
-            Size::Md => 6.0,
-            Size::Lg => 8.0,
-            Size::Xl => 10.0,
-        }
-    }
-
-    fn thumb_size_px(&self) -> f32 {
-        match self.size {
-            Size::Xs => 12.0,
-            Size::Sm => 14.0,
-            Size::Md => 16.0,
-            Size::Lg => 20.0,
-            Size::Xl => 24.0,
-        }
     }
 
     fn filled_color(&self) -> gpui::Hsla {
@@ -240,10 +228,11 @@ impl RenderOnce for Slider {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.slider;
+        let size_preset = tokens.sizes.for_size(self.size);
         let value = self.resolved_value();
         let ratio = self.ratio(value);
-        let track_height = self.track_height_px();
-        let thumb_size = self.thumb_size_px();
+        let track_height = f32::from(size_preset.track_thickness);
+        let thumb_size = f32::from(size_preset.thumb_size);
         let track_top = ((thumb_size - track_height) * 0.5).max(0.0);
         let thumb_left =
             slider_axis::thumb_offset(SliderAxis::Horizontal, self.width_px, thumb_size, ratio);
@@ -377,19 +366,27 @@ impl RenderOnce for Slider {
 
             let mut container = Stack::vertical()
                 .id(self.id.clone())
-                .gap_1p5()
+                .gap(tokens.header_gap_vertical)
                 .items_center();
             if self.label.is_some() || self.show_value {
                 let mut header = Stack::vertical()
                     .items_center()
-                    .gap_0p5()
-                    .text_sm()
-                    .text_color(resolve_hsla(&self.theme, &tokens.label));
+                    .gap(tokens.header_gap_vertical);
                 if let Some(label) = self.label {
-                    header = header.child(label);
+                    header = header.child(
+                        div()
+                            .text_size(tokens.label_size)
+                            .text_color(resolve_hsla(&self.theme, &tokens.label))
+                            .child(label),
+                    );
                 }
                 if self.show_value {
-                    header = header.child(format!("{value:.display_precision$}"));
+                    header = header.child(
+                        div()
+                            .text_size(tokens.value_size)
+                            .text_color(resolve_hsla(&self.theme, &tokens.value))
+                            .child(format!("{value:.display_precision$}")),
+                    );
                 }
                 container = container.child(header);
             }
@@ -510,19 +507,30 @@ impl RenderOnce for Slider {
                 });
         }
 
-        let mut container = Stack::vertical().id(self.id.clone()).gap_1p5();
+        let mut container = Stack::vertical()
+            .id(self.id.clone())
+            .gap(tokens.header_gap_vertical);
         if self.label.is_some() || self.show_value {
             let mut header = Stack::horizontal()
                 .justify_between()
                 .items_center()
                 .w(px(self.width_px))
-                .text_sm()
-                .text_color(resolve_hsla(&self.theme, &tokens.label));
+                .gap(tokens.header_gap_horizontal);
             if let Some(label) = self.label {
-                header = header.child(label);
+                header = header.child(
+                    div()
+                        .text_size(tokens.label_size)
+                        .text_color(resolve_hsla(&self.theme, &tokens.label))
+                        .child(label),
+                );
             }
             if self.show_value {
-                header = header.child(format!("{value:.display_precision$}"));
+                header = header.child(
+                    div()
+                        .text_size(tokens.value_size)
+                        .text_color(resolve_hsla(&self.theme, &tokens.value))
+                        .child(format!("{value:.display_precision$}")),
+                );
             }
             container = container.child(header);
         }

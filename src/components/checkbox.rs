@@ -12,6 +12,7 @@ use crate::style::{GroupOrientation, Radius, Size, Variant};
 
 use super::Stack;
 use super::control;
+use super::selection_state;
 use super::toggle::{ToggleConfig, wire_toggle_handlers};
 use super::transition::TransitionExt;
 use super::utils::{apply_radius, resolve_hsla};
@@ -23,7 +24,7 @@ type CheckboxGroupChangeHandler = Rc<dyn Fn(Vec<SharedString>, &mut Window, &mut
 pub struct Checkbox {
     id: ComponentId,
     value: SharedString,
-    label: SharedString,
+    label: Option<SharedString>,
     description: Option<SharedString>,
     checked: Option<bool>,
     default_checked: bool,
@@ -38,12 +39,11 @@ pub struct Checkbox {
 
 impl Checkbox {
     #[track_caller]
-    pub fn new(label: impl Into<SharedString>) -> Self {
-        let label = label.into();
+    pub fn new() -> Self {
         Self {
             id: ComponentId::default(),
-            value: label.clone(),
-            label,
+            value: SharedString::from(""),
+            label: None,
             description: None,
             checked: None,
             default_checked: false,
@@ -55,6 +55,22 @@ impl Checkbox {
             motion: MotionConfig::default(),
             on_change: None,
         }
+    }
+
+    #[track_caller]
+    pub fn labeled(label: impl Into<SharedString>) -> Self {
+        let label = label.into();
+        Self::new().value(label.clone()).label(label)
+    }
+
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
+    }
+
+    pub fn clear_label(mut self) -> Self {
+        self.label = None;
+        self
     }
 
     pub fn value(mut self, value: impl Into<SharedString>) -> Self {
@@ -189,13 +205,13 @@ impl RenderOnce for Checkbox {
             .child(
                 Stack::vertical()
                     .gap_0p5()
-                    .child(
-                        Stack::horizontal()
-                            .items_center()
-                            .gap_2()
-                            .child(control)
-                            .child(div().text_color(fg).child(self.label)),
-                    )
+                    .child({
+                        let mut content = Stack::horizontal().items_center().gap_2().child(control);
+                        if let Some(label) = self.label {
+                            content = content.child(div().text_color(fg).child(label));
+                        }
+                        content
+                    })
                     .children(self.description.map(|description| {
                         div()
                             .ml(px(size + 8.0))
@@ -338,15 +354,14 @@ impl CheckboxGroup {
     }
 
     fn resolved_values(&self) -> Vec<SharedString> {
-        control::list_state(
+        selection_state::resolve_list(
             &self.id,
             "values",
-            self.values_controlled.then_some(
-                self.values
-                    .iter()
-                    .map(|value| value.to_string())
-                    .collect::<Vec<_>>(),
-            ),
+            self.values_controlled,
+            self.values
+                .iter()
+                .map(|value| value.to_string())
+                .collect::<Vec<_>>(),
             self.default_values
                 .iter()
                 .map(|value| value.to_string())
@@ -399,7 +414,8 @@ impl RenderOnce for CheckboxGroup {
             .enumerate()
             .map(|(index, option)| {
                 let checked = Self::contains_value(&values, &option.value);
-                let mut checkbox = Checkbox::new(option.label)
+                let mut checkbox = Checkbox::new()
+                    .label(option.label.clone())
                     .with_id(self.id.slot_index("option", index.to_string()))
                     .value(option.value.clone())
                     .checked(checked)
@@ -418,12 +434,12 @@ impl RenderOnce for CheckboxGroup {
                 let id = self.id.clone();
                 checkbox = checkbox.on_change(move |_, window, cx| {
                     let next = Self::toggled_values(&current, &value);
-                    if !is_controlled {
-                        control::set_list_state(
-                            &id,
-                            "values",
-                            next.iter().map(|value| value.to_string()).collect(),
-                        );
+                    if selection_state::apply_list(
+                        &id,
+                        "values",
+                        is_controlled,
+                        next.iter().map(|value| value.to_string()).collect(),
+                    ) {
                         window.refresh();
                     }
                     if let Some(handler) = on_change.as_ref() {

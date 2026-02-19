@@ -11,9 +11,9 @@ use crate::motion::MotionConfig;
 use crate::style::{Radius, Size};
 
 use super::Stack;
-use super::control;
 use super::pagination::Pagination;
 use super::scroll_area::{ScrollArea, ScrollDirection};
+use super::table_state::{self, TableState, TableStateInput};
 use super::transition::TransitionExt;
 use super::utils::{
     InteractionStyles, PressHandler, PressableBehavior, apply_interaction_styles, apply_radius,
@@ -402,14 +402,10 @@ impl Table {
         self
     }
 
-    fn apply_cell_size<T: Styled>(size: Size, node: T) -> T {
-        match size {
-            Size::Xs => node.text_xs().px_2().py_1(),
-            Size::Sm => node.text_sm().px_2p5().py_1p5(),
-            Size::Md => node.text_base().px_3().py_2(),
-            Size::Lg => node.text_lg().px_3p5().py_2(),
-            Size::Xl => node.text_xl().px_4().py_2p5(),
-        }
+    fn apply_cell_size<T: Styled>(preset: crate::theme::TableSizePreset, node: T) -> T {
+        node.text_size(preset.font_size)
+            .px(preset.padding_x)
+            .py(preset.padding_y)
     }
 
     fn column_count(&self) -> usize {
@@ -422,210 +418,8 @@ impl Table {
         self.headers.len().max(row_max).max(1)
     }
 
-    fn default_row_height_px(size: Size) -> f32 {
-        match size {
-            Size::Xs => 22.0,
-            Size::Sm => 26.0,
-            Size::Md => 32.0,
-            Size::Lg => 38.0,
-            Size::Xl => 44.0,
-        }
-    }
-}
-
-struct TableControllerInput<'a> {
-    id: &'a str,
-    total_rows: usize,
-    page_size: usize,
-    page_size_options: Vec<usize>,
-    pagination_enabled: bool,
-    page_controlled: bool,
-    page: Option<usize>,
-    default_page: usize,
-    max_height_px: Option<f32>,
-    sticky_header: bool,
-    has_headers: bool,
-    virtual_window: Option<(usize, usize)>,
-    auto_virtualization: bool,
-    virtualization_min_rows: usize,
-    virtualization_overscan_rows: usize,
-    virtual_row_height_px: Option<f32>,
-    default_row_height_px: f32,
-    line_thickness_px: f32,
-}
-
-#[derive(Clone, Debug)]
-struct TableController {
-    page_size_options: Vec<usize>,
-    resolved_page_size: usize,
-    page_count: usize,
-    resolved_page: usize,
-    resolved_scroll_height: Option<f32>,
-    auto_virtualization_enabled: bool,
-    row_extent: f32,
-    scroll_y: f32,
-    max_scroll_y: f32,
-    window_start: usize,
-    window_count: usize,
-}
-
-impl TableController {
-    fn resolve(input: TableControllerInput<'_>) -> Self {
-        let mut page_size_options = input
-            .page_size_options
-            .into_iter()
-            .map(|value| value.max(1))
-            .collect::<Vec<_>>();
-        page_size_options.sort_unstable();
-        page_size_options.dedup();
-        if page_size_options.is_empty() {
-            page_size_options.push(input.page_size);
-        }
-
-        let resolved_page_size = if input.pagination_enabled {
-            let size = control::usize_state(input.id, "page-size", None, input.page_size).max(1);
-            if !page_size_options.contains(&size) {
-                page_size_options.push(size);
-                page_size_options.sort_unstable();
-                page_size_options.dedup();
-            }
-            size
-        } else {
-            input.page_size
-        };
-
-        let page_count = if input.pagination_enabled {
-            ((input.total_rows + resolved_page_size.saturating_sub(1)) / resolved_page_size).max(1)
-        } else {
-            1
-        };
-
-        let resolved_page = if input.pagination_enabled {
-            let controlled_page = input
-                .page
-                .unwrap_or(input.default_page)
-                .clamp(1, page_count);
-            control::usize_state(
-                input.id,
-                "page",
-                input.page_controlled.then_some(controlled_page),
-                input.default_page.clamp(1, page_count),
-            )
-            .clamp(1, page_count)
-        } else {
-            1
-        };
-
-        let resolved_scroll_height = input.max_height_px.map(|max_height| {
-            if input.sticky_header && input.has_headers {
-                (max_height - 42.0).max(40.0)
-            } else {
-                max_height
-            }
-        });
-
-        let auto_virtualization_enabled = input.auto_virtualization
-            && !input.pagination_enabled
-            && input.virtual_window.is_none()
-            && resolved_scroll_height.is_some()
-            && input.total_rows >= input.virtualization_min_rows;
-
-        let default_row_extent = input.default_row_height_px + input.line_thickness_px;
-        let measured_row_height = control::f32_state(
-            input.id,
-            "virtual-row-height",
-            None,
-            input.default_row_height_px,
-        )
-        .max(1.0);
-        let row_extent = if auto_virtualization_enabled {
-            (input.virtual_row_height_px.unwrap_or(measured_row_height) + input.line_thickness_px)
-                .max(1.0)
-        } else {
-            default_row_extent
-        };
-
-        let scroll_height_for_virtual = resolved_scroll_height.unwrap_or(0.0);
-        let max_scroll_y = if auto_virtualization_enabled {
-            ((input.total_rows as f32 * row_extent)
-                - input.line_thickness_px
-                - scroll_height_for_virtual)
-                .max(0.0)
-        } else {
-            0.0
-        };
-
-        let scroll_y = if auto_virtualization_enabled {
-            control::f32_state(input.id, "virtual-scroll-y", None, 0.0).clamp(0.0, max_scroll_y)
-        } else {
-            0.0
-        };
-
-        let (window_start, window_count) = if input.pagination_enabled {
-            (
-                (resolved_page - 1) * resolved_page_size,
-                resolved_page_size.max(1),
-            )
-        } else if auto_virtualization_enabled {
-            let overscan = input.virtualization_overscan_rows.max(1);
-            let visible_count = ((scroll_height_for_virtual / row_extent).ceil() as usize)
-                .saturating_add(overscan.saturating_mul(2))
-                .saturating_add(2)
-                .max(1);
-            let start = ((scroll_y / row_extent).floor() as usize).saturating_sub(overscan);
-            (start, visible_count)
-        } else {
-            input
-                .virtual_window
-                .map(|(start, count)| (start, count.max(1)))
-                .unwrap_or((0, input.total_rows.saturating_add(1)))
-        };
-
-        if auto_virtualization_enabled {
-            control::set_usize_state(input.id, "virtual-window-start", window_start);
-            control::set_f32_state(input.id, "virtual-scroll-y", scroll_y);
-        }
-
-        Self {
-            page_size_options,
-            resolved_page_size,
-            page_count,
-            resolved_page,
-            resolved_scroll_height,
-            auto_virtualization_enabled,
-            row_extent,
-            scroll_y,
-            max_scroll_y,
-            window_start,
-            window_count,
-        }
-    }
-
-    fn slice_rows(&self, rows: Vec<(usize, Vec<String>, TableRow)>) -> Vec<(usize, TableRow)> {
-        let total_rows = rows.len();
-        rows.into_iter()
-            .skip(self.window_start.min(total_rows))
-            .take(self.window_count.max(1))
-            .map(|(source_index, _, row)| (source_index, row))
-            .collect::<Vec<_>>()
-    }
-
-    fn top_spacer_height(&self) -> f32 {
-        if self.auto_virtualization_enabled {
-            (self.window_start as f32 * self.row_extent).max(0.0)
-        } else {
-            0.0
-        }
-    }
-
-    fn bottom_spacer_height(&self, total_rows: usize, visible_rows: usize) -> f32 {
-        if self.auto_virtualization_enabled {
-            let remaining_rows =
-                total_rows.saturating_sub(self.window_start.saturating_add(visible_rows));
-            (remaining_rows as f32 * self.row_extent).max(0.0)
-        } else {
-            0.0
-        }
+    fn default_row_height_px(preset: crate::theme::TableSizePreset) -> f32 {
+        f32::from(preset.row_height)
     }
 }
 
@@ -647,10 +441,10 @@ impl RenderOnce for Table {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = self.theme.components.table.clone();
+        let table_size_preset = tokens.sizes.for_size(self.size);
         let line_thickness = hairline_px(window);
         let line_thickness_px = f32::from(line_thickness);
         let column_count = self.column_count();
-        let size = self.size;
         let table_id = self.id.clone();
         let caption = self.caption;
         let headers = self.headers;
@@ -737,7 +531,7 @@ impl RenderOnce for Table {
         }
 
         let total_rows = rows_with_meta.len();
-        let controller = TableController::resolve(TableControllerInput {
+        let state = TableState::resolve(TableStateInput {
             id: &table_id,
             total_rows,
             page_size,
@@ -754,25 +548,30 @@ impl RenderOnce for Table {
             virtualization_min_rows: self.virtualization_min_rows,
             virtualization_overscan_rows: self.virtualization_overscan_rows,
             virtual_row_height_px: self.virtual_row_height_px,
-            default_row_height_px: Self::default_row_height_px(size),
+            default_row_height_px: Self::default_row_height_px(table_size_preset),
             line_thickness_px,
         });
-        let page_size_options = controller.page_size_options.clone();
-        let page_count = controller.page_count;
-        let resolved_page = controller.resolved_page;
-        let resolved_page_size = controller.resolved_page_size;
-        let resolved_scroll_height = controller.resolved_scroll_height;
-        let auto_virtualization_enabled = controller.auto_virtualization_enabled;
-        let row_extent = controller.row_extent;
-        let scroll_y = controller.scroll_y;
-        let max_scroll_y = controller.max_scroll_y;
-        let window_start = controller.window_start;
-        let rows = controller.slice_rows(rows_with_meta);
+        let page_size_options = state.page_size_options.clone();
+        let page_count = state.page_count;
+        let resolved_page = state.resolved_page;
+        let resolved_page_size = state.resolved_page_size;
+        let resolved_scroll_height = state.resolved_scroll_height;
+        let auto_virtualization_enabled = state.auto_virtualization_enabled;
+        let row_extent = state.row_extent;
+        let scroll_y = state.scroll_y;
+        let max_scroll_y = state.max_scroll_y;
+        let window_start = state.window_start;
+        let rows = rows_with_meta
+            .into_iter()
+            .skip(state.window_start.min(total_rows))
+            .take(state.window_count.max(1))
+            .map(|(source_index, _, row)| (source_index, row))
+            .collect::<Vec<_>>();
 
         let mut root = Stack::vertical()
             .id(table_id.clone())
             .w_full()
-            .gap_0()
+            .gap(tokens.row_gap)
             .bg(resolve_hsla(&self.theme, &tokens.row_bg));
 
         if self.with_outer_border {
@@ -784,9 +583,10 @@ impl RenderOnce for Table {
 
         if let Some(caption) = caption {
             let caption = Self::apply_cell_size(
-                size,
+                table_size_preset,
                 div()
                     .id(table_id.slot("caption"))
+                    .text_size(tokens.caption_size)
                     .text_color(resolve_hsla(&self.theme, &tokens.caption))
                     .font_weight(gpui::FontWeight::MEDIUM)
                     .child(caption),
@@ -823,7 +623,7 @@ impl RenderOnce for Table {
                     }
                 });
                 let cell = Self::apply_cell_size(
-                    size,
+                    table_size_preset,
                     div()
                         .id(table_id.slot_index("header-cell", index.to_string()))
                         .flex_1()
@@ -840,9 +640,12 @@ impl RenderOnce for Table {
 
         let visible_row_count = rows.len();
         let has_rows = visible_row_count > 0;
-        let top_spacer_height = controller.top_spacer_height();
-        let bottom_spacer_height = controller.bottom_spacer_height(total_rows, visible_row_count);
-        let mut rows_root = Stack::vertical().id(table_id.slot("rows")).w_full().gap_0();
+        let top_spacer_height = state.top_spacer_height();
+        let bottom_spacer_height = state.bottom_spacer_height(total_rows, visible_row_count);
+        let mut rows_root = Stack::vertical()
+            .id(table_id.slot("rows"))
+            .w_full()
+            .gap(tokens.row_gap);
         if top_spacer_height > 0.0 {
             rows_root = rows_root.child(
                 div()
@@ -901,18 +704,7 @@ impl RenderOnce for Table {
                     canvas(
                         move |bounds, window, _cx| {
                             let measured = f32::from(bounds.size.height).max(1.0);
-                            let previous = control::f32_state(
-                                &table_id_for_height,
-                                "virtual-row-height",
-                                None,
-                                0.0,
-                            );
-                            if (measured - previous).abs() > 0.5 {
-                                control::set_f32_state(
-                                    &table_id_for_height,
-                                    "virtual-row-height",
-                                    measured,
-                                );
+                            if table_state::on_row_height_measured(&table_id_for_height, measured) {
                                 window.refresh();
                             }
                         },
@@ -936,7 +728,7 @@ impl RenderOnce for Table {
 
                 let next_cell = cells.next();
                 let mut cell = Self::apply_cell_size(
-                    size,
+                    table_size_preset,
                     div()
                         .id(table_id.slot_index("row-cell", format!("{row_index}-{column}")))
                         .flex_1()
@@ -970,7 +762,7 @@ impl RenderOnce for Table {
 
         if !has_rows {
             rows_root = rows_root.child(Self::apply_cell_size(
-                size,
+                table_size_preset,
                 div()
                     .id(table_id.slot("empty"))
                     .w_full()
@@ -1002,15 +794,15 @@ impl RenderOnce for Table {
                     .id(table_id.slot_index("page-size-selector", suffix))
                     .flex()
                     .items_center()
-                    .gap_1();
+                    .gap(tokens.page_chip_gap);
                 for option in page_size_options {
                     let is_active = option == resolved_page_size;
                     let mut item = div()
                         .id(table_id.slot_index("page-size", format!("{option}-{suffix}")))
-                        .px_2()
-                        .py_1()
-                        .text_sm()
-                        .rounded_sm()
+                        .px(tokens.page_chip_padding_x)
+                        .py(tokens.page_chip_padding_y)
+                        .text_size(tokens.page_chip_size)
+                        .rounded(tokens.page_chip_radius)
                         .border(super::utils::quantized_stroke_px(window, 1.0))
                         .border_color(resolve_hsla(&self.theme, &tokens.row_border))
                         .bg(if is_active {
@@ -1032,12 +824,7 @@ impl RenderOnce for Table {
                         let focus_ring = resolve_hsla(&self.theme, &self.theme.semantic.focus_ring);
                         let click_handler: PressHandler =
                             Rc::new(move |_: &ClickEvent, window: &mut gpui::Window, cx| {
-                                control::set_usize_state(
-                                    &table_id_for_page_size,
-                                    "page-size",
-                                    option,
-                                );
-                                control::set_usize_state(&table_id_for_page_size, "page", 1);
+                                table_state::on_page_size_change(&table_id_for_page_size, option);
                                 window.refresh();
                                 if let Some(handler) = on_page_size_change.as_ref() {
                                     (handler)(option, window, cx);
@@ -1066,23 +853,30 @@ impl RenderOnce for Table {
                 None
             };
 
-            let mut right = div().flex().items_center().gap_2().child(
-                Pagination::new()
-                    .with_id(table_id.slot_index("pagination", suffix))
-                    .total(page_count)
-                    .value(resolved_page)
-                    .siblings(self.pagination_siblings)
-                    .boundaries(self.pagination_boundaries)
-                    .on_change(move |next_page: usize, window: &mut gpui::Window, cx| {
-                        if !page_controlled {
-                            control::set_usize_state(&table_id_for_page, "page", next_page);
-                            window.refresh();
-                        }
-                        if let Some(handler) = on_page_change.as_ref() {
-                            (handler)(next_page, window, cx);
-                        }
-                    }),
-            );
+            let mut right = div()
+                .flex()
+                .items_center()
+                .gap(tokens.pagination_items_gap)
+                .child(
+                    Pagination::new()
+                        .with_id(table_id.slot_index("pagination", suffix))
+                        .total(page_count)
+                        .value(resolved_page)
+                        .siblings(self.pagination_siblings)
+                        .boundaries(self.pagination_boundaries)
+                        .on_change(move |next_page: usize, window: &mut gpui::Window, cx| {
+                            if table_state::on_page_change(
+                                &table_id_for_page,
+                                page_controlled,
+                                next_page,
+                            ) {
+                                window.refresh();
+                            }
+                            if let Some(handler) = on_page_change.as_ref() {
+                                (handler)(next_page, window, cx);
+                            }
+                        }),
+                );
             if let Some(selector) = size_selector {
                 right = right.child(selector);
             }
@@ -1090,16 +884,16 @@ impl RenderOnce for Table {
             div()
                 .id(table_id.slot_index("pagination-bar", suffix))
                 .w_full()
-                .px_3()
-                .py_2()
+                .px(tokens.pagination_padding_x)
+                .py(tokens.pagination_padding_y)
                 .flex()
                 .items_center()
                 .justify_between()
-                .gap_2()
+                .gap(tokens.pagination_gap)
                 .bg(resolve_hsla(&self.theme, &tokens.row_bg))
                 .child(
                     div()
-                        .text_sm()
+                        .text_size(tokens.pagination_summary_size)
                         .text_color(resolve_hsla(&self.theme, &tokens.caption))
                         .child(page_summary),
                 )
@@ -1129,7 +923,7 @@ impl RenderOnce for Table {
             let mut scroll_content = Stack::vertical()
                 .id(table_id.slot("scroll-content"))
                 .w_full()
-                .gap_0();
+                .gap(tokens.row_gap);
             if !sticky_header && let Some(header_row) = header_row_any.take() {
                 scroll_content = scroll_content.child(header_row);
                 if has_rows {
@@ -1153,42 +947,19 @@ impl RenderOnce for Table {
                         .h(px(scroll_height))
                         .overflow_y_scroll()
                         .track_scroll(&scroll_handle)
-                        .p_1()
+                        .p(tokens.virtualization_padding)
                         .child(scroll_content)
                         .child(
                             canvas(
                                 move |_bounds, window, _cx| {
                                     let next_y = (-f32::from(handle_for_monitor.offset().y))
                                         .clamp(0.0, max_scroll_for_monitor);
-                                    let current_y = control::f32_state(
+                                    if table_state::on_virtual_scroll(
                                         &table_id_for_scroll,
-                                        "virtual-scroll-y",
-                                        None,
-                                        0.0,
-                                    );
-                                    if (next_y - current_y).abs() > 0.5 {
-                                        control::set_f32_state(
-                                            &table_id_for_scroll,
-                                            "virtual-scroll-y",
-                                            next_y,
-                                        );
-                                    }
-
-                                    let next_start = ((next_y / row_extent_for_monitor).floor()
-                                        as usize)
-                                        .saturating_sub(overscan_rows);
-                                    let prev_start = control::usize_state(
-                                        &table_id_for_scroll,
-                                        "virtual-window-start",
-                                        None,
-                                        0,
-                                    );
-                                    if next_start != prev_start {
-                                        control::set_usize_state(
-                                            &table_id_for_scroll,
-                                            "virtual-window-start",
-                                            next_start,
-                                        );
+                                        next_y,
+                                        row_extent_for_monitor,
+                                        overscan_rows,
+                                    ) {
                                         window.refresh();
                                     }
                                 },

@@ -10,7 +10,8 @@ use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 
 use super::Stack;
-use super::popup::{PopupPlacement, PopupState, anchored_host};
+use super::popup::{PopupPlacement, anchored_host};
+use super::popup_state::{self, PopupStateInput, PopupStateValue};
 use super::transition::TransitionExt;
 use super::utils::resolve_hsla;
 
@@ -124,8 +125,7 @@ impl Popover {
             if let Some(handler) = self.on_open_change.clone() {
                 let id = self.id.clone();
                 panel = panel.on_mouse_down_out(move |_, window, cx| {
-                    if !is_controlled {
-                        super::control::set_bool_state(&id, "opened", false);
+                    if popup_state::on_close_request(&id, is_controlled) {
                         window.refresh();
                     }
                     (handler)(false, window, cx);
@@ -133,8 +133,9 @@ impl Popover {
             } else if !is_controlled {
                 let id = self.id.clone();
                 panel = panel.on_mouse_down_out(move |_, window, _cx| {
-                    super::control::set_bool_state(&id, "opened", false);
-                    window.refresh();
+                    if popup_state::on_close_request(&id, false) {
+                        window.refresh();
+                    }
                 });
             }
         }
@@ -166,8 +167,13 @@ impl MotionAware for Popover {
 impl RenderOnce for Popover {
     fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
-        let popup_state = PopupState::resolve(&self.id, self.opened, self.default_opened);
-        let opened = !self.disabled && popup_state.opened;
+        let popup_state = PopupStateValue::resolve(PopupStateInput {
+            id: &self.id,
+            opened: self.opened,
+            default_opened: self.default_opened,
+            disabled: self.disabled,
+        });
+        let opened = popup_state.opened;
         let is_controlled = popup_state.controlled;
 
         let mut trigger = div().id(self.id.slot("trigger")).relative().child(
@@ -185,8 +191,7 @@ impl RenderOnce for Popover {
             trigger = trigger.cursor_pointer();
             trigger = trigger.on_click(
                 move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
-                    if !is_controlled {
-                        super::control::set_bool_state(&id, "opened", next);
+                    if popup_state::apply_opened(&id, is_controlled, next) {
                         window.refresh();
                     }
                     (handler)(next, window, cx);
@@ -198,8 +203,9 @@ impl RenderOnce for Popover {
             trigger = trigger.cursor_pointer();
             trigger = trigger.on_click(
                 move |_: &ClickEvent, window: &mut Window, _cx: &mut gpui::App| {
-                    super::control::set_bool_state(&id, "opened", next);
-                    window.refresh();
+                    if popup_state::apply_opened(&id, false, next) {
+                        window.refresh();
+                    }
                 },
             );
         } else {

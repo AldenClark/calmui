@@ -16,20 +16,29 @@ use super::utils::{apply_radius, resolve_hsla};
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 
 pub struct TimelineItem {
-    pub title: SharedString,
+    pub title: Option<SharedString>,
     pub body: Option<SharedString>,
     pub marker_icon: Option<SharedString>,
     content: Option<SlotRenderer>,
 }
 
 impl TimelineItem {
-    pub fn new(title: impl Into<SharedString>) -> Self {
+    pub fn new() -> Self {
         Self {
-            title: title.into(),
+            title: None,
             body: None,
             marker_icon: None,
             content: None,
         }
+    }
+
+    pub fn titled(title: impl Into<SharedString>) -> Self {
+        Self::new().title(title)
+    }
+
+    pub fn title(mut self, value: impl Into<SharedString>) -> Self {
+        self.title = Some(value.into());
+        self
     }
 
     pub fn body(mut self, value: impl Into<SharedString>) -> Self {
@@ -252,20 +261,24 @@ impl RenderOnce for Timeline {
                 );
             }
 
-            let mut right_col = Stack::vertical().gap_1().min_w_0().child(
-                div()
-                    .text_color(if is_current {
-                        resolve_hsla(&theme, &tokens.title_active)
-                    } else {
-                        resolve_hsla(&theme, &tokens.title)
-                    })
-                    .font_weight(if is_current {
-                        gpui::FontWeight::SEMIBOLD
-                    } else {
-                        gpui::FontWeight::NORMAL
-                    })
-                    .child(item.title),
-            );
+            let mut right_col =
+                Stack::vertical()
+                    .gap_1()
+                    .min_w_0()
+                    .child(div().children(item.title.map(|title| {
+                        div()
+                            .text_color(if is_current {
+                                resolve_hsla(&theme, &tokens.title_active)
+                            } else {
+                                resolve_hsla(&theme, &tokens.title)
+                            })
+                            .font_weight(if is_current {
+                                gpui::FontWeight::SEMIBOLD
+                            } else {
+                                gpui::FontWeight::NORMAL
+                            })
+                            .child(title)
+                    })));
             if let Some(body) = item.body {
                 right_col = right_col.child(
                     div()
