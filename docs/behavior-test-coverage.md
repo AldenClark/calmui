@@ -1,6 +1,9 @@
-# Behavior Test Coverage Matrix
+# Behavior Test Coverage Matrix (v3)
 
-Behavior test source: `src/components/test_behavior_matrix.rs`.
+Behavior test sources:
+
+- `src/components/test_behavior_matrix.rs`
+- `src/components/test_behavior_coverage.rs`
 
 ## Covered Render Components (all)
 
@@ -70,3 +73,13 @@ Behavior test source: `src/components/test_behavior_matrix.rs`.
 - `FieldLike` behavior contract (`label/description/error/required/layout`) for field components.
 - Variant-size-radius behavior matrix for style-configurable components.
 - End-to-end render scenarios for all render components, including overlay/layer manager-backed components.
+
+## Coverage Guardrails
+
+- `test_behavior_coverage.rs` cross-checks `test_contract_matrix.rs` and asserts behavior coverage mentions for:
+  - all `RenderOnce` components
+  - all `Disableable` components
+  - all `Openable` components
+  - all `FieldLike` components
+  - all `Varianted` / `Sized` / `Radiused` components
+- This prevents adding new components to contract matrixes without behavior matrix updates.

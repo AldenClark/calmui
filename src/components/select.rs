@@ -59,6 +59,60 @@ impl SelectRuntime {
     }
 }
 
+fn render_select_label_block(
+    theme: &crate::theme::LocalTheme,
+    tokens: &SelectTokens,
+    label: &Option<SharedString>,
+    description: &Option<SharedString>,
+    error: &Option<SharedString>,
+    required: bool,
+) -> Option<AnyElement> {
+    if label.is_none() && description.is_none() && error.is_none() {
+        return None;
+    }
+
+    let mut block = Stack::vertical().gap(tokens.label_block_gap);
+
+    if let Some(label) = label.clone() {
+        let mut label_row = Stack::horizontal().gap(tokens.label_row_gap).child(
+            div()
+                .text_size(tokens.label_size)
+                .font_weight(tokens.label_weight)
+                .text_color(resolve_hsla(theme, &tokens.label))
+                .child(label),
+        );
+
+        if required {
+            label_row = label_row.child(
+                div()
+                    .text_color(resolve_hsla(theme, &theme.semantic.status_error))
+                    .child("*"),
+            );
+        }
+        block = block.child(label_row);
+    }
+
+    if let Some(description) = description.clone() {
+        block = block.child(
+            div()
+                .text_size(tokens.description_size)
+                .text_color(resolve_hsla(theme, &tokens.description))
+                .child(description),
+        );
+    }
+
+    if let Some(error) = error.clone() {
+        block = block.child(
+            div()
+                .text_size(tokens.error_size)
+                .text_color(resolve_hsla(theme, &tokens.error))
+                .child(error),
+        );
+    }
+
+    Some(block.into_any_element())
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SelectOption {
     pub value: SharedString,
@@ -282,54 +336,18 @@ impl Select {
         self.options
             .iter()
             .find(|option| option.value.as_ref() == current.as_ref())
-            .and_then(|option| option.label.clone())
+            .map(|option| option.label.clone().unwrap_or_else(|| option.value.clone()))
     }
 
     fn render_label_block(&self) -> Option<AnyElement> {
-        if self.label.is_none() && self.description.is_none() && self.error.is_none() {
-            return None;
-        }
-
-        let tokens = &self.theme.components.select;
-        let mut block = Stack::vertical().gap(tokens.label_block_gap);
-        if let Some(label) = self.label.clone() {
-            let mut label_row = Stack::horizontal().gap(tokens.label_row_gap).child(
-                div()
-                    .text_size(tokens.label_size)
-                    .font_weight(tokens.label_weight)
-                    .text_color(resolve_hsla(&self.theme, &tokens.label))
-                    .child(label),
-            );
-
-            if self.required {
-                label_row = label_row.child(
-                    div()
-                        .text_color(resolve_hsla(&self.theme, &self.theme.semantic.status_error))
-                        .child("*"),
-                );
-            }
-            block = block.child(label_row);
-        }
-
-        if let Some(description) = self.description.clone() {
-            block = block.child(
-                div()
-                    .text_size(tokens.description_size)
-                    .text_color(resolve_hsla(&self.theme, &tokens.description))
-                    .child(description),
-            );
-        }
-
-        if let Some(error) = self.error.clone() {
-            block = block.child(
-                div()
-                    .text_size(tokens.error_size)
-                    .text_color(resolve_hsla(&self.theme, &tokens.error))
-                    .child(error),
-            );
-        }
-
-        Some(block.into_any_element())
+        render_select_label_block(
+            &self.theme,
+            &self.theme.components.select,
+            &self.label,
+            &self.description,
+            &self.error,
+            self.required,
+        )
     }
 
     fn render_control(&mut self, window: &gpui::Window) -> AnyElement {
@@ -500,107 +518,106 @@ impl Select {
         let tokens = &self.theme.components.select;
         let current_value = self.resolved_value();
 
-        let items = self
-            .options
-            .iter()
-            .cloned()
-            .map(|option| {
-                let row_id = self.id.slot_index("option", option.value.to_string());
-                let selected = current_value
-                    .as_ref()
-                    .is_some_and(|current| current.as_ref() == option.value.as_ref());
+        let items =
+            self.options
+                .iter()
+                .cloned()
+                .map(|option| {
+                    let row_id = self.id.slot_index("option", option.value.to_string());
+                    let selected = current_value
+                        .as_ref()
+                        .is_some_and(|current| current.as_ref() == option.value.as_ref());
 
-                let row_bg = if selected {
-                    resolve_hsla(&self.theme, &tokens.option_selected_bg)
-                } else {
-                    resolve_hsla(&self.theme, &gpui::transparent_black())
-                };
-                let hover_bg = resolve_hsla(&self.theme, &tokens.option_hover_bg);
+                    let row_bg = if selected {
+                        resolve_hsla(&self.theme, &tokens.option_selected_bg)
+                    } else {
+                        resolve_hsla(&self.theme, &gpui::transparent_black())
+                    };
+                    let hover_bg = resolve_hsla(&self.theme, &tokens.option_hover_bg);
 
-                let mut row = div()
-                    .id(row_id.clone())
-                    .px(tokens.option_padding_x)
-                    .py(tokens.option_padding_y)
-                    .rounded_sm()
-                    .text_size(tokens.option_size)
-                    .text_color(resolve_hsla(&self.theme, &tokens.option_fg))
-                    .bg(row_bg)
-                    .child({
-                        let mut label_node = div().flex_1().min_w_0().truncate();
-                        if let Some(label) = option.label.clone() {
-                            label_node = label_node.child(label);
-                        }
-                        Stack::horizontal()
-                            .w_full()
-                            .justify_between()
-                            .items_center()
-                            .gap(tokens.option_content_gap)
-                            .child(label_node)
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .flex_none()
-                                    .w(tokens.option_check_size)
-                                    .h(tokens.option_check_size)
-                                    .children(
-                                        selected.then_some(
-                                            Icon::named("check")
-                                                .with_id(self.id.slot_index(
-                                                    "selected",
-                                                    option.value.to_string(),
-                                                ))
-                                                .size(f32::from(tokens.option_check_size))
-                                                .color(resolve_hsla(&self.theme, &tokens.icon)),
+                    let mut row = div()
+                        .id(row_id.clone())
+                        .px(tokens.option_padding_x)
+                        .py(tokens.option_padding_y)
+                        .rounded_sm()
+                        .text_size(tokens.option_size)
+                        .text_color(resolve_hsla(&self.theme, &tokens.option_fg))
+                        .bg(row_bg)
+                        .child({
+                            let label_node = div().flex_1().min_w_0().truncate().child(
+                                option.label.clone().unwrap_or_else(|| option.value.clone()),
+                            );
+                            Stack::horizontal()
+                                .w_full()
+                                .justify_between()
+                                .items_center()
+                                .gap(tokens.option_content_gap)
+                                .child(label_node)
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .flex_none()
+                                        .w(tokens.option_check_size)
+                                        .h(tokens.option_check_size)
+                                        .children(
+                                            selected.then_some(
+                                                Icon::named("check")
+                                                    .with_id(self.id.slot_index(
+                                                        "selected",
+                                                        option.value.to_string(),
+                                                    ))
+                                                    .size(f32::from(tokens.option_check_size))
+                                                    .color(resolve_hsla(&self.theme, &tokens.icon)),
+                                            ),
                                         ),
-                                    ),
-                            )
-                    });
-
-                if option.disabled {
-                    row = row.opacity(0.45).cursor_default();
-                } else {
-                    let value = option.value.clone();
-                    let on_change = self.on_change.clone();
-                    let on_open_change = self.on_open_change.clone();
-                    let id = self.id.clone();
-                    let value_controlled = self.value_controlled;
-                    let opened_controlled = self.opened_controlled;
-                    let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
-                    let activate_handler: ActivateHandler =
-                        Rc::new(move |window: &mut Window, cx: &mut gpui::App| {
-                            if select_state::apply_single_option_commit(
-                                &id,
-                                value_controlled,
-                                opened_controlled,
-                                value.as_ref(),
-                            ) {
-                                window.refresh();
-                            }
-                            if let Some(handler) = on_change.as_ref() {
-                                (handler)(value.clone(), window, cx);
-                            }
-                            if let Some(handler) = on_open_change.as_ref() {
-                                (handler)(false, window, cx);
-                            }
+                                )
                         });
-                    row = apply_interaction_styles(
-                        row.cursor_pointer(),
-                        InteractionStyles::new()
-                            .hover(interaction_style(move |style| style.bg(hover_bg)))
-                            .active(interaction_style(move |style| style.bg(press_bg)))
-                            .focus(interaction_style(move |style| style.bg(hover_bg))),
-                    );
-                    row = bind_press_adapter(
-                        row,
-                        PressAdapter::new(row_id.clone()).on_activate(Some(activate_handler)),
-                    );
-                }
 
-                row
-            })
-            .collect::<Vec<_>>();
+                    if option.disabled {
+                        row = row.opacity(0.45).cursor_default();
+                    } else {
+                        let value = option.value.clone();
+                        let on_change = self.on_change.clone();
+                        let on_open_change = self.on_open_change.clone();
+                        let id = self.id.clone();
+                        let value_controlled = self.value_controlled;
+                        let opened_controlled = self.opened_controlled;
+                        let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
+                        let activate_handler: ActivateHandler =
+                            Rc::new(move |window: &mut Window, cx: &mut gpui::App| {
+                                if select_state::apply_single_option_commit(
+                                    &id,
+                                    value_controlled,
+                                    opened_controlled,
+                                    value.as_ref(),
+                                ) {
+                                    window.refresh();
+                                }
+                                if let Some(handler) = on_change.as_ref() {
+                                    (handler)(value.clone(), window, cx);
+                                }
+                                if let Some(handler) = on_open_change.as_ref() {
+                                    (handler)(false, window, cx);
+                                }
+                            });
+                        row = apply_interaction_styles(
+                            row.cursor_pointer(),
+                            InteractionStyles::new()
+                                .hover(interaction_style(move |style| style.bg(hover_bg)))
+                                .active(interaction_style(move |style| style.bg(press_bg)))
+                                .focus(interaction_style(move |style| style.bg(hover_bg))),
+                        );
+                        row = bind_press_adapter(
+                            row,
+                            PressAdapter::new(row_id.clone()).on_activate(Some(activate_handler)),
+                        );
+                    }
+
+                    row
+                })
+                .collect::<Vec<_>>();
 
         let mut dropdown = div()
             .id(self.id.slot("dropdown"))
@@ -772,6 +789,7 @@ impl RenderOnce for Select {
             trigger = trigger.child(anchor_host);
         }
         field = field.child(trigger);
+        field = field.w_full().min_w_0();
 
         match self.layout {
             FieldLayout::Vertical => container.child(field),
@@ -783,7 +801,7 @@ impl RenderOnce for Select {
                 if let Some(label_block) = self.render_label_block() {
                     row = row.child(div().w(horizontal_label_width).child(label_block));
                 }
-                row.child(div().flex_1().child(field))
+                row.child(field)
             }
         }
     }
@@ -959,7 +977,7 @@ impl MultiSelect {
         self.options
             .iter()
             .filter(|option| select_state::contains(&values, option.value.as_ref()))
-            .filter_map(|option| option.label.clone())
+            .map(|option| option.label.clone().unwrap_or_else(|| option.value.clone()))
             .collect()
     }
 
@@ -992,51 +1010,14 @@ impl MultiSelect {
     }
 
     fn render_label_block(&self) -> Option<AnyElement> {
-        if self.label.is_none() && self.description.is_none() && self.error.is_none() {
-            return None;
-        }
-
-        let tokens = &self.theme.components.select;
-        let mut block = Stack::vertical().gap(tokens.label_block_gap);
-
-        if let Some(label) = self.label.clone() {
-            let mut label_row = Stack::horizontal().gap(tokens.label_row_gap).child(
-                div()
-                    .text_size(tokens.label_size)
-                    .font_weight(tokens.label_weight)
-                    .text_color(resolve_hsla(&self.theme, &tokens.label))
-                    .child(label),
-            );
-
-            if self.required {
-                label_row = label_row.child(
-                    div()
-                        .text_color(resolve_hsla(&self.theme, &self.theme.semantic.status_error))
-                        .child("*"),
-                );
-            }
-            block = block.child(label_row);
-        }
-
-        if let Some(description) = self.description.clone() {
-            block = block.child(
-                div()
-                    .text_size(tokens.description_size)
-                    .text_color(resolve_hsla(&self.theme, &tokens.description))
-                    .child(description),
-            );
-        }
-
-        if let Some(error) = self.error.clone() {
-            block = block.child(
-                div()
-                    .text_size(tokens.error_size)
-                    .text_color(resolve_hsla(&self.theme, &tokens.error))
-                    .child(error),
-            );
-        }
-
-        Some(block.into_any_element())
+        render_select_label_block(
+            &self.theme,
+            &self.theme.components.select,
+            &self.label,
+            &self.description,
+            &self.error,
+            self.required,
+        )
     }
 
     fn render_control(&mut self, window: &gpui::Window) -> AnyElement {
@@ -1168,7 +1149,9 @@ impl MultiSelect {
                     .border_color(resolve_hsla(&self.theme, &tokens.tag_border))
                     .bg(resolve_hsla(&self.theme, &tokens.tag_bg))
                     .text_color(resolve_hsla(&self.theme, &tokens.tag_fg))
-                    .child(div().max_w(tokens.tag_max_width).truncate().child(label))
+                    .max_w(tokens.tag_max_width)
+                    .truncate()
+                    .child(label)
             });
 
             control = control.child(
@@ -1250,10 +1233,10 @@ impl MultiSelect {
                     .text_color(resolve_hsla(&self.theme, &tokens.option_fg))
                     .bg(row_bg)
                     .child({
-                        let mut label_node = div().flex_1().min_w_0().truncate();
-                        if let Some(label) = option.label.clone() {
-                            label_node = label_node.child(label);
-                        }
+                        let label_node =
+                            div().flex_1().min_w_0().truncate().child(
+                                option.label.clone().unwrap_or_else(|| option.value.clone()),
+                            );
                         Stack::horizontal()
                             .w_full()
                             .justify_between()
@@ -1499,6 +1482,7 @@ impl RenderOnce for MultiSelect {
             trigger = trigger.child(anchor_host);
         }
         field = field.child(trigger);
+        field = field.w_full().min_w_0();
 
         match self.layout {
             FieldLayout::Vertical => container.child(field),
@@ -1510,7 +1494,7 @@ impl RenderOnce for MultiSelect {
                 if let Some(label_block) = self.render_label_block() {
                     row = row.child(div().w(horizontal_label_width).child(label_block));
                 }
-                row.child(div().flex_1().child(field))
+                row.child(field)
             }
         }
     }

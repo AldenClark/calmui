@@ -185,12 +185,29 @@ impl Tree {
     }
 
     fn collect_default_expanded(nodes: &[TreeNode], output: &mut Vec<SharedString>) {
-        for node in nodes {
+        struct Frame<'a> {
+            nodes: &'a [TreeNode],
+            index: usize,
+        }
+
+        let mut stack = vec![Frame { nodes, index: 0 }];
+        while let Some(frame) = stack.last_mut() {
+            if frame.index >= frame.nodes.len() {
+                stack.pop();
+                continue;
+            }
+
+            let node = &frame.nodes[frame.index];
+            frame.index += 1;
             if node.default_expanded {
                 output.push(node.value.clone());
             }
+
             if !node.children.is_empty() {
-                Self::collect_default_expanded(&node.children, output);
+                stack.push(Frame {
+                    nodes: &node.children,
+                    index: 0,
+                });
             }
         }
     }
@@ -209,24 +226,75 @@ impl Tree {
     fn collect_visible_nodes(
         nodes: &[TreeNode],
         expanded: &BTreeSet<String>,
-        parent: Option<&str>,
-        output: &mut Vec<TreeVisibleNode>,
-    ) {
-        for node in nodes {
-            let value = node.value.to_string();
-            let is_expanded = expanded.contains(value.as_str());
-            let first_child = node.children.first().map(|child| child.value.to_string());
-            output.push(TreeVisibleNode {
-                value: value.clone(),
-                parent: parent.map(ToOwned::to_owned),
-                disabled: node.disabled,
-                has_children: !node.children.is_empty(),
-                first_child,
-            });
-            if is_expanded && !node.children.is_empty() {
-                Self::collect_visible_nodes(&node.children, expanded, Some(value.as_str()), output);
+    ) -> Vec<TreeVisibleNode> {
+        struct Frame<'a> {
+            nodes: &'a [TreeNode],
+            index: usize,
+            depth: usize,
+            parent: Option<String>,
+            path_prefix: String,
+        }
+
+        let mut output = Vec::new();
+        let mut stack = vec![Frame {
+            nodes,
+            index: 0,
+            depth: 0,
+            parent: None,
+            path_prefix: String::new(),
+        }];
+
+        while !stack.is_empty() {
+            let mut next_frame = None;
+            {
+                let frame = stack.last_mut().expect("stack is not empty");
+                if frame.index >= frame.nodes.len() {
+                    stack.pop();
+                    continue;
+                }
+
+                let index = frame.index;
+                let node = &frame.nodes[index];
+                frame.index += 1;
+
+                let path = if frame.path_prefix.is_empty() {
+                    index.to_string()
+                } else {
+                    format!("{}-{index}", frame.path_prefix)
+                };
+                let value = node.value.to_string();
+                let has_children = !node.children.is_empty();
+                let is_expanded = expanded.contains(value.as_str());
+                let first_child = node.children.first().map(|child| child.value.to_string());
+
+                output.push(TreeVisibleNode {
+                    value: value.clone(),
+                    parent: frame.parent.clone(),
+                    label: node.label.as_ref().map(ToString::to_string),
+                    depth: frame.depth,
+                    path: path.clone(),
+                    disabled: node.disabled,
+                    has_children,
+                    first_child,
+                });
+
+                if has_children && is_expanded {
+                    next_frame = Some(Frame {
+                        nodes: &node.children,
+                        index: 0,
+                        depth: frame.depth + 1,
+                        parent: Some(value),
+                        path_prefix: path,
+                    });
+                }
+            }
+
+            if let Some(frame) = next_frame {
+                stack.push(frame);
             }
         }
+
+        output
     }
 }
 
@@ -287,28 +355,22 @@ struct TreeRenderCtx {
 }
 
 impl TreeRenderCtx {
-    fn render_node(
-        &self,
-        window: &gpui::Window,
-        node: TreeNode,
-        depth: usize,
-        path: String,
-    ) -> AnyElement {
-        let value_key = node.value.to_string();
-        let has_children = !node.children.is_empty();
+    fn render_visible_row(&self, window: &gpui::Window, node: &TreeVisibleNode) -> AnyElement {
+        let value_key = node.value.clone();
+        let has_children = node.has_children;
         let is_expanded = self.expanded.contains(value_key.as_str());
         let is_selected = self
             .selected
             .as_ref()
-            .is_some_and(|selected| selected.as_ref() == node.value.as_ref());
+            .is_some_and(|selected| selected.as_ref() == node.value.as_str());
 
         let mut row = div()
-            .id(self.tree_id.slot_index("row", path.clone()))
+            .id(self.tree_id.slot_index("row", node.path.clone()))
             .w_full()
             .flex()
             .items_center()
             .gap(self.size_preset.row_inner_gap)
-            .pl(px(depth as f32 * f32::from(self.size_preset.indent)))
+            .pl(px(node.depth as f32 * f32::from(self.size_preset.indent)))
             .pr(self.size_preset.row_padding_right)
             .py(self.size_preset.row_padding_y)
             .border(super::utils::quantized_stroke_px(window, 1.0))
@@ -332,7 +394,7 @@ impl TreeRenderCtx {
         row = apply_radius(&self.theme, row, self.radius);
 
         let mut toggle = div()
-            .id(self.tree_id.slot_index("toggle", path.clone()))
+            .id(self.tree_id.slot_index("toggle", node.path.clone()))
             .w(self.size_preset.toggle_size)
             .h(self.size_preset.toggle_size)
             .flex()
@@ -345,12 +407,12 @@ impl TreeRenderCtx {
                 } else {
                     "chevron-right"
                 })
-                .with_id(self.tree_id.slot_index("chevron", path.clone()))
+                .with_id(self.tree_id.slot_index("chevron", node.path.clone()))
                 .size(f32::from(self.size_preset.toggle_icon_size)),
             );
             if !node.disabled {
                 let tree_id = self.tree_id.clone();
-                let value = node.value.clone();
+                let value = SharedString::from(value_key.clone());
                 let controlled = self.expanded_controlled;
                 let on_expanded_change = self.on_expanded_change.clone();
                 let expanded_snapshot = self.expanded_values.clone();
@@ -378,16 +440,16 @@ impl TreeRenderCtx {
                 toggle = toggle.cursor_pointer();
                 toggle = bind_press_adapter(
                     toggle,
-                    PressAdapter::new(self.tree_id.slot_index("toggle", path.clone()))
+                    PressAdapter::new(self.tree_id.slot_index("toggle", node.path.clone()))
                         .on_activate(Some(activate_handler)),
                 );
             }
         }
 
-        let connector = if self.show_lines && depth > 0 {
+        let connector = if self.show_lines && node.depth > 0 {
             Some(
                 div()
-                    .id(self.tree_id.slot_index("line-h", path.clone()))
+                    .id(self.tree_id.slot_index("line-h", node.path.clone()))
                     .w(self.size_preset.connector_stub_width)
                     .h(super::utils::hairline_px(window))
                     .bg(resolve_hsla(&self.theme, &self.tokens.line)),
@@ -397,12 +459,17 @@ impl TreeRenderCtx {
         };
 
         let label = div()
-            .id(self.tree_id.slot_index("label", path.clone()))
+            .id(self.tree_id.slot_index("label", node.path.clone()))
             .flex_1()
             .min_w_0()
             .text_size(self.size_preset.label_size)
             .truncate()
-            .children(node.label.clone());
+            .child(
+                node.label
+                    .clone()
+                    .map(SharedString::from)
+                    .unwrap_or_else(|| SharedString::from(value_key.clone())),
+            );
 
         if let Some(connector) = connector {
             row = row.child(connector);
@@ -416,7 +483,7 @@ impl TreeRenderCtx {
             let hover_bg = resolve_hsla(&self.theme, &self.tokens.row_hover_bg);
             row = row.hover(move |style| style.bg(hover_bg));
             let tree_id = self.tree_id.clone();
-            let value = node.value.clone();
+            let value = SharedString::from(value_key.clone());
             let controlled = self.selected_controlled;
             let on_select = self.on_select.clone();
             let activate_handler: ActivateHandler = Rc::new(move |window, cx| {
@@ -432,52 +499,13 @@ impl TreeRenderCtx {
             row = row.cursor_pointer();
             row = bind_press_adapter(
                 row,
-                PressAdapter::new(self.tree_id.slot_index("row", path.clone()))
+                PressAdapter::new(self.tree_id.slot_index("row", node.path.clone()))
                     .on_activate(Some(activate_handler)),
             );
         } else {
             row = row.opacity(0.55).cursor_default();
         }
-
-        let mut wrapper = Stack::vertical()
-            .id(self.tree_id.slot_index("node", path.clone()))
-            .w_full()
-            .gap(self.tokens.children_gap)
-            .child(row);
-
-        if has_children && is_expanded {
-            let mut child_list = Stack::vertical()
-                .id(self.tree_id.slot_index("children", path.clone()))
-                .w_full()
-                .gap(self.tokens.children_gap);
-            if self.show_lines {
-                child_list = child_list
-                    .relative()
-                    .ml(px((depth as f32 * f32::from(self.size_preset.indent))
-                        + f32::from(self.size_preset.child_line_margin)))
-                    .pl(self.size_preset.child_line_padding)
-                    .child(
-                        div()
-                            .absolute()
-                            .left_0()
-                            .top_0()
-                            .h_full()
-                            .w(super::utils::hairline_px(window))
-                            .bg(resolve_hsla(&self.theme, &self.tokens.line)),
-                    );
-            }
-            for (index, child) in node.children.into_iter().enumerate() {
-                child_list = child_list.child(self.render_node(
-                    window,
-                    child,
-                    depth + 1,
-                    format!("{path}-{index}"),
-                ));
-            }
-            wrapper = wrapper.child(child_list);
-        }
-
-        wrapper.into_any_element()
+        row.into_any_element()
     }
 }
 
@@ -517,8 +545,7 @@ impl RenderOnce for Tree {
         let expanded_set = expanded_values.iter().cloned().collect::<BTreeSet<_>>();
         let tokens = self.theme.components.tree.clone();
         let tree_size_preset = tokens.sizes.for_size(self.size);
-        let mut visible_nodes = Vec::new();
-        Self::collect_visible_nodes(&self.nodes, &expanded_set, None, &mut visible_nodes);
+        let visible_nodes = Self::collect_visible_nodes(&self.nodes, &expanded_set);
         let ctx = TreeRenderCtx {
             tree_id: self.id.clone(),
             theme: self.theme.clone(),
@@ -608,8 +635,8 @@ impl RenderOnce for Tree {
                 }
             });
 
-        for (index, node) in self.nodes.into_iter().enumerate() {
-            root = root.child(ctx.render_node(window, node, 0, index.to_string()));
+        for node in &visible_nodes {
+            root = root.child(ctx.render_visible_row(window, node));
         }
 
         gpui::Refineable::refine(gpui::Styled::style(&mut root), &self.style);

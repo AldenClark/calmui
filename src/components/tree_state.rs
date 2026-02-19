@@ -6,6 +6,9 @@ use super::control;
 pub struct TreeVisibleNode {
     pub value: String,
     pub parent: Option<String>,
+    pub label: Option<String>,
+    pub depth: usize,
+    pub path: String,
     pub disabled: bool,
     pub has_children: bool,
     pub first_child: Option<String>,

@@ -1,4 +1,20 @@
-# Full Component Depth Evaluation (Pass v2)
+# Full Component Depth Evaluation (Pass v3)
+
+## v3 Addendum
+
+Additional flattening/optimization changes in this pass:
+
+- `tree.rs`: recursive render path removed (iterative frame-stack traversal).
+- `select.rs`: label block deduplicated, option/selected label fallback fixed, wrapper layers reduced.
+- `input.rs` / `textarea.rs`: horizontal layout wrapper flattening.
+
+Tightened budget guardrails were updated in:
+
+- `src/components/test_layout_depth_budget.rs`
+  - `input.rs`
+  - `textarea.rs`
+  - `select.rs`
+  - `tree.rs`
 
 This file records a full-pass assessment across component modules in `src/components` (test files excluded).
 

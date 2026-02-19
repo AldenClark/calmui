@@ -56,6 +56,9 @@ fn demo_visible_nodes() -> Vec<tree_state::TreeVisibleNode> {
         tree_state::TreeVisibleNode {
             value: "root".into(),
             parent: None,
+            label: Some("Root".into()),
+            depth: 0,
+            path: "0".into(),
             disabled: false,
             has_children: true,
             first_child: Some("child-a".into()),
@@ -63,6 +66,9 @@ fn demo_visible_nodes() -> Vec<tree_state::TreeVisibleNode> {
         tree_state::TreeVisibleNode {
             value: "child-a".into(),
             parent: Some("root".into()),
+            label: Some("Child A".into()),
+            depth: 1,
+            path: "0-0".into(),
             disabled: false,
             has_children: false,
             first_child: None,
@@ -70,6 +76,9 @@ fn demo_visible_nodes() -> Vec<tree_state::TreeVisibleNode> {
         tree_state::TreeVisibleNode {
             value: "child-b".into(),
             parent: Some("root".into()),
+            label: Some("Child B".into()),
+            depth: 1,
+            path: "0-1".into(),
             disabled: true,
             has_children: false,
             first_child: None,

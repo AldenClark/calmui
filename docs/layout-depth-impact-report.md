@@ -1,93 +1,87 @@
-# Layout Depth Impact Report (v2)
+# Layout Depth Impact Report (v3)
 
 ## Scope
 
-This report summarizes the completed flattening batches while keeping the architecture/token upgrades intact.
+This pass keeps the tokenization + architecture upgrades, then applies an additional stability-focused optimization batch:
 
-Flattening-covered components:
+- public API/module surface consolidation (`widgets`, `foundation`, `prelude`)
+- high-risk tree rendering path de-recursion
+- select/multiselect render flattening and label fallback correctness
+- horizontal field-layout wrapper flattening for `input` / `textarea` / `select` / `multiselect`
+- behavior coverage guardrails for all contract-matrix component sets
 
-- `src/components/input.rs`
-- `src/components/textarea.rs`
-- `src/components/select.rs`
-- `src/components/layers.rs`
-- `src/components/modal.rs`
-- `src/components/title_bar.rs`
-- `src/components/table.rs`
-- `src/components/timeline.rs`
-- `src/components/layout.rs`
-- `src/components/menu.rs`
-- `src/components/popover.rs`
-- `src/components/tooltip.rs`
-- `src/components/hovercard.rs`
-- `src/components/tabs.rs`
-- `src/components/stepper.rs`
+## Metric Delta (v3 Batch)
 
-## Metric Delta (Current Additional Batch)
+Metrics computed with the same line-based budget logic used by `src/components/test_layout_depth_budget.rs`.
 
 | Component | child_calls | div_calls | canvas_calls | max_chain |
 |---|---:|---:|---:|---:|
-| table.rs | 42 -> 41 | 19 -> 17 | 2 -> 2 | 4 -> 4 |
-| timeline.rs | 16 -> 16 | 8 -> 7 | 0 -> 0 | 6 -> 6 |
-| layout.rs | 7 -> 7 | 9 -> 9 | 0 -> 0 | 6 -> 6 |
-| menu.rs | 9 -> 9 | 5 -> 4 | 1 -> 1 | 5 -> 5 |
-| popover.rs | 5 -> 5 | 3 -> 2 | 0 -> 0 | 5 -> 5 |
-| tooltip.rs | 5 -> 5 | 4 -> 3 | 0 -> 0 | 5 -> 5 |
-| hovercard.rs | 10 -> 10 | 5 -> 4 | 1 -> 1 | 5 -> 5 |
-| tabs.rs | 6 -> 6 | 3 -> 2 | 0 -> 0 | 6 -> 6 |
-| stepper.rs | 24 -> 24 | 11 -> 10 | 0 -> 0 | 6 -> 6 |
+| input.rs | 36 -> 36 | 18 -> 17 | 1 -> 1 | 6 -> 6 |
+| textarea.rs | 30 -> 30 | 15 -> 14 | 3 -> 3 | 6 -> 6 |
+| select.rs | 63 -> 54 | 32 -> 25 | 2 -> 2 | 6 -> 6 |
+| tree.rs | 10 -> 6 | 5 -> 4 | 0 -> 0 | 5 -> 5 |
 
 ## What Changed
 
-1. Empty slot/cell placeholders were removed where they only served shape padding.
-- `table.rs`: removed empty cell placeholder `div().child("")`; empty-state content now mounts directly without synthetic wrapper.
-- `layout.rs`: trailing grid cells are represented by direct empty flex cells, no synthetic nested filler element.
+1. Tree high-risk path was de-recursed.
+- `src/components/tree.rs` no longer recursively renders child branches.
+- visible node collection is now iterative (explicit frame stack), which lowers stack-depth risk on deep trees.
+- keyboard state transitions continue to use the same `tree_state` contract.
 
-2. Optional title/trigger fallback now renders sparsely.
-- `timeline.rs`: title wrapper is only created when title exists.
-- `menu.rs` / `popover.rs` / `tooltip.rs` / `hovercard.rs`: default trigger label no longer goes through an extra `div` wrapper.
+2. Select family depth and duplication were reduced.
+- `src/components/select.rs` now shares one label-block builder between `Select` and `MultiSelect`.
+- per-option render path now uses fallback label text (`value`) when `label` is missing.
+- several wrapper-only layout nodes were flattened.
 
-3. Fallback panel rendering is sparse.
-- `tabs.rs`: no-panel fallback now writes directly into the panel node instead of creating an extra fallback wrapper element.
+3. Input family horizontal layout wrappers were flattened.
+- `src/components/input.rs` and `src/components/textarea.rs` remove one `flex_1` wrapper layer in horizontal layout render branch.
 
-4. Budget guardrails were tightened.
-- `test_layout_depth_budget.rs` reduced thresholds for:
-  - `hovercard.rs`
-  - `layout.rs`
-  - `menu.rs`
-  - `popover.rs`
-  - `stepper.rs`
-  - `table.rs`
-  - `tabs.rs`
-  - `timeline.rs`
-  - `tooltip.rs`
+4. Depth budgets were tightened for changed hotspots.
+- `src/components/test_layout_depth_budget.rs` tightened thresholds for:
+  - `input.rs`
+  - `textarea.rs`
+  - `select.rs`
+  - `tree.rs`
 
-5. New anti-regression coverage was added.
-- `test_flattening_invariants.rs` now enforces:
-  - no empty table-cell placeholders
-  - no synthetic grid filler push path
-  - no wrapped default trigger fallback text in popup family
-  - no stepper optional-label wrapper shell
-- `test_component_coverage.rs` ensures every non-test component module is included by both:
-  - depth-budget test
-  - flattening-invariant test
-- `test_behavior_matrix.rs` adds behavior-level render/contract exercises across all render components.
+5. Behavior coverage guardrails were added.
+- `src/components/test_behavior_coverage.rs` enforces alignment between:
+  - contract matrix coverage (`test_contract_matrix.rs`)
+  - behavior matrix coverage (`test_behavior_matrix.rs`)
 
-## Functional/Style Impact
+## Functional / Style Impact List
 
-Expected behavior changes:
+This list enumerates all known externally observable impact from this pass.
 
-- No public API changes.
-- No controlled/uncontrolled state contract changes.
-- No keyboard behavior changes in popup/menu/table/tabs flows.
+1. `Select` (`src/components/select.rs`)
+- Functional: options without explicit `label` now display `value` text instead of blank.
+- Functional: selected value display also falls back to `value` when `label` is missing.
+- Visual: no intentional style-token change.
 
-Potential visual micro-shifts:
+2. `MultiSelect` (`src/components/select.rs`)
+- Functional: selected tags now fall back to option `value` when `label` is missing.
+- Visual: tag content wrapper was flattened; no intentional color/spacing token change.
 
-- Empty-state rows and popup default trigger text lose one wrapper layer, so spacing may be very slightly tighter in highly customized themes that target wrapper nodes by selector.
-- Tabs no-panel fallback now inherits panel node typography path directly.
+3. `Tree` (`src/components/tree.rs` + `src/components/tree_state.rs`)
+- Functional: render/data traversal changed from recursion to iterative frame stack (same API/state contract).
+- Visual: line rendering now uses flattened row-level connector rendering; branch-line visuals may differ slightly in deeply nested trees.
+
+4. `TextInput` / `Textarea` horizontal layout
+- Structural: wrapper layer removed in horizontal layout branch.
+- Expected visual/behavior: unchanged in standard token usage.
+- Potential micro impact: custom style selectors targeting the removed wrapper node need adjustment.
+
+5. Public API surface (`src/lib.rs`, `src/widgets/mod.rs`, `src/foundation/mod.rs`, `src/prelude.rs`)
+- Additive only: no breaking removal of old `components` path.
+- New preferred imports:
+  - `calmui::widgets::*` for grouped UI access
+  - `calmui::foundation::*` for style/theme/contracts access
+  - `calmui::prelude::*` for common one-shot imports
 
 ## Validation
 
-- `cargo test --lib` passed (`68 passed, 0 failed`).
-- Depth and sparse-rendering guardrails are green.
-- Compatible with current gpui dependency in `Cargo.toml` (overlay-related update path verified by compile + tests).
-- Full component-by-component depth assessment ledger: `docs/layout-depth-full-evaluation.md`.
+- `cargo fmt` passed.
+- `cargo test --lib` passed (`76 passed, 0 failed`).
+- New regression guardrails are active for:
+  - behavior coverage completeness
+  - tightened depth budgets
+  - public API facade compile smoke tests

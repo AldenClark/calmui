@@ -2257,7 +2257,7 @@ impl RenderOnce for Textarea {
                             .child(label_block),
                     );
                 }
-                row.child(div().flex_1().child(self.render_input_box(window, _cx)))
+                row.child(self.render_input_box(window, _cx))
             }
         }
     }

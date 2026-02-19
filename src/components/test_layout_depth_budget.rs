@@ -145,7 +145,7 @@ const BUDGETS: &[DepthBudget] = &[
     DepthBudget {
         file: "input.rs",
         max_child: 40,
-        max_div: 21,
+        max_div: 19,
         max_canvas: 2,
         max_chain: 6,
     },
@@ -312,9 +312,9 @@ const BUDGETS: &[DepthBudget] = &[
     },
     DepthBudget {
         file: "select.rs",
-        max_child: 72,
-        max_div: 38,
-        max_canvas: 3,
+        max_child: 60,
+        max_div: 30,
+        max_canvas: 2,
         max_chain: 6,
     },
     DepthBudget {
@@ -418,7 +418,7 @@ const BUDGETS: &[DepthBudget] = &[
     DepthBudget {
         file: "textarea.rs",
         max_child: 33,
-        max_div: 18,
+        max_div: 16,
         max_canvas: 4,
         max_chain: 6,
     },
@@ -466,8 +466,8 @@ const BUDGETS: &[DepthBudget] = &[
     },
     DepthBudget {
         file: "tree.rs",
-        max_child: 12,
-        max_div: 7,
+        max_child: 8,
+        max_div: 5,
         max_canvas: 1,
         max_chain: 5,
     },

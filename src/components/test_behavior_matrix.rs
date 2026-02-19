@@ -75,10 +75,15 @@ where
 
 #[test]
 fn behavior_matrix_for_disableable_components() {
+    let _ = AccordionItem::new("item-a").label("Item A").disabled(true);
+    let _ = BreadcrumbItem::new().label("Crumb").disabled(true);
     exercise_disableable(|| ActionIcon::new().child(Icon::named("sparkles")));
     exercise_disableable(|| Button::new().label("button"));
+    let _ = ButtonGroupItem::new("group-a").label("A").disabled(true);
     exercise_disableable(|| Checkbox::new().label("checkbox"));
+    let _ = CheckboxOption::new("check-a").label("A").disabled(true);
     exercise_disableable(|| Chip::new().label("chip"));
+    let _ = ChipOption::new("chip-a").label("A").disabled(true);
     exercise_disableable(|| HoverCard::new().trigger(div()).content(div()));
     exercise_disableable(|| Indicator::new().child(div()));
     exercise_disableable(|| {
@@ -86,6 +91,7 @@ fn behavior_matrix_for_disableable_components() {
             .item(MenuItem::new("a").label("A"))
             .trigger(div())
     });
+    let _ = MenuItem::new("menu-a").label("A").disabled(true);
     exercise_disableable(|| {
         MultiSelect::new()
             .option(SelectOption::new("a").label("A"))
@@ -97,14 +103,22 @@ fn behavior_matrix_for_disableable_components() {
     exercise_disableable(|| PinInput::new(6).value("123456"));
     exercise_disableable(|| Popover::new().trigger(div()).content(div()));
     exercise_disableable(|| Radio::new().label("radio"));
+    let _ = RadioOption::new("radio-a").label("A").disabled(true);
     exercise_disableable(|| RangeSlider::new().values(10.0, 90.0));
     exercise_disableable(|| Rating::new().value(3.5));
     exercise_disableable(|| Select::new().option(SelectOption::new("a").label("A")));
+    let _ = SelectOption::new("select-a").label("A").disabled(true);
+    let _ = SegmentedControlItem::new("segment-a")
+        .label("A")
+        .disabled(true);
     exercise_disableable(|| Slider::new().value(25.0));
+    let _ = StepperStep::new("step-a").labeled("A").disabled(true);
     exercise_disableable(|| Switch::new().label("switch"));
+    let _ = TabItem::new("tab-a").label("A").disabled(true);
     exercise_disableable(|| TextInput::new().placeholder("input"));
     exercise_disableable(|| Textarea::new().placeholder("textarea"));
     exercise_disableable(|| Tooltip::new().label("tip").trigger(div()));
+    let _ = TreeNode::new("node-a").label("Node A").disabled(true);
 }
 
 #[test]
