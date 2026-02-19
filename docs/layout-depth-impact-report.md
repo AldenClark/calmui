@@ -20,6 +20,7 @@ Flattening-covered components:
 - `src/components/tooltip.rs`
 - `src/components/hovercard.rs`
 - `src/components/tabs.rs`
+- `src/components/stepper.rs`
 
 ## Metric Delta (Current Additional Batch)
 
@@ -33,6 +34,7 @@ Flattening-covered components:
 | tooltip.rs | 5 -> 5 | 4 -> 3 | 0 -> 0 | 5 -> 5 |
 | hovercard.rs | 10 -> 10 | 5 -> 4 | 1 -> 1 | 5 -> 5 |
 | tabs.rs | 6 -> 6 | 3 -> 2 | 0 -> 0 | 6 -> 6 |
+| stepper.rs | 24 -> 24 | 11 -> 10 | 0 -> 0 | 6 -> 6 |
 
 ## What Changed
 
@@ -53,6 +55,7 @@ Flattening-covered components:
   - `layout.rs`
   - `menu.rs`
   - `popover.rs`
+  - `stepper.rs`
   - `table.rs`
   - `tabs.rs`
   - `timeline.rs`
@@ -63,9 +66,11 @@ Flattening-covered components:
   - no empty table-cell placeholders
   - no synthetic grid filler push path
   - no wrapped default trigger fallback text in popup family
+  - no stepper optional-label wrapper shell
 - `test_component_coverage.rs` ensures every non-test component module is included by both:
   - depth-budget test
   - flattening-invariant test
+- `test_behavior_matrix.rs` adds behavior-level render/contract exercises across all render components.
 
 ## Functional/Style Impact
 
@@ -82,6 +87,7 @@ Potential visual micro-shifts:
 
 ## Validation
 
-- `cargo test --lib` passed (`59 passed, 0 failed`).
+- `cargo test --lib` passed (`68 passed, 0 failed`).
 - Depth and sparse-rendering guardrails are green.
 - Compatible with current gpui dependency in `Cargo.toml` (overlay-related update path verified by compile + tests).
+- Full component-by-component depth assessment ledger: `docs/layout-depth-full-evaluation.md`.

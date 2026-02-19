@@ -321,3 +321,12 @@ fn popup_trigger_defaults_do_not_wrap_text_in_extra_div() {
         "hovercard.rs should not use wrapped div fallback for trigger text",
     );
 }
+
+#[test]
+fn stepper_label_block_does_not_use_optional_wrapper_div() {
+    let stepper_src = include_str!("stepper.rs");
+    assert!(
+        !stepper_src.contains("Stack::vertical().gap(tokens.text_gap).child(div().children("),
+        "stepper.rs should not wrap optional label in an extra div().children(...) layer",
+    );
+}

@@ -7,7 +7,7 @@ table.rs,1031,41,17,3,2,4,15,98.3,P0
 title_bar.rs,690,36,27,0,0,5,14,95.2,P0
 layers.rs,655,33,27,1,0,6,14,92.4,P0
 range_slider.rs,885,22,14,4,2,5,12,65.6,P0
-stepper.rs,488,24,11,8,0,6,12,62.6,P0
+stepper.rs,489,24,10,8,0,6,12,62.6,P0
 slider.rs,560,18,11,5,0,6,12,55.4,P0
 button.rs,616,15,7,3,0,6,17,55.3,P0
 loader.rs,393,19,15,4,0,6,8,54.6,P0
@@ -41,7 +41,7 @@ badge.rs,177,3,1,0,0,6,10,24.4,P3
 overlay.rs,273,3,4,0,0,6,8,24.4,P3
 breadcrumbs.rs,277,4,3,1,0,4,8,23.0,P3
 action_icon.rs,244,1,1,0,0,6,10,22.0,P3
-mod.rs,128,0,0,0,0,0,13,19.5,P3
+mod.rs,130,0,0,0,0,0,13,19.5,P3
 icon.rs,134,1,1,0,0,4,7,15.9,P3
 paper.rs,126,1,1,0,0,4,7,15.9,P3
 scroll_area.rs,165,2,2,0,0,5,5,15.9,P3
@@ -51,7 +51,7 @@ popup.rs,75,3,2,0,0,4,2,11.8,P3
 test_layout_depth_budget.rs,592,1,1,0,1,4,1,8.5,P3
 control.rs,379,0,0,0,0,4,3,7.7,P3
 test_state_logic.rs,478,0,0,0,0,5,1,5.5,P3
-test_flattening_invariants.rs,324,5,8,0,0,5,0,2.6,P3
+test_flattening_invariants.rs,333,7,11,1,0,5,0,2.6,P3
 test_theme_api_smoke.rs,77,0,1,0,0,1,0,1.8,P3
 test_contract_matrix.rs,386,0,0,0,0,0,1,1.5,P3
 utils.rs,149,0,0,0,0,3,8,14.4,ignore

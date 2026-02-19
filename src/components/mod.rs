@@ -62,6 +62,8 @@ mod tree_state;
 mod utils;
 
 #[cfg(test)]
+mod test_behavior_matrix;
+#[cfg(test)]
 mod test_component_coverage;
 #[cfg(test)]
 mod test_component_smoke;

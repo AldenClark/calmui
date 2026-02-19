@@ -347,8 +347,8 @@ const BUDGETS: &[DepthBudget] = &[
     },
     DepthBudget {
         file: "stepper.rs",
-        max_child: 27,
-        max_div: 13,
+        max_child: 25,
+        max_div: 11,
         max_canvas: 1,
         max_chain: 6,
     },

@@ -22,6 +22,8 @@ Keep the new architecture + tokenization model, while removing layout-depth regr
   - Smoke rendering coverage for exported component families (primitives/forms/overlay/layout/data-heavy).
 - `src/components/test_state_logic.rs`
   - Deterministic state-machine tests for popup/menu/select/table/tree/input/slider logic.
+- `src/components/test_behavior_matrix.rs`
+  - Behavior-level matrix that exercises render-time behavior toggles across all render components.
 - `src/components/test_layout_depth_budget.rs`
   - Depth budget gate for all component files.
 - `src/components/test_flattening_invariants.rs`
@@ -30,6 +32,10 @@ Keep the new architecture + tokenization model, while removing layout-depth regr
   - Ensures every non-test component module is covered by both depth budgets and flattening invariants.
 - `docs/component-depth-matrix.csv`
   - Current component depth baseline and priority tiering.
+- `docs/layout-depth-full-evaluation.md`
+  - Full-pass file-by-file assessment (optimized vs. no-safe-change-in-pass).
+- `docs/behavior-test-coverage.md`
+  - Behavior-level coverage ledger for all render components.
 
 2. Architecture flattening track (current batch implemented)
 - Remove empty placeholder nodes for optional regions (`label/description/error/close action`).
@@ -66,7 +72,9 @@ Every batch must pass:
 - Guardrails wired into `cargo test --lib`: done
 - High-risk sparse-rendering batch (`input/textarea/select/modal/layers/title_bar`): done
 - Additional flattening batch (`table/timeline/layout/menu/popover/tooltip/hovercard/tabs`): done
+- Additional stepper flattening pass (`stepper` optional label wrapper removal): done
 - Updated impact report and depth matrix: done
+- Behavior matrix coverage for all render components: done
 
 ## Risk Notes
 

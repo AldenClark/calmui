@@ -284,8 +284,9 @@ impl RenderOnce for Stepper {
                     .child(indicator_text);
                 indicator = apply_radius(&self.theme, indicator, Radius::Pill);
 
-                let mut text_block = Stack::vertical().gap(tokens.text_gap).child(div().children(
-                    step.label.clone().map(|label| {
+                let mut text_block = Stack::vertical().gap(tokens.text_gap);
+                if let Some(label) = step.label.clone() {
+                    text_block = text_block.child(
                         div()
                             .text_size(size_preset.label_size)
                             .text_color(resolve_hsla(&theme, &tokens.label))
@@ -294,9 +295,9 @@ impl RenderOnce for Stepper {
                             } else {
                                 gpui::FontWeight::NORMAL
                             })
-                            .child(label)
-                    }),
-                ));
+                            .child(label),
+                    );
+                }
                 if let Some(description) = step.description.clone() {
                     text_block = text_block.child(
                         div()
