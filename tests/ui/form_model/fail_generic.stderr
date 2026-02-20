@@ -1,0 +1,5 @@
+error: FormModel derive currently supports only non-generic structs
+ --> tests/ui/form_model/fail_generic.rs:2:8
+  |
+2 | struct GenericForm<T> {
+  |        ^^^^^^^^^^^

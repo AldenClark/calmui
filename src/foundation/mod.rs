@@ -6,6 +6,10 @@ pub mod feedback {
     pub use crate::feedback::*;
 }
 
+pub mod form {
+    pub use crate::form::*;
+}
+
 pub mod icon {
     pub use crate::icon::*;
 }

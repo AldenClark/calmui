@@ -13,7 +13,13 @@ gpui = { git = "https://github.com/zed-industries/zed.git", rev = "85ca795977790
 rust-embed = "8.5.0"
 pulldown-cmark = "0.12"
 rust_decimal = "1.36"
+futures-timer = "3.0.3"
 sys-locale = { version = "0.3.2", optional = true }
+calmui_form_derive = { path = "crates/calmui_form_derive" }
+
+[dev-dependencies]
+futures = "0.3.31"
+trybuild = "1.0.105"
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
 core-text = "=21.0.0"

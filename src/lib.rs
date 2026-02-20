@@ -1,6 +1,7 @@
 pub mod components;
 pub mod contracts;
 pub mod feedback;
+pub mod form;
 pub mod foundation;
 #[cfg(feature = "i18n")]
 pub mod i18n;
