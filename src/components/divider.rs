@@ -27,6 +27,7 @@ pub struct Divider {
     label: Option<SharedString>,
     label_position: DividerLabelPosition,
     line_width: Option<gpui::Pixels>,
+    line_color: Option<gpui::Hsla>,
     theme: crate::theme::LocalTheme,
     style: gpui::StyleRefinement,
 }
@@ -40,6 +41,7 @@ impl Divider {
             label: None,
             label_position: DividerLabelPosition::Center,
             line_width: None,
+            line_color: None,
             theme: crate::theme::LocalTheme::default(),
             style: gpui::StyleRefinement::default(),
         }
@@ -67,6 +69,11 @@ impl Divider {
         self.line_width = Some(px(value.max(0.0)));
         self
     }
+
+    pub fn line_color(mut self, value: impl Into<gpui::Hsla>) -> Self {
+        self.line_color = Some(value.into());
+        self
+    }
 }
 
 impl Divider {
@@ -80,7 +87,9 @@ impl RenderOnce for Divider {
     fn render(mut self, window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let tokens = &self.theme.components.divider;
-        let line = resolve_hsla(&self.theme, &tokens.line);
+        let line = self
+            .line_color
+            .unwrap_or_else(|| resolve_hsla(&self.theme, &tokens.line));
         let label_color = resolve_hsla(&self.theme, &tokens.label);
         let requested_line_width = self.line_width.unwrap_or(tokens.line_width);
         let requested_line_width_px = f32::from(requested_line_width);
@@ -94,12 +103,11 @@ impl RenderOnce for Divider {
         };
 
         match self.axis {
-            DividerAxis::Vertical => div()
-                .id(self.id)
-                .w(line_thickness)
-                .h_full()
-                .flex_none()
-                .bg(line),
+            DividerAxis::Vertical => {
+                let mut line_node = div().id(self.id).w(line_thickness).flex_none().bg(line);
+                line_node.style().align_self = Some(gpui::AlignSelf::Stretch);
+                line_node
+            }
             DividerAxis::Horizontal => {
                 if let Some(label) = self.label {
                     let left_flex = match self.label_position {
