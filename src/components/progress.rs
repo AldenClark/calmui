@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, Hsla, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, Styled, div, px,
+    Animation, AnimationExt, AnyElement, Bounds, Hsla, InteractiveElement, IntoElement,
+    ParentElement, RenderOnce, SharedString, Styled, canvas, div, fill, point, px, size,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable};
@@ -12,7 +12,7 @@ use crate::style::{Radius, Size, Variant};
 
 use super::Stack;
 use super::transition::TransitionExt;
-use super::utils::{apply_radius, resolve_hsla};
+use super::utils::{apply_radius, resolve_hsla, snap_px};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProgressSection {
@@ -154,139 +154,102 @@ impl Progress {
     fn striped_overlay(
         color: gpui::Hsla,
         key: ComponentId,
+        filled_ranges: Vec<(f32, f32)>,
         width_px: f32,
         bar_height: f32,
         animated: bool,
     ) -> AnyElement {
-        let stripe_width = (bar_height * 1.7).clamp(8.0, 18.0);
-        let primary_band_width = width_px * 2.4;
-        let secondary_band_width = width_px * 1.9;
+        if filled_ranges.is_empty() || width_px <= 0.0 {
+            return div().id(key).absolute().size_full().into_any_element();
+        }
 
-        let primary_count = (primary_band_width / stripe_width).ceil().max(10.0) as usize;
-        let secondary_count = (secondary_band_width / (stripe_width * 1.25))
-            .ceil()
-            .max(8.0) as usize;
+        let stripe_width = (bar_height * 1.55).clamp(6.0, 14.0);
+        let stripe_step = stripe_width * 1.7;
+        let overlay_width = if animated { width_px * 2.0 } else { width_px };
+        let overlay_offset = if animated { width_px } else { 0.0 };
+        let stripe_ranges = filled_ranges;
 
-        let primary_key = key.clone();
-        let primary_stripes = (0..primary_count).map(move |index| {
-            let alpha = match index % 3 {
-                0 => 0.18,
-                1 => 0.10,
-                _ => 0.04,
-            };
+        let stripe_canvas = canvas(
+            |_, _, _| {},
+            move |bounds, _, window, _| {
+                if stripe_width <= 0.0 || stripe_step <= 0.0 {
+                    return;
+                }
+
+                for (range_left, range_width) in &stripe_ranges {
+                    if *range_width <= 0.0 {
+                        continue;
+                    }
+
+                    let range_start = overlay_offset + *range_left;
+                    let range_end = range_start + *range_width;
+                    let mut x = range_start - stripe_step;
+                    let mut stripe_index = 0usize;
+
+                    while x < range_end + stripe_step {
+                        let stripe_start = x.max(range_start);
+                        let stripe_end = (x + stripe_width).min(range_end);
+                        let snapped_start = f32::from(snap_px(window, stripe_start));
+                        let snapped_end = f32::from(snap_px(window, stripe_end));
+                        let snapped_width = (snapped_end - snapped_start).max(0.0);
+                        if snapped_width > 0.0 {
+                            let alpha = match stripe_index % 3 {
+                                0 => 0.18,
+                                1 => 0.1,
+                                _ => 0.05,
+                            };
+                            window.paint_quad(fill(
+                                Bounds::new(
+                                    point(bounds.origin.x + px(snapped_start), bounds.origin.y),
+                                    size(px(snapped_width), bounds.size.height),
+                                ),
+                                color.alpha(alpha),
+                            ));
+                        }
+                        stripe_index += 1;
+                        x += stripe_step;
+                    }
+                }
+            },
+        )
+        .absolute()
+        .size_full();
+
+        if animated {
+            let animation_ms = (2800.0 + width_px * 4.0).clamp(3200.0, 5200.0) as u64;
+            let move_key = key.slot("move");
             div()
-                .id(primary_key.slot_index("primary", index.to_string()))
-                .w(px(stripe_width))
-                .h_full()
-                .bg(color.alpha(alpha))
-        });
-
-        let secondary_key = key.clone();
-        let secondary_stripes = (0..secondary_count).map(move |index| {
-            let alpha = if index % 2 == 0 { 0.08 } else { 0.03 };
+                .id(key)
+                .absolute()
+                .top_0()
+                .bottom_0()
+                .left(px(-width_px))
+                .w(px(overlay_width))
+                .overflow_hidden()
+                .child(stripe_canvas)
+                .with_animation(
+                    move_key,
+                    Animation::new(Duration::from_millis(animation_ms))
+                        .repeat()
+                        .with_easing(gpui::ease_in_out),
+                    move |this, delta| {
+                        let eased = gpui::ease_in_out(delta);
+                        this.left(px(-width_px + width_px * eased))
+                    },
+                )
+                .into_any_element()
+        } else {
             div()
-                .id(secondary_key.slot_index("secondary", index.to_string()))
-                .w(px(stripe_width * 1.25))
-                .h_full()
-                .bg(color.alpha(alpha))
-        });
-
-        let primary_band = Stack::horizontal()
-            .id(key.slot("band-primary"))
-            .absolute()
-            .top_0()
-            .left(px(-width_px * 1.15))
-            .bottom_0()
-            .w(px(primary_band_width))
-            .children(primary_stripes);
-
-        let secondary_band = Stack::horizontal()
-            .id(key.slot("band-secondary"))
-            .absolute()
-            .top_0()
-            .left(px(-width_px * 0.2))
-            .bottom_0()
-            .w(px(secondary_band_width))
-            .children(secondary_stripes);
-
-        let animation_ms = (2800.0 + width_px * 4.0).clamp(3200.0, 5200.0) as u64;
-
-        let primary_band = if animated {
-            let animation = Animation::new(Duration::from_millis(animation_ms))
-                .repeat()
-                .with_easing(gpui::ease_in_out);
-            let travel = width_px * 1.35;
-            primary_band
-                .with_animation(key.slot("move-primary"), animation, move |this, delta| {
-                    let eased = gpui::ease_in_out(delta);
-                    this.left(px(-width_px * 1.15 + travel * eased))
-                })
+                .id(key)
+                .absolute()
+                .top_0()
+                .left_0()
+                .right_0()
+                .bottom_0()
+                .overflow_hidden()
+                .child(stripe_canvas)
                 .into_any_element()
-        } else {
-            primary_band.into_any_element()
-        };
-
-        let secondary_band = if animated {
-            let animation =
-                Animation::new(Duration::from_millis((animation_ms as f32 * 1.8) as u64))
-                    .repeat()
-                    .with_easing(gpui::ease_in_out);
-            let travel = width_px * 1.1;
-            secondary_band
-                .with_animation(key.slot("move-secondary"), animation, move |this, delta| {
-                    let eased = gpui::ease_in_out(delta);
-                    this.left(px(-width_px * 0.2 - travel * eased))
-                })
-                .into_any_element()
-        } else {
-            secondary_band.into_any_element()
-        };
-
-        let sheen_width = (width_px * 0.22).clamp(26.0, 78.0);
-        let sheen = div()
-            .id(key.slot("sheen"))
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .left(px(-sheen_width))
-            .w(px(sheen_width))
-            .bg(color.alpha(0.16))
-            .shadow_sm();
-
-        let sheen = if animated {
-            let animation =
-                Animation::new(Duration::from_millis((animation_ms as f32 * 2.6) as u64))
-                    .repeat()
-                    .with_easing(gpui::ease_in_out);
-            let travel = width_px + sheen_width * 2.0;
-            sheen
-                .with_animation(key.slot("sheen-move"), animation, move |this, delta| {
-                    let stepped = if delta < 0.12 {
-                        0.0
-                    } else if delta > 0.96 {
-                        1.0
-                    } else {
-                        gpui::ease_in_out((delta - 0.12) / 0.84)
-                    };
-                    this.left(px(-sheen_width + travel * stepped))
-                })
-                .into_any_element()
-        } else {
-            sheen.into_any_element()
-        };
-
-        div()
-            .id(key)
-            .absolute()
-            .top_0()
-            .left_0()
-            .right_0()
-            .bottom_0()
-            .overflow_hidden()
-            .child(primary_band)
-            .child(secondary_band)
-            .child(sheen)
-            .into_any_element()
+        }
     }
 }
 
@@ -348,6 +311,7 @@ impl RenderOnce for Progress {
         track = apply_radius(&self.theme, track, self.radius);
 
         let mut left = 0.0_f32;
+        let mut filled_ranges = Vec::new();
         for (index, section) in sections.into_iter().enumerate() {
             if section.value <= 0.0 {
                 continue;
@@ -359,7 +323,7 @@ impl RenderOnce for Progress {
                 .map(|token| resolve_hsla(&self.theme, token))
                 .unwrap_or(default_fill);
 
-            let mut fill = div()
+            let fill = div()
                 .id(self.id.slot_index("fill", index.to_string()))
                 .absolute()
                 .left(px(left))
@@ -367,22 +331,21 @@ impl RenderOnce for Progress {
                 .w(px(width))
                 .h(px(bar_height))
                 .bg(fill_color);
-
-            if self.striped {
-                let stripe_color = resolve_hsla(&self.theme, &tokens.label).opacity(0.28);
-                fill = fill.child(Self::striped_overlay(
-                    stripe_color,
-                    ComponentId::from(self.id.slot_index("stripe", index.to_string())),
-                    width,
-                    bar_height,
-                    self.animated,
-                ));
-            }
-
-            let fill = fill;
+            filled_ranges.push((left, width));
 
             left += width;
             track = track.child(fill);
+        }
+        if self.striped && !filled_ranges.is_empty() {
+            let stripe_color = resolve_hsla(&self.theme, &tokens.label).opacity(0.28);
+            track = track.child(Self::striped_overlay(
+                stripe_color,
+                ComponentId::from(self.id.slot("stripe-overlay")),
+                filled_ranges,
+                track_width,
+                bar_height,
+                self.animated,
+            ));
         }
 
         let mut root = Stack::vertical().id(self.id.clone()).gap(tokens.root_gap);

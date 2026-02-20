@@ -11,7 +11,7 @@ use crate::style::Size;
 use super::Stack;
 use super::loader::{Loader, LoaderElement, LoaderVariant};
 use super::overlay::{Overlay, OverlayMaterialMode};
-use super::utils::resolve_hsla;
+use super::utils::{quantized_stroke_px, resolve_hsla};
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 type LoaderRenderer = Box<dyn FnOnce(Size, Hsla, ElementId) -> AnyElement>;
@@ -123,7 +123,7 @@ impl MotionAware for LoadingOverlay {
 }
 
 impl RenderOnce for LoadingOverlay {
-    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         self.theme.sync_from_provider(_cx);
         let mut root = div().id(self.id.clone()).relative().w_full();
 
@@ -188,7 +188,7 @@ impl RenderOnce for LoadingOverlay {
                             .id(self.id.slot("content-panel"))
                             .rounded(px(14.0))
                             .bg(content_panel_bg)
-                            .border(px(1.0))
+                            .border(quantized_stroke_px(window, 1.0))
                             .border_color(content_panel_border)
                             .shadow_sm()
                             .px(px(20.0))

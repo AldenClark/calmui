@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
-    Window, div, px,
+    AnyElement, Bounds, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
+    Styled, Window, canvas, div, fill, point, px, size,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable};
@@ -14,7 +14,7 @@ use super::Stack;
 use super::interaction_adapter::{ActivateHandler, PressAdapter, bind_press_adapter};
 use super::selection_state;
 use super::transition::TransitionExt;
-use super::utils::{apply_radius, resolve_hsla};
+use super::utils::{apply_radius, quantized_stroke_px, resolve_hsla, snap_px};
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 type ChangeHandler = Rc<dyn Fn(usize, SharedString, &mut Window, &mut gpui::App)>;
@@ -214,6 +214,7 @@ impl RenderOnce for Stepper {
         let indicator_size = f32::from(size_preset.indicator_size);
         let connector_thickness = f32::from(size_preset.connector_thickness);
         let connector_span = f32::from(size_preset.connector_span);
+        let connector_thickness_px = quantized_stroke_px(window, connector_thickness);
         let on_change = self.on_change.clone();
         let active_bg = self.active_bg();
         let controlled = self.active_controlled;
@@ -272,7 +273,7 @@ impl RenderOnce for Stepper {
                     .items_center()
                     .justify_center()
                     .rounded_full()
-                    .border(super::utils::quantized_stroke_px(window, 1.0))
+                    .border(quantized_stroke_px(window, 1.0))
                     .border_color(indicator_border)
                     .bg(indicator_bg)
                     .text_color(indicator_fg)
@@ -369,26 +370,80 @@ impl RenderOnce for Stepper {
         let step_count = step_nodes.len();
         let mut steps_view = match self.orientation {
             GroupOrientation::Horizontal => {
-                let mut row = Stack::horizontal()
-                    .id(self.id.slot("steps-row"))
-                    .w_full()
-                    .items_start();
-                for (index, node) in step_nodes.into_iter().enumerate() {
-                    row = row.child(node);
-                    if index < step_count.saturating_sub(1) {
-                        let connector_color = if index < active {
+                let connector_gap = connector_span.max(0.0);
+                let connector_colors = (0..step_count.saturating_sub(1))
+                    .map(|index| {
+                        if index < active {
                             resolve_hsla(&theme, &tokens.step_completed_border)
                         } else {
                             resolve_hsla(&theme, &tokens.connector)
-                        };
-                        row = row.child(
-                            div()
-                                .mt(px(indicator_size * 0.5))
-                                .w(px(connector_span))
-                                .h(px(connector_thickness))
-                                .bg(connector_color),
-                        );
-                    }
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                let mut row = Stack::horizontal()
+                    .id(self.id.slot("steps-row"))
+                    .relative()
+                    .w_full()
+                    .items_start()
+                    .gap(px(connector_gap));
+                for node in step_nodes {
+                    row = row.child(node);
+                }
+                if !connector_colors.is_empty() && connector_gap > 0.0 {
+                    let indicator_center_y =
+                        f32::from(size_preset.item_padding) + indicator_size * 0.5;
+                    row = row.child(
+                        canvas(
+                            |_, _, _| {},
+                            move |bounds, _, window, _| {
+                                let count = connector_colors.len() + 1;
+                                if count < 2 {
+                                    return;
+                                }
+
+                                let total_width = f32::from(bounds.size.width).max(0.0);
+                                let total_gap = connector_gap * connector_colors.len() as f32;
+                                if total_width <= total_gap {
+                                    return;
+                                }
+
+                                let item_width = (total_width - total_gap) / count as f32;
+                                let thickness =
+                                    f32::from(quantized_stroke_px(window, connector_thickness));
+                                if thickness <= 0.0 {
+                                    return;
+                                }
+
+                                let line_top = f32::from(snap_px(
+                                    window,
+                                    indicator_center_y - thickness * 0.5,
+                                ));
+                                for (index, color) in connector_colors.iter().enumerate() {
+                                    let start = item_width * (index as f32 + 1.0)
+                                        + connector_gap * index as f32;
+                                    let end = start + connector_gap;
+                                    let x0 = f32::from(snap_px(window, start));
+                                    let x1 = f32::from(snap_px(window, end));
+                                    let width = (x1 - x0).max(0.0);
+                                    if width <= 0.0 {
+                                        continue;
+                                    }
+                                    window.paint_quad(fill(
+                                        Bounds::new(
+                                            point(
+                                                bounds.origin.x + px(x0),
+                                                bounds.origin.y + px(line_top),
+                                            ),
+                                            size(px(width), px(thickness)),
+                                        ),
+                                        *color,
+                                    ));
+                                }
+                            },
+                        )
+                        .absolute()
+                        .size_full(),
+                    );
                 }
                 row
             }
@@ -408,7 +463,7 @@ impl RenderOnce for Stepper {
                         col = col.child(
                             div()
                                 .ml(px(indicator_size * 0.5))
-                                .w(px(connector_thickness))
+                                .w(connector_thickness_px)
                                 .h(px(connector_span))
                                 .bg(connector_color),
                         );
@@ -430,7 +485,7 @@ impl RenderOnce for Stepper {
             .w_full()
             .mt(tokens.panel_margin_top)
             .p(size_preset.panel_padding)
-            .border(super::utils::quantized_stroke_px(window, 1.0))
+            .border(quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&theme, &tokens.panel_border))
             .bg(resolve_hsla(&theme, &tokens.panel_bg))
             .text_color(resolve_hsla(&theme, &tokens.panel_fg));

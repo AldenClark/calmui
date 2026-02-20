@@ -16,7 +16,7 @@ use super::Stack;
 use super::control;
 use super::slider_axis::{self, SliderAxis};
 use super::transition::TransitionExt;
-use super::utils::{apply_radius, resolve_hsla, resolve_radius};
+use super::utils::{apply_radius, quantized_stroke_px, resolve_hsla, resolve_radius, snap_px};
 
 type ChangeHandler = Rc<dyn Fn(f32, &mut Window, &mut gpui::App)>;
 
@@ -246,6 +246,7 @@ impl RenderOnce for Slider {
         let track_color = resolve_hsla(&self.theme, &tokens.track_bg);
         let fill_color = self.filled_color();
         let tick_color = resolve_hsla(&self.theme, &tokens.thumb_border).alpha(0.35);
+        let tick_thickness = f32::from(quantized_stroke_px(window, 1.0));
         let track_corner = Corners::all(resolve_radius(
             &self.theme,
             SemanticRadiusToken::from(self.radius),
@@ -281,13 +282,16 @@ impl RenderOnce for Slider {
                         window.paint_quad(fill(fill_bounds, fill_color).corner_radii(track_corner));
                     }
 
-                    if segment_count > 1 {
+                    if segment_count > 1 && tick_thickness > 0.0 {
                         for index in 1..segment_count {
-                            let y = bounds.origin.y
-                                + px(track_len * (index as f32 / segment_count as f32));
+                            let y = track_len * (index as f32 / segment_count as f32);
+                            let tick_top = f32::from(snap_px(window, y - (tick_thickness * 0.5)));
                             let tick_bounds = Bounds::new(
-                                point(bounds.origin.x + px(track_left), y - px(0.5)),
-                                size(px(track_height), px(1.0)),
+                                point(
+                                    bounds.origin.x + px(track_left),
+                                    bounds.origin.y + px(tick_top),
+                                ),
+                                size(px(track_height), px(tick_thickness)),
                             );
                             window.paint_quad(fill(tick_bounds, tick_color));
                         }
@@ -305,7 +309,7 @@ impl RenderOnce for Slider {
                 .w(px(thumb_size))
                 .h(px(thumb_size))
                 .cursor_pointer()
-                .border(super::utils::quantized_stroke_px(window, 1.0))
+                .border(quantized_stroke_px(window, 1.0))
                 .border_color(resolve_hsla(&self.theme, &tokens.thumb_border))
                 .bg(resolve_hsla(&self.theme, &tokens.thumb_bg));
             thumb = apply_radius(&self.theme, thumb, Radius::Pill);
@@ -437,13 +441,16 @@ impl RenderOnce for Slider {
                     window.paint_quad(fill(fill_bounds, fill_color).corner_radii(track_corner));
                 }
 
-                if segment_count > 1 {
+                if segment_count > 1 && tick_thickness > 0.0 {
                     for index in 1..segment_count {
-                        let x =
-                            bounds.origin.x + px(track_len * (index as f32 / segment_count as f32));
+                        let x = track_len * (index as f32 / segment_count as f32);
+                        let tick_left = f32::from(snap_px(window, x - (tick_thickness * 0.5)));
                         let tick_bounds = Bounds::new(
-                            point(x - px(0.5), bounds.origin.y + px(track_top)),
-                            size(px(1.0), px(track_height)),
+                            point(
+                                bounds.origin.x + px(tick_left),
+                                bounds.origin.y + px(track_top),
+                            ),
+                            size(px(tick_thickness), px(track_height)),
                         );
                         window.paint_quad(fill(tick_bounds, tick_color));
                     }
@@ -461,7 +468,7 @@ impl RenderOnce for Slider {
             .w(px(thumb_size))
             .h(px(thumb_size))
             .cursor_pointer()
-            .border(super::utils::quantized_stroke_px(window, 1.0))
+            .border(quantized_stroke_px(window, 1.0))
             .border_color(resolve_hsla(&self.theme, &tokens.thumb_border))
             .bg(resolve_hsla(&self.theme, &tokens.thumb_bg));
         thumb = apply_radius(&self.theme, thumb, Radius::Pill);

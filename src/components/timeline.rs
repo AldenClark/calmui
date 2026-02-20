@@ -1,6 +1,6 @@
 use gpui::{
-    AnyElement, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
-    div, px,
+    AnyElement, Bounds, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
+    Styled, canvas, div, fill, point, px, size,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable};
@@ -11,7 +11,7 @@ use crate::style::{Radius, Size, Variant};
 use super::Stack;
 use super::icon::Icon;
 use super::transition::TransitionExt;
-use super::utils::{apply_radius, resolve_hsla};
+use super::utils::{apply_radius, quantized_stroke_px, resolve_hsla, snap_px};
 
 type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
 
@@ -158,7 +158,10 @@ impl RenderOnce for Timeline {
         let size_preset = self.size_preset();
         let theme = self.theme.clone();
         let bullet_size = f32::from(size_preset.bullet_size);
-        let line_width = f32::from(size_preset.line_width);
+        let line_width = f32::from(quantized_stroke_px(
+            window,
+            f32::from(size_preset.line_width),
+        ));
         let active_bullet_bg = self.active_bullet_bg();
         let total_items = self.items.len();
         let active = self.active.min(total_items.saturating_sub(1));
@@ -193,7 +196,7 @@ impl RenderOnce for Timeline {
                 .items_center()
                 .justify_center()
                 .rounded_full()
-                .border(super::utils::quantized_stroke_px(window, 1.0))
+                .border(quantized_stroke_px(window, 1.0))
                 .border_color(if is_active_marker {
                     resolve_hsla(&theme, &tokens.bullet_active_border)
                 } else {
@@ -228,26 +231,63 @@ impl RenderOnce for Timeline {
                 bullet = bullet.child("•");
             }
 
+            let line_color = if is_done {
+                resolve_hsla(&theme, &tokens.line_active)
+            } else {
+                resolve_hsla(&theme, &tokens.line)
+            };
+
+            let left_min_height = if has_next {
+                px(bullet_size + f32::from(tokens.line_min_height))
+            } else {
+                px(bullet_size + f32::from(tokens.line_extra_height))
+            };
+
             let mut left_col = div()
                 .w(px(bullet_size))
                 .h_full()
-                .min_h(px(bullet_size + f32::from(tokens.line_extra_height)))
+                .min_h(left_min_height)
                 .flex()
                 .flex_col()
                 .items_center()
+                .relative()
                 .child(bullet);
             if has_next {
                 left_col = left_col.child(
-                    div()
-                        .mt(px(0.0))
-                        .w(px(line_width))
-                        .flex_1()
-                        .min_h(tokens.line_min_height)
-                        .bg(if is_done {
-                            resolve_hsla(&theme, &tokens.line_active)
-                        } else {
-                            resolve_hsla(&theme, &tokens.line)
-                        }),
+                    canvas(
+                        |_, _, _| {},
+                        move |bounds, _, window, _| {
+                            let available = (f32::from(bounds.size.height) - bullet_size).max(0.0);
+                            if available <= 0.0 || line_width <= 0.0 {
+                                return;
+                            }
+
+                            let line_top = f32::from(snap_px(window, bullet_size));
+                            let line_left = f32::from(snap_px(
+                                window,
+                                ((bullet_size - line_width) * 0.5).max(0.0),
+                            ));
+                            let line_bottom =
+                                f32::from(snap_px(window, (line_top + available).max(line_top)));
+                            let line_height = (line_bottom - line_top).max(0.0);
+                            if line_height <= 0.0 {
+                                return;
+                            }
+
+                            window.paint_quad(fill(
+                                Bounds::new(
+                                    point(
+                                        bounds.origin.x + px(line_left),
+                                        bounds.origin.y + px(line_top),
+                                    ),
+                                    size(px(line_width), px(line_height)),
+                                ),
+                                line_color,
+                            ));
+                        },
+                    )
+                    .absolute()
+                    .size_full(),
                 );
             }
 
@@ -281,7 +321,7 @@ impl RenderOnce for Timeline {
                 let mut content_wrap = div()
                     .mt(tokens.card_margin_top)
                     .p(size_preset.card_padding)
-                    .border(super::utils::quantized_stroke_px(window, 1.0))
+                    .border(quantized_stroke_px(window, 1.0))
                     .border_color(resolve_hsla(&theme, &tokens.card_border))
                     .bg(resolve_hsla(&theme, &tokens.card_bg))
                     .child(content());
