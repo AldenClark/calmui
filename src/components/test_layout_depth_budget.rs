@@ -286,8 +286,8 @@ const BUDGETS: &[DepthBudget] = &[
         file: "range_slider.rs",
         max_child: 25,
         max_div: 16,
-        max_canvas: 3,
-        max_chain: 5,
+        max_canvas: 4,
+        max_chain: 6,
     },
     DepthBudget {
         file: "rating.rs",
@@ -335,7 +335,7 @@ const BUDGETS: &[DepthBudget] = &[
         file: "slider.rs",
         max_child: 20,
         max_div: 13,
-        max_canvas: 1,
+        max_canvas: 2,
         max_chain: 6,
     },
     DepthBudget {

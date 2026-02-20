@@ -1,20 +1,22 @@
 use std::rc::Rc;
 
 use gpui::{
-    AppContext, ClickEvent, EmptyView, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window, div, px,
+    AppContext, Bounds, ClickEvent, Corners, EmptyView, InteractiveElement, IntoElement,
+    ParentElement, RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, canvas,
+    div, fill, point, px, size,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable};
 use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
+use crate::theme::SemanticRadiusToken;
 
 use super::Stack;
 use super::control;
 use super::slider_axis::{self, SliderAxis};
 use super::transition::TransitionExt;
-use super::utils::{apply_radius, resolve_hsla};
+use super::utils::{apply_radius, resolve_hsla, resolve_radius};
 
 type ChangeHandler = Rc<dyn Fn(f32, &mut Window, &mut gpui::App)>;
 
@@ -241,6 +243,13 @@ impl RenderOnce for Slider {
         let thumb_left =
             slider_axis::thumb_offset(SliderAxis::Horizontal, track_len, thumb_size, ratio);
         let segment_count = self.segments();
+        let track_color = resolve_hsla(&self.theme, &tokens.track_bg);
+        let fill_color = self.filled_color();
+        let tick_color = resolve_hsla(&self.theme, &tokens.thumb_border).alpha(0.35);
+        let track_corner = Corners::all(resolve_radius(
+            &self.theme,
+            SemanticRadiusToken::from(self.radius),
+        ));
         let display_precision = if self.step < 1.0 { 2 } else { 0 };
         let is_controlled = self.value_controlled;
         let orientation = self.orientation;
@@ -250,31 +259,43 @@ impl RenderOnce for Slider {
             let track_left = ((thumb_size - track_height) * 0.5).max(0.0);
             let thumb_top =
                 slider_axis::thumb_offset(SliderAxis::Vertical, track_len, thumb_size, ratio);
-
-            let mut track = div()
-                .id(self.id.slot("track"))
-                .absolute()
-                .top_0()
-                .left(px(track_left))
-                .w(px(track_height))
-                .h(px(track_len))
-                .overflow_hidden()
-                .border(super::utils::quantized_stroke_px(window, 1.0))
-                .border_color(resolve_hsla(&self.theme, &tokens.track_bg))
-                .bg(resolve_hsla(&self.theme, &tokens.track_bg));
-            track = apply_radius(&self.theme, track, self.radius);
-
             let fill_top = (thumb_top + (thumb_size * 0.5)).clamp(0.0, track_len);
             let fill_height = (track_len - fill_top).max(0.0);
-            let mut fill = div()
-                .id(self.id.slot("fill"))
-                .absolute()
-                .left(px(track_left))
-                .top(px(fill_top))
-                .w(px(track_height))
-                .h(px(fill_height))
-                .bg(self.filled_color());
-            fill = apply_radius(&self.theme, fill, self.radius);
+            let track_layer = canvas(
+                |_, _, _| (),
+                move |bounds, _, window, _| {
+                    let track_bounds = Bounds::new(
+                        point(bounds.origin.x + px(track_left), bounds.origin.y),
+                        size(px(track_height), px(track_len)),
+                    );
+                    window.paint_quad(fill(track_bounds, track_color).corner_radii(track_corner));
+
+                    if fill_height > 0.0 {
+                        let fill_bounds = Bounds::new(
+                            point(
+                                bounds.origin.x + px(track_left),
+                                bounds.origin.y + px(fill_top),
+                            ),
+                            size(px(track_height), px(fill_height)),
+                        );
+                        window.paint_quad(fill(fill_bounds, fill_color).corner_radii(track_corner));
+                    }
+
+                    if segment_count > 1 {
+                        for index in 1..segment_count {
+                            let y = bounds.origin.y
+                                + px(track_len * (index as f32 / segment_count as f32));
+                            let tick_bounds = Bounds::new(
+                                point(bounds.origin.x + px(track_left), y - px(0.5)),
+                                size(px(track_height), px(1.0)),
+                            );
+                            window.paint_quad(fill(tick_bounds, tick_color));
+                        }
+                    }
+                },
+            )
+            .absolute()
+            .size_full();
 
             let mut thumb = div()
                 .id(self.id.slot("thumb"))
@@ -297,8 +318,7 @@ impl RenderOnce for Slider {
                 .relative()
                 .w(px(thumb_size))
                 .h(px(track_len))
-                .child(track)
-                .child(fill)
+                .child(track_layer)
                 .child(thumb);
 
             if !self.disabled {
@@ -399,50 +419,39 @@ impl RenderOnce for Slider {
                 .with_enter_transition(self.id.slot("enter"), self.motion);
         }
 
-        let mut track = Stack::horizontal()
-            .id(self.id.slot("track"))
-            .absolute()
-            .top(px(track_top))
-            .left_0()
-            .w(px(track_len))
-            .h(px(track_height))
-            .overflow_hidden()
-            .border(super::utils::quantized_stroke_px(window, 1.0))
-            .border_color(resolve_hsla(&self.theme, &tokens.track_bg));
-        track = apply_radius(&self.theme, track, self.radius);
+        let fill_width = (track_len * ratio).clamp(0.0, track_len);
+        let track_layer = canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let track_bounds = Bounds::new(
+                    point(bounds.origin.x, bounds.origin.y + px(track_top)),
+                    size(px(track_len), px(track_height)),
+                );
+                window.paint_quad(fill(track_bounds, track_color).corner_radii(track_corner));
 
-        let segment_span = (self.max - self.min) / segment_count as f32;
-        let filled_color = self.filled_color();
-        let empty_color = resolve_hsla(&self.theme, &tokens.track_bg);
-        let segments = (0..segment_count).map(|index| {
-            let segment_value = self.min + ((index + 1) as f32 * segment_span);
-            let target = self.normalize(segment_value);
-            let active = target <= value + (self.step * 0.5);
-            let mut segment = div()
-                .id(self.id.slot_index("segment", index.to_string()))
-                .flex_1()
-                .h(px(track_height))
-                .bg(if active { filled_color } else { empty_color });
+                if fill_width > 0.0 {
+                    let fill_bounds = Bounds::new(
+                        point(bounds.origin.x, bounds.origin.y + px(track_top)),
+                        size(px(fill_width), px(track_height)),
+                    );
+                    window.paint_quad(fill(fill_bounds, fill_color).corner_radii(track_corner));
+                }
 
-            if !self.disabled {
-                let id = self.id.clone();
-                let on_change = on_change.clone();
-                segment = segment
-                    .cursor_pointer()
-                    .on_click(move |_: &ClickEvent, window, cx| {
-                        if !is_controlled {
-                            control::set_f32_state(&id, "value", target);
-                            window.refresh();
-                        }
-                        if let Some(handler) = on_change.as_ref() {
-                            (handler)(target, window, cx);
-                        }
-                    });
-            }
-
-            segment
-        });
-        track = track.children(segments);
+                if segment_count > 1 {
+                    for index in 1..segment_count {
+                        let x =
+                            bounds.origin.x + px(track_len * (index as f32 / segment_count as f32));
+                        let tick_bounds = Bounds::new(
+                            point(x - px(0.5), bounds.origin.y + px(track_top)),
+                            size(px(1.0), px(track_height)),
+                        );
+                        window.paint_quad(fill(tick_bounds, tick_color));
+                    }
+                }
+            },
+        )
+        .absolute()
+        .size_full();
 
         let mut thumb = div()
             .id(self.id.slot("thumb"))
@@ -465,7 +474,7 @@ impl RenderOnce for Slider {
             .relative()
             .w(px(track_len))
             .h(px(thumb_size))
-            .child(track)
+            .child(track_layer)
             .child(thumb);
 
         if !self.disabled {
@@ -478,8 +487,32 @@ impl RenderOnce for Slider {
             };
             let slider_id = self.id.to_string();
             let on_change_for_drag = on_change.clone();
+            let id = self.id.clone();
+            let min = self.min;
+            let max = self.max;
+            let step = self.step;
+            let on_change_for_click = on_change.clone();
 
             rail = rail
+                .cursor_pointer()
+                .on_click(move |event: &ClickEvent, window, cx| {
+                    let local_x = f32::from(event.position().x).clamp(0.0, track_len);
+                    let raw = slider_axis::value_from_local(
+                        SliderAxis::Horizontal,
+                        local_x,
+                        track_len,
+                        min,
+                        max,
+                    );
+                    let next = slider_axis::normalize(min, max, step, raw);
+                    if !is_controlled {
+                        control::set_f32_state(&id, "value", next);
+                        window.refresh();
+                    }
+                    if let Some(handler) = on_change_for_click.as_ref() {
+                        (handler)(next, window, cx);
+                    }
+                })
                 .on_drag(drag_state, |_drag, _, _, cx| cx.new(|_| EmptyView))
                 .on_drag_move::<SliderDragState>(move |event, window, cx| {
                     let drag = event.drag(cx);

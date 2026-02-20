@@ -1,20 +1,22 @@
 use std::rc::Rc;
 
 use gpui::{
-    AppContext, ClickEvent, EmptyView, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Window, canvas, div, px,
+    AppContext, Bounds, ClickEvent, Corners, EmptyView, InteractiveElement, IntoElement,
+    ParentElement, RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, canvas,
+    div, fill, point, px, size,
 };
 
 use crate::contracts::{MotionAware, VariantConfigurable};
 use crate::id::ComponentId;
 use crate::motion::MotionConfig;
 use crate::style::{Radius, Size, Variant};
+use crate::theme::SemanticRadiusToken;
 
 use super::Stack;
 use super::control;
 use super::slider_axis::{self, RailGeometry, SliderAxis};
 use super::transition::TransitionExt;
-use super::utils::{apply_radius, resolve_hsla};
+use super::utils::{apply_radius, resolve_hsla, resolve_radius};
 
 type ChangeHandler = Rc<dyn Fn((f32, f32), &mut Window, &mut gpui::App)>;
 
@@ -236,6 +238,11 @@ impl RangeSlider {
             Variant::Ghost => base.alpha(0.55),
         }
     }
+
+    fn tick_count(&self) -> usize {
+        let span = (self.max - self.min).max(self.step.max(0.001));
+        ((span / self.step.max(0.001)).round() as usize).clamp(1, 80)
+    }
 }
 
 impl RangeSlider {
@@ -297,6 +304,12 @@ impl RenderOnce for RangeSlider {
         let track_top = ((thumb_size - track_height) * 0.5).max(0.0);
         let left_thumb_x = ((track_len - thumb_size) * left_ratio).max(0.0);
         let right_thumb_x = ((track_len - thumb_size) * right_ratio).max(0.0);
+        let tick_count = self.tick_count();
+        let tick_color = resolve_hsla(&self.theme, &tokens.thumb_border).alpha(0.32);
+        let track_corner = Corners::all(resolve_radius(
+            &self.theme,
+            SemanticRadiusToken::from(self.radius),
+        ));
         let display_precision = if self.step < 1.0 { 2 } else { 0 };
         let is_controlled = self.values_controlled;
         let orientation = self.orientation;
@@ -308,28 +321,42 @@ impl RenderOnce for RangeSlider {
             let fill_top = right_thumb_y + (thumb_size * 0.5);
             let fill_bottom = left_thumb_y + (thumb_size * 0.5);
             let fill_height = (fill_bottom - fill_top).max(0.0);
+            let track_layer = canvas(
+                |_, _, _| (),
+                move |bounds, _, window, _| {
+                    let track_bounds = Bounds::new(
+                        point(bounds.origin.x + px(track_left), bounds.origin.y),
+                        size(px(track_height), px(track_len)),
+                    );
+                    window.paint_quad(fill(track_bounds, track_color).corner_radii(track_corner));
 
-            let mut track = div()
-                .id(self.id.slot("track"))
-                .absolute()
-                .top_0()
-                .left(px(track_left))
-                .w(px(track_height))
-                .h(px(track_len))
-                .border(super::utils::quantized_stroke_px(window, 1.0))
-                .border_color(track_color)
-                .bg(track_color);
-            track = apply_radius(&self.theme, track, self.radius);
+                    if fill_height > 0.0 {
+                        let fill_bounds = Bounds::new(
+                            point(
+                                bounds.origin.x + px(track_left),
+                                bounds.origin.y + px(fill_top),
+                            ),
+                            size(px(track_height), px(fill_height)),
+                        );
+                        window
+                            .paint_quad(fill(fill_bounds, range_color).corner_radii(track_corner));
+                    }
 
-            let mut fill = div()
-                .id(self.id.slot("range-fill"))
-                .absolute()
-                .top(px(fill_top))
-                .left(px(track_left))
-                .w(px(track_height))
-                .h(px(fill_height))
-                .bg(range_color);
-            fill = apply_radius(&self.theme, fill, self.radius);
+                    if tick_count > 1 {
+                        for index in 1..tick_count {
+                            let y = bounds.origin.y
+                                + px(track_len * (index as f32 / tick_count as f32));
+                            let tick_bounds = Bounds::new(
+                                point(bounds.origin.x + px(track_left), y - px(0.5)),
+                                size(px(track_height), px(1.0)),
+                            );
+                            window.paint_quad(fill(tick_bounds, tick_color));
+                        }
+                    }
+                },
+            )
+            .absolute()
+            .size_full();
 
             let mut left_thumb = div()
                 .id(self.id.slot("thumb-left"))
@@ -474,8 +501,7 @@ impl RenderOnce for RangeSlider {
                 .relative()
                 .w(px(thumb_size))
                 .h(px(track_len))
-                .child(track)
-                .child(fill)
+                .child(track_layer)
                 .child(
                     canvas(
                         {
@@ -581,29 +607,44 @@ impl RenderOnce for RangeSlider {
                 .with_enter_transition(self.id.slot("enter"), self.motion);
         }
 
-        let mut track = div()
-            .id(self.id.slot("track"))
-            .absolute()
-            .top(px(track_top))
-            .left_0()
-            .w(px(track_len))
-            .h(px(track_height))
-            .border(super::utils::quantized_stroke_px(window, 1.0))
-            .border_color(track_color)
-            .bg(track_color);
-        track = apply_radius(&self.theme, track, self.radius);
-
         let fill_left = left_thumb_x + (thumb_size * 0.5);
         let fill_right = right_thumb_x + (thumb_size * 0.5);
         let fill_width = (fill_right - fill_left).max(0.0);
-        let fill = div()
-            .id(self.id.slot("range-fill"))
-            .absolute()
-            .top(px(track_top))
-            .left(px(fill_left))
-            .w(px(fill_width))
-            .h(px(track_height))
-            .bg(range_color);
+        let track_layer = canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let track_bounds = Bounds::new(
+                    point(bounds.origin.x, bounds.origin.y + px(track_top)),
+                    size(px(track_len), px(track_height)),
+                );
+                window.paint_quad(fill(track_bounds, track_color).corner_radii(track_corner));
+
+                if fill_width > 0.0 {
+                    let fill_bounds = Bounds::new(
+                        point(
+                            bounds.origin.x + px(fill_left),
+                            bounds.origin.y + px(track_top),
+                        ),
+                        size(px(fill_width), px(track_height)),
+                    );
+                    window.paint_quad(fill(fill_bounds, range_color).corner_radii(track_corner));
+                }
+
+                if tick_count > 1 {
+                    for index in 1..tick_count {
+                        let x =
+                            bounds.origin.x + px(track_len * (index as f32 / tick_count as f32));
+                        let tick_bounds = Bounds::new(
+                            point(x - px(0.5), bounds.origin.y + px(track_top)),
+                            size(px(1.0), px(track_height)),
+                        );
+                        window.paint_quad(fill(tick_bounds, tick_color));
+                    }
+                }
+            },
+        )
+        .absolute()
+        .size_full();
 
         let mut left_thumb = div()
             .id(self.id.slot("thumb-left"))
@@ -758,8 +799,7 @@ impl RenderOnce for RangeSlider {
             .relative()
             .w(px(track_len))
             .h(px(thumb_size))
-            .child(track)
-            .child(fill)
+            .child(track_layer)
             .child(
                 canvas(
                     {

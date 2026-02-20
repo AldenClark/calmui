@@ -482,12 +482,9 @@ impl Modal {
             .p(tokens.panel_padding);
 
         if self.title.is_some() || self.close_button {
-            let mut header = div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .mb(tokens.header_margin_bottom);
+            let mut header = div().flex().items_center().mb(tokens.header_margin_bottom);
             if let Some(title) = self.title.clone() {
+                header = header.justify_between();
                 header = header.child(
                     div()
                         .text_size(tokens.title_size)
@@ -496,7 +493,7 @@ impl Modal {
                         .child(title),
                 );
             } else {
-                header = header.child(div().flex_1());
+                header = header.justify_end();
             }
             panel = panel.child(header.children(close_action));
         }

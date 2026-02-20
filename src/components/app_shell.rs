@@ -196,13 +196,12 @@ impl RenderOnce for Sidebar {
                             .child(content()),
                     ),
             );
-        } else {
-            root = root.child(div().flex_1().min_h_0());
         }
 
         if let Some(footer) = self.footer.take() {
             root = root.child(
                 div()
+                    .mt_auto()
                     .p(tokens.section_padding)
                     .text_size(tokens.footer_size)
                     .text_color(resolve_hsla(&self.theme, &tokens.footer_fg))

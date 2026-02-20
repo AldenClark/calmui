@@ -66,6 +66,7 @@ fn render_select_label_block(
     description: &Option<SharedString>,
     error: &Option<SharedString>,
     required: bool,
+    width: Option<gpui::Pixels>,
 ) -> Option<AnyElement> {
     if label.is_none() && description.is_none() && error.is_none() {
         return None;
@@ -108,6 +109,10 @@ fn render_select_label_block(
                 .text_color(resolve_hsla(theme, &tokens.error))
                 .child(error),
         );
+    }
+
+    if let Some(width) = width {
+        block = block.w(width);
     }
 
     Some(block.into_any_element())
@@ -347,6 +352,19 @@ impl Select {
             &self.description,
             &self.error,
             self.required,
+            None,
+        )
+    }
+
+    fn render_horizontal_label_block(&self, width: gpui::Pixels) -> Option<AnyElement> {
+        render_select_label_block(
+            &self.theme,
+            &self.theme.components.select,
+            &self.label,
+            &self.description,
+            &self.error,
+            self.required,
+            Some(width),
         )
     }
 
@@ -798,8 +816,10 @@ impl RenderOnce for Select {
                     .id(self.id.clone())
                     .items_start()
                     .gap(layout_gap_horizontal);
-                if let Some(label_block) = self.render_label_block() {
-                    row = row.child(div().w(horizontal_label_width).child(label_block));
+                if let Some(label_block) =
+                    self.render_horizontal_label_block(horizontal_label_width)
+                {
+                    row = row.child(label_block);
                 }
                 row.child(field)
             }
@@ -1017,6 +1037,19 @@ impl MultiSelect {
             &self.description,
             &self.error,
             self.required,
+            None,
+        )
+    }
+
+    fn render_horizontal_label_block(&self, width: gpui::Pixels) -> Option<AnyElement> {
+        render_select_label_block(
+            &self.theme,
+            &self.theme.components.select,
+            &self.label,
+            &self.description,
+            &self.error,
+            self.required,
+            Some(width),
         )
     }
 
@@ -1491,8 +1524,10 @@ impl RenderOnce for MultiSelect {
                     .id(self.id.clone())
                     .items_start()
                     .gap(layout_gap_horizontal);
-                if let Some(label_block) = self.render_label_block() {
-                    row = row.child(div().w(horizontal_label_width).child(label_block));
+                if let Some(label_block) =
+                    self.render_horizontal_label_block(horizontal_label_width)
+                {
+                    row = row.child(label_block);
                 }
                 row.child(field)
             }

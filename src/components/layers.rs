@@ -178,26 +178,26 @@ impl ToastLayer {
                     .gap(tokens.row_gap)
                     .child(icon_badge)
                     .child(
-                        div().flex_1().overflow_hidden().child(
-                            Stack::vertical()
-                                .gap(tokens.content_gap)
-                                .child(
-                                    div()
-                                        .w_full()
-                                        .text_size(tokens.title_size)
-                                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .truncate()
-                                        .child(title),
-                                )
-                                .child(
-                                    div()
-                                        .w_full()
-                                        .text_size(tokens.body_size)
-                                        .whitespace_normal()
-                                        .line_clamp(3)
-                                        .child(message),
-                                ),
-                        ),
+                        Stack::vertical()
+                            .flex_1()
+                            .overflow_hidden()
+                            .gap(tokens.content_gap)
+                            .child(
+                                div()
+                                    .w_full()
+                                    .text_size(tokens.title_size)
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .truncate()
+                                    .child(title),
+                            )
+                            .child(
+                                div()
+                                    .w_full()
+                                    .text_size(tokens.body_size)
+                                    .whitespace_normal()
+                                    .line_clamp(3)
+                                    .child(message),
+                            ),
                     )
                     .children(closable.then_some(close_button)),
             )

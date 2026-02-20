@@ -661,9 +661,6 @@ impl RenderOnce for Table {
             );
         }
         for (row_index, (source_index, row)) in rows.into_iter().enumerate() {
-            if row_index > 0 {
-                rows_root = rows_root.child(separator());
-            }
             let striped_index = window_start + row_index;
             let row_bg = if striped && striped_index % 2 == 1 {
                 resolve_hsla(&self.theme, &tokens.row_alt_bg)
@@ -678,6 +675,17 @@ impl RenderOnce for Table {
                 .items_center()
                 .bg(row_bg)
                 .text_color(resolve_hsla(&self.theme, &tokens.cell_fg));
+            if row_index > 0 {
+                row_node = row_node.relative().child(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .right_0()
+                        .h(line_thickness)
+                        .bg(resolve_hsla(&self.theme, &tokens.row_border)),
+                );
+            }
 
             if let Some(handler) = on_row_click.as_ref() {
                 let on_row_click = handler.clone();
