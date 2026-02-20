@@ -587,7 +587,6 @@ impl ModalLayer {
             .absolute()
             .top_0()
             .left_0()
-            .relative()
             .flex()
             .items_center()
             .justify_center()

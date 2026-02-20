@@ -77,7 +77,12 @@ impl RenderOnce for Divider {
         let line_thickness = hairline_px(window);
 
         match self.axis {
-            DividerAxis::Vertical => div().id(self.id).w(line_thickness).h_full().bg(line),
+            DividerAxis::Vertical => div()
+                .id(self.id)
+                .w(line_thickness)
+                .h_full()
+                .flex_none()
+                .bg(line),
             DividerAxis::Horizontal => {
                 if let Some(label) = self.label {
                     let left_flex = match self.label_position {
