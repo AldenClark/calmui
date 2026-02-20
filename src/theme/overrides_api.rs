@@ -390,6 +390,7 @@ impl_option_overrides_methods!(ToastOverrides {
 
 impl_option_overrides_methods!(DividerOverrides {
     line: Hsla,
+    line_width: Pixels,
     label: Hsla,
     label_size: Pixels,
     label_gap: Pixels,

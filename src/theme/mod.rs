@@ -1718,6 +1718,7 @@ pub struct ToastTokens {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DividerTokens {
     pub line: Hsla,
+    pub line_width: Pixels,
     pub label: Hsla,
     pub label_size: Pixels,
     pub label_gap: Pixels,
@@ -3461,6 +3462,7 @@ impl ComponentTokens {
                     line: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    line_width: px(1.0),
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[6 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
@@ -4943,6 +4945,7 @@ impl ComponentTokens {
                     line: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[4 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    line_width: px(1.0),
                     label: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[5 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
@@ -7324,6 +7327,7 @@ impl ToastOverrides {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DividerOverrides {
     pub line: Option<Hsla>,
+    pub line_width: Option<Pixels>,
     pub label: Option<Hsla>,
     pub label_size: Option<Pixels>,
     pub label_gap: Option<Pixels>,
@@ -7334,6 +7338,9 @@ impl DividerOverrides {
     fn apply(&self, mut current: DividerTokens) -> DividerTokens {
         if let Some(value) = &self.line {
             current.line = value.clone();
+        }
+        if let Some(value) = self.line_width {
+            current.line_width = value;
         }
         if let Some(value) = &self.label {
             current.label = value.clone();

@@ -1,10 +1,11 @@
 use gpui::{
     InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div,
+    px,
 };
 
 use crate::id::ComponentId;
 
-use super::utils::{hairline_px, resolve_hsla};
+use super::utils::{hairline_px, quantized_stroke_px, resolve_hsla};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum DividerAxis {
@@ -25,6 +26,7 @@ pub struct Divider {
     axis: DividerAxis,
     label: Option<SharedString>,
     label_position: DividerLabelPosition,
+    line_width: Option<gpui::Pixels>,
     theme: crate::theme::LocalTheme,
     style: gpui::StyleRefinement,
 }
@@ -37,6 +39,7 @@ impl Divider {
             axis: DividerAxis::Horizontal,
             label: None,
             label_position: DividerLabelPosition::Center,
+            line_width: None,
             theme: crate::theme::LocalTheme::default(),
             style: gpui::StyleRefinement::default(),
         }
@@ -59,6 +62,11 @@ impl Divider {
         self.label_position = value;
         self
     }
+
+    pub fn line_width(mut self, value: f32) -> Self {
+        self.line_width = Some(px(value.max(0.0)));
+        self
+    }
 }
 
 impl Divider {
@@ -74,7 +82,16 @@ impl RenderOnce for Divider {
         let tokens = &self.theme.components.divider;
         let line = resolve_hsla(&self.theme, &tokens.line);
         let label_color = resolve_hsla(&self.theme, &tokens.label);
-        let line_thickness = hairline_px(window);
+        let requested_line_width = self.line_width.unwrap_or(tokens.line_width);
+        let requested_line_width_px = f32::from(requested_line_width);
+        let line_thickness = if requested_line_width_px <= 0.0 || !requested_line_width_px.is_finite()
+        {
+            px(0.0)
+        } else if requested_line_width_px <= 1.0 {
+            hairline_px(window)
+        } else {
+            quantized_stroke_px(window, requested_line_width_px)
+        };
 
         match self.axis {
             DividerAxis::Vertical => div()
