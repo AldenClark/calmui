@@ -16,8 +16,7 @@ fn apply_themable<T: Themable>(component: T) -> T {
     component.themed(|overrides| overrides)
 }
 
-#[test]
-fn theme_api_smoke_for_themable_components() {
+fn theme_api_smoke_for_themable_components_body() {
     let _ = apply_themable(apply_component_theme(Button::new().label("button")));
     let _ = apply_themable(apply_component_theme(ButtonGroup::new()));
     let _ = apply_themable(apply_component_theme(TextInput::new()));
@@ -54,6 +53,16 @@ fn theme_api_smoke_for_themable_components() {
     let _ = apply_themable(apply_component_theme(Sidebar::new()));
     let _ = apply_themable(apply_component_theme(TitleBar::new()));
     let _ = apply_themable(apply_component_theme(Markdown::new("demo")));
+    let _ = apply_themable(apply_component_theme(Markdown::new("demo").theme(
+        |theme| {
+            theme.markdown(|markdown| {
+                markdown
+                    .paragraph_line_height(gpui::px(28.0))
+                    .link(gpui::black())
+                    .table_radius(gpui::px(10.0))
+            })
+        },
+    )));
     let _ = apply_themable(apply_component_theme(Text::new("demo")));
     let _ = apply_themable(apply_component_theme(Title::new("demo")));
     let _ = apply_themable(apply_component_theme(Paper::new()));
@@ -73,4 +82,15 @@ fn theme_api_smoke_for_themable_components() {
     let _ = apply_themable(apply_component_theme(Grid::new()));
     let _ = apply_themable(apply_component_theme(SimpleGrid::new()));
     let _ = apply_themable(apply_component_theme(Space::new()));
+}
+
+#[test]
+fn theme_api_smoke_for_themable_components() {
+    std::thread::Builder::new()
+        .name("theme_api_smoke_for_themable_components".into())
+        .stack_size(32 * 1024 * 1024)
+        .spawn(theme_api_smoke_for_themable_components_body)
+        .expect("failed to spawn theme api smoke test thread")
+        .join()
+        .expect("theme api smoke test thread panicked");
 }

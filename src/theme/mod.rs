@@ -1821,6 +1821,9 @@ pub struct SidebarTokens {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MarkdownTokens {
     pub paragraph: Hsla,
+    pub paragraph_muted: Hsla,
+    pub heading: Hsla,
+    pub heading2_border: Hsla,
     pub quote_bg: Hsla,
     pub quote_border: Hsla,
     pub quote_fg: Hsla,
@@ -1828,23 +1831,72 @@ pub struct MarkdownTokens {
     pub code_border: Hsla,
     pub code_fg: Hsla,
     pub code_lang_fg: Hsla,
+    pub link: Hsla,
+    pub link_hover: Hsla,
+    pub strong: Hsla,
+    pub em: Hsla,
+    pub del: Hsla,
+    pub inline_code_bg: Hsla,
+    pub inline_code_border: Hsla,
+    pub inline_code_fg: Hsla,
+    pub kbd_bg: Hsla,
+    pub kbd_border: Hsla,
+    pub kbd_fg: Hsla,
+    pub mark_bg: Hsla,
+    pub mark_fg: Hsla,
     pub list_marker: Hsla,
     pub rule: Hsla,
+    pub table_border: Hsla,
+    pub table_header_bg: Hsla,
+    pub table_header_fg: Hsla,
+    pub table_row_alt_bg: Hsla,
+    pub table_cell_fg: Hsla,
+    pub task_border: Hsla,
+    pub task_bg: Hsla,
+    pub task_checked_bg: Hsla,
+    pub task_checked_fg: Hsla,
+    pub details_bg: Hsla,
+    pub details_border: Hsla,
+    pub details_summary_fg: Hsla,
+    pub details_body_fg: Hsla,
+    pub image_border: Hsla,
+    pub image_bg: Hsla,
+    pub image_caption_fg: Hsla,
     pub gap_regular: Pixels,
     pub gap_compact: Pixels,
     pub paragraph_size: Pixels,
+    pub paragraph_line_height: Pixels,
     pub quote_size: Pixels,
+    pub quote_line_height: Pixels,
     pub code_size: Pixels,
+    pub code_line_height: Pixels,
     pub code_lang_size: Pixels,
     pub list_size: Pixels,
+    pub list_line_height: Pixels,
+    pub table_size: Pixels,
+    pub image_caption_size: Pixels,
     pub quote_padding_x: Pixels,
     pub quote_padding_y: Pixels,
     pub quote_radius: Pixels,
+    pub quote_gap: Pixels,
     pub code_padding: Pixels,
     pub code_radius: Pixels,
     pub code_gap: Pixels,
+    pub inline_code_radius: Pixels,
+    pub kbd_radius: Pixels,
     pub list_gap: Pixels,
     pub list_item_gap: Pixels,
+    pub list_indent: Pixels,
+    pub table_radius: Pixels,
+    pub table_cell_padding_x: Pixels,
+    pub table_cell_padding_y: Pixels,
+    pub details_radius: Pixels,
+    pub details_padding_x: Pixels,
+    pub details_padding_y: Pixels,
+    pub image_radius: Pixels,
+    pub image_padding: Pixels,
+    pub image_gap: Pixels,
+    pub heading2_padding_top: Pixels,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3603,6 +3655,19 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    paragraph_muted: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    heading: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    heading2_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                     quote_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
@@ -3630,6 +3695,55 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    link: (Rgba::try_from(PaletteCatalog::scale(primary)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    link_hover: (Rgba::try_from(PaletteCatalog::scale(primary)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    strong: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    em: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    del: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    inline_code_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    inline_code_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    inline_code_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    kbd_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[1 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    kbd_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    kbd_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    mark_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Yellow)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    mark_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                     list_marker: (Rgba::try_from(
                         PaletteCatalog::scale(PaletteKey::Gray)[6 as usize],
                     )
@@ -3638,21 +3752,115 @@ impl ComponentTokens {
                     rule: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[3 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    table_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    table_header_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    table_header_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    table_row_alt_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    table_cell_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    task_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    task_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    task_checked_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[6 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    task_checked_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    details_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[0 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    details_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    details_summary_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    details_body_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    image_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    image_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    image_caption_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                     gap_regular: px(8.0),
                     gap_compact: px(6.0),
-                    paragraph_size: px(14.0),
+                    paragraph_size: px(16.0),
+                    paragraph_line_height: px(28.0),
                     quote_size: px(14.0),
+                    quote_line_height: px(24.0),
                     code_size: px(13.0),
+                    code_line_height: px(21.0),
                     code_lang_size: px(12.0),
                     list_size: px(14.0),
+                    list_line_height: px(24.0),
+                    table_size: px(14.0),
+                    image_caption_size: px(13.0),
                     quote_padding_x: px(12.0),
                     quote_padding_y: px(8.0),
-                    quote_radius: px(8.0),
+                    quote_radius: px(10.0),
+                    quote_gap: px(8.0),
                     code_padding: px(10.0),
-                    code_radius: px(8.0),
+                    code_radius: px(10.0),
                     code_gap: px(6.0),
+                    inline_code_radius: px(6.0),
+                    kbd_radius: px(6.0),
                     list_gap: px(6.0),
-                    list_item_gap: px(8.0),
+                    list_item_gap: px(10.0),
+                    list_indent: px(20.0),
+                    table_radius: px(10.0),
+                    table_cell_padding_x: px(12.0),
+                    table_cell_padding_y: px(8.0),
+                    details_radius: px(10.0),
+                    details_padding_x: px(12.0),
+                    details_padding_y: px(10.0),
+                    image_radius: px(10.0),
+                    image_padding: px(8.0),
+                    image_gap: px(8.0),
+                    heading2_padding_top: px(10.0),
                 },
                 text: TextTokens {
                     fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[9 as usize])
@@ -5106,6 +5314,19 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    paragraph_muted: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    heading: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    heading2_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                     quote_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
@@ -5133,6 +5354,55 @@ impl ComponentTokens {
                     )
                     .map(Into::into)
                     .unwrap_or_else(|_| black())),
+                    link: (Rgba::try_from(PaletteCatalog::scale(primary)[3 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    link_hover: (Rgba::try_from(PaletteCatalog::scale(primary)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    strong: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    em: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[1 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    del: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[5 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    inline_code_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    inline_code_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    inline_code_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[2 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    kbd_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    kbd_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    kbd_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[2 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    mark_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Yellow)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    mark_fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
                     list_marker: (Rgba::try_from(
                         PaletteCatalog::scale(PaletteKey::Gray)[5 as usize],
                     )
@@ -5141,21 +5411,115 @@ impl ComponentTokens {
                     rule: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[5 as usize])
                         .map(Into::into)
                         .unwrap_or_else(|_| black())),
+                    table_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    table_header_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[7 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    table_header_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    table_row_alt_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    table_cell_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[2 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    task_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    task_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[7 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    task_checked_bg: (Rgba::try_from(PaletteCatalog::scale(primary)[4 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    task_checked_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[9 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    details_bg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[8 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    details_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    details_summary_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[1 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    details_body_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[3 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    image_border: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Dark)[5 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
+                    image_bg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Dark)[8 as usize])
+                        .map(Into::into)
+                        .unwrap_or_else(|_| black())),
+                    image_caption_fg: (Rgba::try_from(
+                        PaletteCatalog::scale(PaletteKey::Gray)[4 as usize],
+                    )
+                    .map(Into::into)
+                    .unwrap_or_else(|_| black())),
                     gap_regular: px(8.0),
                     gap_compact: px(6.0),
-                    paragraph_size: px(14.0),
+                    paragraph_size: px(16.0),
+                    paragraph_line_height: px(28.0),
                     quote_size: px(14.0),
+                    quote_line_height: px(24.0),
                     code_size: px(13.0),
+                    code_line_height: px(21.0),
                     code_lang_size: px(12.0),
                     list_size: px(14.0),
+                    list_line_height: px(24.0),
+                    table_size: px(14.0),
+                    image_caption_size: px(13.0),
                     quote_padding_x: px(12.0),
                     quote_padding_y: px(8.0),
-                    quote_radius: px(8.0),
+                    quote_radius: px(10.0),
+                    quote_gap: px(8.0),
                     code_padding: px(10.0),
-                    code_radius: px(8.0),
+                    code_radius: px(10.0),
                     code_gap: px(6.0),
+                    inline_code_radius: px(6.0),
+                    kbd_radius: px(6.0),
                     list_gap: px(6.0),
-                    list_item_gap: px(8.0),
+                    list_item_gap: px(10.0),
+                    list_indent: px(20.0),
+                    table_radius: px(10.0),
+                    table_cell_padding_x: px(12.0),
+                    table_cell_padding_y: px(8.0),
+                    details_radius: px(10.0),
+                    details_padding_x: px(12.0),
+                    details_padding_y: px(10.0),
+                    image_radius: px(10.0),
+                    image_padding: px(8.0),
+                    image_gap: px(8.0),
+                    heading2_padding_top: px(10.0),
                 },
                 text: TextTokens {
                     fg: (Rgba::try_from(PaletteCatalog::scale(PaletteKey::Gray)[0 as usize])
@@ -7663,6 +8027,9 @@ impl SidebarOverrides {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct MarkdownOverrides {
     pub paragraph: Option<Hsla>,
+    pub paragraph_muted: Option<Hsla>,
+    pub heading: Option<Hsla>,
+    pub heading2_border: Option<Hsla>,
     pub quote_bg: Option<Hsla>,
     pub quote_border: Option<Hsla>,
     pub quote_fg: Option<Hsla>,
@@ -7670,29 +8037,87 @@ pub struct MarkdownOverrides {
     pub code_border: Option<Hsla>,
     pub code_fg: Option<Hsla>,
     pub code_lang_fg: Option<Hsla>,
+    pub link: Option<Hsla>,
+    pub link_hover: Option<Hsla>,
+    pub strong: Option<Hsla>,
+    pub em: Option<Hsla>,
+    pub del: Option<Hsla>,
+    pub inline_code_bg: Option<Hsla>,
+    pub inline_code_border: Option<Hsla>,
+    pub inline_code_fg: Option<Hsla>,
+    pub kbd_bg: Option<Hsla>,
+    pub kbd_border: Option<Hsla>,
+    pub kbd_fg: Option<Hsla>,
+    pub mark_bg: Option<Hsla>,
+    pub mark_fg: Option<Hsla>,
     pub list_marker: Option<Hsla>,
     pub rule: Option<Hsla>,
+    pub table_border: Option<Hsla>,
+    pub table_header_bg: Option<Hsla>,
+    pub table_header_fg: Option<Hsla>,
+    pub table_row_alt_bg: Option<Hsla>,
+    pub table_cell_fg: Option<Hsla>,
+    pub task_border: Option<Hsla>,
+    pub task_bg: Option<Hsla>,
+    pub task_checked_bg: Option<Hsla>,
+    pub task_checked_fg: Option<Hsla>,
+    pub details_bg: Option<Hsla>,
+    pub details_border: Option<Hsla>,
+    pub details_summary_fg: Option<Hsla>,
+    pub details_body_fg: Option<Hsla>,
+    pub image_border: Option<Hsla>,
+    pub image_bg: Option<Hsla>,
+    pub image_caption_fg: Option<Hsla>,
     pub gap_regular: Option<Pixels>,
     pub gap_compact: Option<Pixels>,
     pub paragraph_size: Option<Pixels>,
+    pub paragraph_line_height: Option<Pixels>,
     pub quote_size: Option<Pixels>,
+    pub quote_line_height: Option<Pixels>,
     pub code_size: Option<Pixels>,
+    pub code_line_height: Option<Pixels>,
     pub code_lang_size: Option<Pixels>,
     pub list_size: Option<Pixels>,
+    pub list_line_height: Option<Pixels>,
+    pub table_size: Option<Pixels>,
+    pub image_caption_size: Option<Pixels>,
     pub quote_padding_x: Option<Pixels>,
     pub quote_padding_y: Option<Pixels>,
     pub quote_radius: Option<Pixels>,
+    pub quote_gap: Option<Pixels>,
     pub code_padding: Option<Pixels>,
     pub code_radius: Option<Pixels>,
     pub code_gap: Option<Pixels>,
+    pub inline_code_radius: Option<Pixels>,
+    pub kbd_radius: Option<Pixels>,
     pub list_gap: Option<Pixels>,
     pub list_item_gap: Option<Pixels>,
+    pub list_indent: Option<Pixels>,
+    pub table_radius: Option<Pixels>,
+    pub table_cell_padding_x: Option<Pixels>,
+    pub table_cell_padding_y: Option<Pixels>,
+    pub details_radius: Option<Pixels>,
+    pub details_padding_x: Option<Pixels>,
+    pub details_padding_y: Option<Pixels>,
+    pub image_radius: Option<Pixels>,
+    pub image_padding: Option<Pixels>,
+    pub image_gap: Option<Pixels>,
+    pub heading2_padding_top: Option<Pixels>,
 }
 
 impl MarkdownOverrides {
     fn apply(&self, mut current: MarkdownTokens) -> MarkdownTokens {
         if let Some(value) = &self.paragraph {
             current.paragraph = value.clone();
+        }
+        if let Some(value) = &self.paragraph_muted {
+            current.paragraph_muted = value.clone();
+        }
+        if let Some(value) = &self.heading {
+            current.heading = value.clone();
+        }
+        if let Some(value) = &self.heading2_border {
+            current.heading2_border = value.clone();
         }
         if let Some(value) = &self.quote_bg {
             current.quote_bg = value.clone();
@@ -7715,11 +8140,98 @@ impl MarkdownOverrides {
         if let Some(value) = &self.code_lang_fg {
             current.code_lang_fg = value.clone();
         }
+        if let Some(value) = &self.link {
+            current.link = value.clone();
+        }
+        if let Some(value) = &self.link_hover {
+            current.link_hover = value.clone();
+        }
+        if let Some(value) = &self.strong {
+            current.strong = value.clone();
+        }
+        if let Some(value) = &self.em {
+            current.em = value.clone();
+        }
+        if let Some(value) = &self.del {
+            current.del = value.clone();
+        }
+        if let Some(value) = &self.inline_code_bg {
+            current.inline_code_bg = value.clone();
+        }
+        if let Some(value) = &self.inline_code_border {
+            current.inline_code_border = value.clone();
+        }
+        if let Some(value) = &self.inline_code_fg {
+            current.inline_code_fg = value.clone();
+        }
+        if let Some(value) = &self.kbd_bg {
+            current.kbd_bg = value.clone();
+        }
+        if let Some(value) = &self.kbd_border {
+            current.kbd_border = value.clone();
+        }
+        if let Some(value) = &self.kbd_fg {
+            current.kbd_fg = value.clone();
+        }
+        if let Some(value) = &self.mark_bg {
+            current.mark_bg = value.clone();
+        }
+        if let Some(value) = &self.mark_fg {
+            current.mark_fg = value.clone();
+        }
         if let Some(value) = &self.list_marker {
             current.list_marker = value.clone();
         }
         if let Some(value) = &self.rule {
             current.rule = value.clone();
+        }
+        if let Some(value) = &self.table_border {
+            current.table_border = value.clone();
+        }
+        if let Some(value) = &self.table_header_bg {
+            current.table_header_bg = value.clone();
+        }
+        if let Some(value) = &self.table_header_fg {
+            current.table_header_fg = value.clone();
+        }
+        if let Some(value) = &self.table_row_alt_bg {
+            current.table_row_alt_bg = value.clone();
+        }
+        if let Some(value) = &self.table_cell_fg {
+            current.table_cell_fg = value.clone();
+        }
+        if let Some(value) = &self.task_border {
+            current.task_border = value.clone();
+        }
+        if let Some(value) = &self.task_bg {
+            current.task_bg = value.clone();
+        }
+        if let Some(value) = &self.task_checked_bg {
+            current.task_checked_bg = value.clone();
+        }
+        if let Some(value) = &self.task_checked_fg {
+            current.task_checked_fg = value.clone();
+        }
+        if let Some(value) = &self.details_bg {
+            current.details_bg = value.clone();
+        }
+        if let Some(value) = &self.details_border {
+            current.details_border = value.clone();
+        }
+        if let Some(value) = &self.details_summary_fg {
+            current.details_summary_fg = value.clone();
+        }
+        if let Some(value) = &self.details_body_fg {
+            current.details_body_fg = value.clone();
+        }
+        if let Some(value) = &self.image_border {
+            current.image_border = value.clone();
+        }
+        if let Some(value) = &self.image_bg {
+            current.image_bg = value.clone();
+        }
+        if let Some(value) = &self.image_caption_fg {
+            current.image_caption_fg = value.clone();
         }
         if let Some(value) = self.gap_regular {
             current.gap_regular = value;
@@ -7730,17 +8242,35 @@ impl MarkdownOverrides {
         if let Some(value) = self.paragraph_size {
             current.paragraph_size = value;
         }
+        if let Some(value) = self.paragraph_line_height {
+            current.paragraph_line_height = value;
+        }
         if let Some(value) = self.quote_size {
             current.quote_size = value;
         }
+        if let Some(value) = self.quote_line_height {
+            current.quote_line_height = value;
+        }
         if let Some(value) = self.code_size {
             current.code_size = value;
+        }
+        if let Some(value) = self.code_line_height {
+            current.code_line_height = value;
         }
         if let Some(value) = self.code_lang_size {
             current.code_lang_size = value;
         }
         if let Some(value) = self.list_size {
             current.list_size = value;
+        }
+        if let Some(value) = self.list_line_height {
+            current.list_line_height = value;
+        }
+        if let Some(value) = self.table_size {
+            current.table_size = value;
+        }
+        if let Some(value) = self.image_caption_size {
+            current.image_caption_size = value;
         }
         if let Some(value) = self.quote_padding_x {
             current.quote_padding_x = value;
@@ -7751,6 +8281,9 @@ impl MarkdownOverrides {
         if let Some(value) = self.quote_radius {
             current.quote_radius = value;
         }
+        if let Some(value) = self.quote_gap {
+            current.quote_gap = value;
+        }
         if let Some(value) = self.code_padding {
             current.code_padding = value;
         }
@@ -7760,11 +8293,50 @@ impl MarkdownOverrides {
         if let Some(value) = self.code_gap {
             current.code_gap = value;
         }
+        if let Some(value) = self.inline_code_radius {
+            current.inline_code_radius = value;
+        }
+        if let Some(value) = self.kbd_radius {
+            current.kbd_radius = value;
+        }
         if let Some(value) = self.list_gap {
             current.list_gap = value;
         }
         if let Some(value) = self.list_item_gap {
             current.list_item_gap = value;
+        }
+        if let Some(value) = self.list_indent {
+            current.list_indent = value;
+        }
+        if let Some(value) = self.table_radius {
+            current.table_radius = value;
+        }
+        if let Some(value) = self.table_cell_padding_x {
+            current.table_cell_padding_x = value;
+        }
+        if let Some(value) = self.table_cell_padding_y {
+            current.table_cell_padding_y = value;
+        }
+        if let Some(value) = self.details_radius {
+            current.details_radius = value;
+        }
+        if let Some(value) = self.details_padding_x {
+            current.details_padding_x = value;
+        }
+        if let Some(value) = self.details_padding_y {
+            current.details_padding_y = value;
+        }
+        if let Some(value) = self.image_radius {
+            current.image_radius = value;
+        }
+        if let Some(value) = self.image_padding {
+            current.image_padding = value;
+        }
+        if let Some(value) = self.image_gap {
+            current.image_gap = value;
+        }
+        if let Some(value) = self.heading2_padding_top {
+            current.heading2_padding_top = value;
         }
         current
     }

@@ -186,10 +186,10 @@ const BUDGETS: &[DepthBudget] = &[
     },
     DepthBudget {
         file: "markdown.rs",
-        max_child: 19,
-        max_div: 13,
+        max_child: 26,
+        max_div: 17,
         max_canvas: 1,
-        max_chain: 4,
+        max_chain: 5,
     },
     DepthBudget {
         file: "menu.rs",

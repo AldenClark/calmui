@@ -76,6 +76,8 @@ mod test_flattening_invariants;
 #[cfg(test)]
 mod test_layout_depth_budget;
 #[cfg(test)]
+mod test_markdown_rendering;
+#[cfg(test)]
 mod test_state_logic;
 #[cfg(test)]
 mod test_theme_api_smoke;
@@ -99,7 +101,7 @@ pub use layers::{ModalLayer, ToastLayer};
 pub use layout::{Grid, SimpleGrid, Space, Stack};
 pub use loader::{Loader, LoaderElement, LoaderVariant};
 pub use loading_overlay::LoadingOverlay;
-pub use markdown::Markdown;
+pub use markdown::{Markdown, MarkdownLinkClick};
 pub use menu::{Menu, MenuItem};
 pub use modal::Modal;
 pub use number_input::NumberInput;

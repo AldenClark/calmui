@@ -229,7 +229,11 @@ fn behavior_render_scenarios_group_a() {
     let _ = into_any(Indicator::new().processing(true).child(div()));
     let _ = into_any(Loader::new().variant(LoaderVariant::Bars).label("loading"));
     let _ = into_any(LoadingOverlay::new().content(div()).label("Busy"));
-    let _ = into_any(Markdown::new("## Heading"));
+    let _ = into_any(
+        Markdown::new("## Heading")
+            .open_links_with_system(false)
+            .on_link_click(|_payload, _window, _cx| {}),
+    );
     let _ = into_any(
         Menu::new()
             .item(MenuItem::new("a").label("A"))
