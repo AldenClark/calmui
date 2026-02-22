@@ -14,7 +14,7 @@ use super::Stack;
 use super::control;
 use super::toggle::{ToggleConfig, wire_toggle_handlers};
 use super::transition::TransitionExt;
-use super::utils::{apply_radius, resolve_hsla};
+use super::utils::{apply_radius, resolve_hsla, snap_px};
 
 type SwitchChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut gpui::App)>;
 
@@ -167,14 +167,8 @@ impl RenderOnce for Switch {
         let track_w = f32::from(size_preset.track_width);
         let track_h = f32::from(size_preset.track_height);
         let thumb_size = f32::from(size_preset.thumb_size);
-        let thumb_inset = ((track_h - thumb_size) * 0.5).max(0.0);
-        let thumb_top = thumb_inset;
-        let thumb_left = if checked {
-            track_w - thumb_size - thumb_inset
-        } else {
-            thumb_inset
-        };
-
+        // Snap thumb offsets to device pixels to avoid sub-pixel drift on scaled displays.
+        let thumb_inset = f32::from(snap_px(window, ((track_h - thumb_size) * 0.5).max(0.0)));
         let active = self.variant_track_color(resolve_hsla(&self.theme, &tokens.track_on_bg));
         let inactive =
             self.variant_inactive_track_color(resolve_hsla(&self.theme, &tokens.track_off_bg));
@@ -187,16 +181,15 @@ impl RenderOnce for Switch {
         };
 
         let mut thumb = div()
-            .absolute()
-            .left(px(thumb_left))
-            .top(px(thumb_top))
             .w(px(thumb_size))
             .h(px(thumb_size))
             .bg(resolve_hsla(&self.theme, &tokens.thumb_bg));
         thumb = apply_radius(&self.theme, thumb, Radius::Pill);
 
         let mut track = div()
-            .relative()
+            .flex()
+            .items_center()
+            .px(px(thumb_inset))
             .w(px(track_w))
             .h(px(track_h))
             .border(super::utils::quantized_stroke_px(window, 1.0))
@@ -207,6 +200,11 @@ impl RenderOnce for Switch {
             })
             .bg(track_bg)
             .child(thumb);
+        track = if checked {
+            track.justify_end()
+        } else {
+            track.justify_start()
+        };
         track = apply_radius(&self.theme, track, self.radius);
         if !self.disabled {
             let hover_border =
