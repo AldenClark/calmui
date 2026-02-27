@@ -1,0 +1,376 @@
+use std::collections::BTreeMap;
+use std::env;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use toml::{Table, Value};
+
+const GENERATED_FILE_NAME: &str = "calmui_i18n_generated.rs";
+const DEFAULT_I18N_REL_PATH: &str = "locales.toml";
+const DEFAULT_LOCALE: &str = "en-US";
+const STRICT_I18N_ENV: &str = "CALMUI_I18N_STRICT";
+const I18N_TOML_ENV: &str = "CALMUI_I18N_TOML";
+const I18N_APP_ROOT_ENV: &str = "CALMUI_I18N_APP_ROOT";
+
+fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-env-changed={I18N_TOML_ENV}");
+    println!("cargo:rerun-if-env-changed={I18N_APP_ROOT_ENV}");
+    println!("cargo:rerun-if-env-changed={STRICT_I18N_ENV}");
+
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR is required"));
+    let generated_path = out_dir.join(GENERATED_FILE_NAME);
+    let strict_i18n = strict_i18n_mode();
+
+    if env::var_os("CARGO_FEATURE_I18N").is_none() {
+        write_stub_catalog(&generated_path).expect("failed to write i18n stub catalog");
+        return;
+    }
+
+    let source_path = match resolve_catalog_path(&out_dir) {
+        Ok(path) => path,
+        Err(issue) => {
+            handle_i18n_build_issue(&generated_path, strict_i18n, issue);
+            return;
+        }
+    };
+    println!("cargo:rerun-if-changed={}", source_path.display());
+
+    let source = match fs::read_to_string(&source_path) {
+        Ok(content) => content,
+        Err(err) => {
+            handle_i18n_build_issue(
+                &generated_path,
+                strict_i18n,
+                I18nBuildIssue::warning(format!("failed to read {}: {err}", source_path.display())),
+            );
+            return;
+        }
+    };
+
+    let catalog = match parse_catalog(&source, &source_path) {
+        Ok(catalog) => catalog,
+        Err(message) => {
+            handle_i18n_build_issue(
+                &generated_path,
+                strict_i18n,
+                I18nBuildIssue::warning(message),
+            );
+            return;
+        }
+    };
+    let rendered = render_catalog(&catalog);
+
+    write_generated_if_changed(&generated_path, &rendered).unwrap_or_else(|err| {
+        panic!(
+            "calmui i18n: failed to write generated catalog {}: {err}",
+            generated_path.display()
+        )
+    });
+}
+
+fn strict_i18n_mode() -> bool {
+    let Some(raw) = env::var_os(STRICT_I18N_ENV) else {
+        return false;
+    };
+    matches!(
+        raw.to_string_lossy().trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on"
+    )
+}
+
+fn handle_i18n_build_issue(path: &Path, strict: bool, issue: I18nBuildIssue) {
+    let message = issue.message;
+    if strict {
+        panic!("calmui i18n: {message}");
+    }
+    if issue.emit_warning {
+        println!(
+            "cargo:warning=calmui i18n: {message}; fallback to key-only catalog. Set {STRICT_I18N_ENV}=1 to fail build."
+        );
+    }
+    write_stub_catalog(path).expect("failed to write i18n stub catalog");
+}
+
+fn resolve_catalog_path(out_dir: &Path) -> Result<PathBuf, I18nBuildIssue> {
+    if let Some(explicit_path) = env::var_os(I18N_TOML_ENV) {
+        let candidate = PathBuf::from(explicit_path);
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+        println!("cargo:rerun-if-changed={}", candidate.display());
+        return Err(I18nBuildIssue::warning(format!(
+            "explicit path from {I18N_TOML_ENV} not found: {}",
+            candidate.display()
+        )));
+    }
+
+    let (app_root, has_explicit_root) = if let Some(explicit_root) = env::var_os(I18N_APP_ROOT_ENV)
+    {
+        (PathBuf::from(explicit_root), true)
+    } else {
+        (
+            infer_app_root_from_out_dir(out_dir).ok_or_else(|| {
+                I18nBuildIssue::silent(format!(
+                    "cannot infer app root from OUT_DIR={}, set {I18N_APP_ROOT_ENV} or {I18N_TOML_ENV} explicitly",
+                    out_dir.display()
+                ))
+            })?,
+            false,
+        )
+    };
+
+    let primary = app_root.join(DEFAULT_I18N_REL_PATH);
+    if primary.exists() {
+        return Ok(primary);
+    }
+
+    if has_explicit_root {
+        println!("cargo:rerun-if-changed={}", primary.display());
+        return Err(I18nBuildIssue::warning(format!(
+            "i18n feature requires translation file at {} or set {I18N_TOML_ENV}",
+            primary.display()
+        )));
+    }
+
+    Err(I18nBuildIssue::silent(format!(
+        "translation file not found at inferred path {}",
+        primary.display()
+    )))
+}
+
+fn infer_app_root_from_out_dir(out_dir: &Path) -> Option<PathBuf> {
+    let mut current = Some(out_dir);
+    while let Some(path) = current {
+        if path.file_name().and_then(|name| name.to_str()) == Some("target") {
+            return path.parent().map(Path::to_path_buf);
+        }
+        current = path.parent();
+    }
+    None
+}
+
+fn write_stub_catalog(path: &Path) -> std::io::Result<()> {
+    write_generated_if_changed(
+        path,
+        r#"// @generated by calmui/build.rs
+pub(super) const DEFAULT_LOCALE: &str = "en-US";
+pub(super) static LOCALES: &[(&str, &[(&str, &str)])] = &[("en-US", &[])];
+"#,
+    )
+}
+
+fn write_generated_if_changed(path: &Path, content: &str) -> std::io::Result<()> {
+    let existing = fs::read_to_string(path).ok();
+    if existing.as_deref() == Some(content) {
+        return Ok(());
+    }
+    fs::write(path, content)
+}
+
+struct I18nBuildIssue {
+    message: String,
+    emit_warning: bool,
+}
+
+impl I18nBuildIssue {
+    fn warning(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            emit_warning: true,
+        }
+    }
+
+    fn silent(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            emit_warning: false,
+        }
+    }
+}
+
+struct Catalog {
+    default_locale: String,
+    locales: BTreeMap<String, BTreeMap<String, String>>,
+}
+
+fn parse_catalog(content: &str, path: &Path) -> Result<Catalog, String> {
+    let root = content
+        .parse::<Value>()
+        .map_err(|err| format!("failed to parse {} as TOML: {err}", path.to_string_lossy()))?;
+    let root_table = root
+        .as_table()
+        .ok_or_else(|| format!("{} must contain a top-level table", path.to_string_lossy()))?;
+
+    let default_locale = root_table
+        .get("default_locale")
+        .and_then(Value::as_str)
+        .unwrap_or(DEFAULT_LOCALE)
+        .trim();
+    let default_locale = canonicalize_locale_tag(default_locale).ok_or_else(|| {
+        "`default_locale` must be a valid locale tag in BCP-47 style (for example `en-US`)"
+            .to_string()
+    })?;
+
+    let locales_root = root_table
+        .get("locales")
+        .ok_or_else(|| "`locales` table is required".to_string())?
+        .as_table()
+        .ok_or_else(|| "`locales` must be a TOML table".to_string())?;
+    if locales_root.is_empty() {
+        return Err("`locales` table must not be empty".to_string());
+    }
+
+    let mut by_key = BTreeMap::new();
+    collect_key_entries(locales_root, "", &mut by_key)?;
+
+    let mut locales: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+    for (key, translations) in by_key {
+        for (locale, text) in translations {
+            locales.entry(locale).or_default().insert(key.clone(), text);
+        }
+    }
+
+    if !locales.contains_key(&default_locale) {
+        return Err(format!(
+            "default_locale `{default_locale}` is missing in [locales]"
+        ));
+    }
+
+    Ok(Catalog {
+        default_locale,
+        locales,
+    })
+}
+
+fn collect_key_entries(
+    table: &Table,
+    prefix: &str,
+    entries: &mut BTreeMap<String, BTreeMap<String, String>>,
+) -> Result<(), String> {
+    for (segment, value) in table {
+        let key = if prefix.is_empty() {
+            segment.to_string()
+        } else {
+            format!("{prefix}.{segment}")
+        };
+
+        let nested = value
+            .as_table()
+            .ok_or_else(|| format!("translation key `{key}` must map to a TOML table"))?;
+
+        let all_strings = nested.values().all(Value::is_str);
+        let all_tables = nested.values().all(Value::is_table);
+
+        if all_strings {
+            let mut translated = BTreeMap::new();
+            for (locale_tag, text_value) in nested {
+                let locale = canonicalize_locale_tag(locale_tag).ok_or_else(|| {
+                    format!(
+                        "translation key `{key}` has invalid locale tag `{locale_tag}`; use BCP-47 style tags such as `en-US`"
+                    )
+                })?;
+                let text = text_value.as_str().expect("checked as string").to_string();
+                if translated.insert(locale.clone(), text).is_some() {
+                    return Err(format!(
+                        "translation key `{key}` has duplicate locale after canonicalization: `{locale}`"
+                    ));
+                }
+            }
+
+            if translated.is_empty() {
+                return Err(format!(
+                    "translation key `{key}` must contain at least one locale translation"
+                ));
+            }
+            if entries.insert(key.clone(), translated).is_some() {
+                return Err(format!("duplicate translation key `{key}`"));
+            }
+            continue;
+        }
+
+        if all_tables {
+            collect_key_entries(nested, &key, entries)?;
+            continue;
+        }
+
+        return Err(format!(
+            "translation key `{key}` must be either a locale map table or nested key tables"
+        ));
+    }
+    Ok(())
+}
+
+fn canonicalize_locale_tag(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let parts = trimmed.split('-').map(str::trim).collect::<Vec<_>>();
+    if parts.iter().any(|part| part.is_empty()) {
+        return None;
+    }
+
+    let language = parts.first()?;
+    if !(2..=3).contains(&language.len()) || !language.chars().all(|ch| ch.is_ascii_alphabetic()) {
+        return None;
+    }
+
+    let mut canonical = Vec::with_capacity(parts.len());
+    canonical.push(language.to_ascii_lowercase());
+
+    for segment in parts.iter().skip(1) {
+        if !(2..=8).contains(&segment.len())
+            || !segment.chars().all(|ch| ch.is_ascii_alphanumeric())
+        {
+            return None;
+        }
+
+        if segment.len() == 2 && segment.chars().all(|ch| ch.is_ascii_alphabetic()) {
+            canonical.push(segment.to_ascii_uppercase());
+        } else if segment.len() == 4 && segment.chars().all(|ch| ch.is_ascii_alphabetic()) {
+            let mut chars = segment.chars();
+            let first = chars
+                .next()
+                .map(|ch| ch.to_ascii_uppercase())
+                .unwrap_or_default();
+            let rest = chars.as_str().to_ascii_lowercase();
+            canonical.push(format!("{first}{rest}"));
+        } else {
+            canonical.push(segment.to_ascii_lowercase());
+        }
+    }
+
+    Some(canonical.join("-"))
+}
+
+fn render_catalog(catalog: &Catalog) -> String {
+    let mut output = String::new();
+    output.push_str("// @generated by calmui/build.rs\n");
+    output.push_str("pub(super) const DEFAULT_LOCALE: &str = ");
+    output.push_str(&quote(&catalog.default_locale));
+    output.push_str(";\n");
+    output.push_str("pub(super) static LOCALES: &[(&str, &[(&str, &str)])] = &[\n");
+
+    for (locale, entries) in &catalog.locales {
+        output.push_str("    (");
+        output.push_str(&quote(locale));
+        output.push_str(", &[\n");
+        for (key, value) in entries {
+            output.push_str("        (");
+            output.push_str(&quote(key));
+            output.push_str(", ");
+            output.push_str(&quote(value));
+            output.push_str("),\n");
+        }
+        output.push_str("    ]),\n");
+    }
+
+    output.push_str("];\n");
+    output
+}
+
+fn quote(value: &str) -> String {
+    format!("{value:?}")
+}

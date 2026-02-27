@@ -1,0 +1,134 @@
+use calmui::form::FormModel as _;
+use gpui::SharedString;
+use gpui::{IntoElement, div};
+use rust_decimal::Decimal;
+
+fn into_any(element: impl IntoElement) -> gpui::AnyElement {
+    element.into_any_element()
+}
+
+fn assert_render_once<T: gpui::RenderOnce>() {}
+
+#[test]
+fn widgets_facade_exports_render_components() {
+    assert_render_once::<calmui::widgets::form::TextInput>();
+    assert_render_once::<calmui::widgets::form::Textarea>();
+    assert_render_once::<calmui::widgets::form::Select>();
+    assert_render_once::<calmui::widgets::form::MultiSelect>();
+    assert_render_once::<calmui::widgets::form::Button>();
+    assert_render_once::<calmui::widgets::overlay::Modal>();
+    assert_render_once::<calmui::widgets::overlay::Popover>();
+    assert_render_once::<calmui::widgets::navigation::Tree>();
+    assert_render_once::<calmui::widgets::navigation::Tabs>();
+    assert_render_once::<calmui::widgets::layout::ScrollArea>();
+    assert_render_once::<calmui::widgets::data::Table>();
+    assert_render_once::<calmui::widgets::display::Text>();
+    assert_render_once::<calmui::widgets::feedback::ToastLayer>();
+}
+
+#[test]
+fn prelude_smoke_builds_core_widgets() {
+    use calmui::prelude::*;
+
+    let _ = into_any(Button::new().label("button"));
+    let _ = into_any(TextInput::new().placeholder("input"));
+    let _ = into_any(Textarea::new().placeholder("textarea"));
+    let _ = into_any(Select::new().option(SelectOption::new("a").label("A")));
+    let _ = into_any(
+        MultiSelect::new()
+            .option(SelectOption::new("a").label("A"))
+            .option(SelectOption::new("b").label("B")),
+    );
+    let _ = into_any(Modal::new().title("modal"));
+    let _ = into_any(Popover::new().trigger(div()).content(div()));
+    let _ = into_any(Tree::new().node(TreeNode::new("root").label("Root")));
+    let _ = into_any(Tabs::new().item(TabItem::new("tab").label("Tab")));
+    let _ = into_any(Table::new().header("Name").row(TableRow::new()));
+}
+
+#[test]
+fn foundation_facade_exports_core_types() {
+    let _ = calmui::foundation::style::Size::Md;
+    let _ = calmui::foundation::style::Radius::Sm;
+    let _ = calmui::foundation::style::Variant::Default;
+    let _ = calmui::foundation::style::FieldLayout::Vertical;
+    let _ = calmui::foundation::motion::MotionConfig::default();
+    let _ = calmui::foundation::theme::Theme::default();
+    let _ = calmui::foundation::form::FormOptions::default();
+    let _ = calmui::foundation::form::ValidationMode::OnSubmit;
+    let _ = calmui::foundation::form::RevalidateMode::OnChange;
+    let _ = calmui::foundation::form::compat::CompatibilityStatus::Experimental;
+}
+
+#[derive(Clone, calmui::form::FormModel)]
+struct ApiSmokeForm {
+    title: SharedString,
+    enabled: bool,
+    amount: Decimal,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ApiSmokeError(&'static str);
+
+impl calmui::form::ValidationError for ApiSmokeError {
+    fn message(&self) -> SharedString {
+        self.0.into()
+    }
+}
+
+fn validate_smoke_title(_model: &ApiSmokeForm, value: &SharedString) -> Result<(), ApiSmokeError> {
+    if value.trim().is_empty() {
+        Err(ApiSmokeError("required"))
+    } else {
+        Ok(())
+    }
+}
+
+#[test]
+fn form_public_api_smoke_compiles() {
+    let controller = calmui::form::FormController::<ApiSmokeForm, ApiSmokeError>::new(
+        ApiSmokeForm {
+            title: "draft".into(),
+            enabled: false,
+            amount: Decimal::from_i128_with_scale(500, 2),
+        },
+        calmui::form::FormOptions::default(),
+    );
+    let fields = ApiSmokeForm::fields();
+
+    controller
+        .register_field_validator(fields.title(), validate_smoke_title)
+        .expect("register field validator");
+    controller
+        .register_required_field(fields.title())
+        .expect("register required");
+    controller
+        .register_field_description(fields.title(), "required")
+        .expect("register description");
+    controller
+        .register_dependency(fields.title(), fields.amount())
+        .expect("register dependency");
+    controller
+        .set(fields.title(), "".into())
+        .expect("set value");
+    controller.touch(fields.title()).expect("touch field");
+    controller.validate_form().expect("validate form");
+    let _ = controller
+        .field_error_for_display(fields.title())
+        .expect("display error");
+    let _ = controller
+        .bind_text_input(fields.title(), calmui::widgets::TextInput::new())
+        .expect("bind text input");
+    let _ = controller
+        .bind_checkbox(fields.enabled(), calmui::widgets::Checkbox::new())
+        .expect("bind checkbox");
+    let _ = controller
+        .bind_number_input(fields.amount(), calmui::widgets::NumberInput::new())
+        .expect("bind number input");
+
+    let store = calmui::form::InMemoryDraftStore::new();
+    controller.save_draft(&store).expect("save draft");
+    controller.reset_to_initial().expect("reset");
+    let _ = controller.load_draft(&store).expect("load draft");
+    controller.clear_draft(&store).expect("clear draft");
+}

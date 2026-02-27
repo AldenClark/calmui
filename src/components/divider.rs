@@ -1,0 +1,145 @@
+use gpui::InteractiveElement;
+use gpui::{IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div, px};
+
+use crate::id::ComponentId;
+
+use super::utils::{hairline_px, quantized_stroke_px, resolve_hsla};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DividerAxis {
+    Horizontal,
+    Vertical,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DividerLabelPosition {
+    Start,
+    Center,
+    End,
+}
+
+#[derive(IntoElement)]
+pub struct Divider {
+    pub(crate) id: ComponentId,
+    axis: DividerAxis,
+    label: Option<SharedString>,
+    label_position: DividerLabelPosition,
+    line_width: Option<gpui::Pixels>,
+    line_color: Option<gpui::Hsla>,
+    pub(crate) theme: crate::theme::LocalTheme,
+}
+
+impl Divider {
+    #[track_caller]
+    pub fn horizontal() -> Self {
+        Self {
+            id: ComponentId::default(),
+            axis: DividerAxis::Horizontal,
+            label: None,
+            label_position: DividerLabelPosition::Center,
+            line_width: None,
+            line_color: None,
+            theme: crate::theme::LocalTheme::default(),
+        }
+    }
+
+    #[track_caller]
+    pub fn vertical() -> Self {
+        Self {
+            axis: DividerAxis::Vertical,
+            ..Self::horizontal()
+        }
+    }
+
+    pub fn label(mut self, label: impl Into<SharedString>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    pub fn label_position(mut self, value: DividerLabelPosition) -> Self {
+        self.label_position = value;
+        self
+    }
+
+    pub fn line_width(mut self, value: f32) -> Self {
+        self.line_width = Some(px(value.max(0.0)));
+        self
+    }
+
+    pub fn line_color(mut self, value: impl Into<gpui::Hsla>) -> Self {
+        self.line_color = Some(value.into());
+        self
+    }
+}
+
+impl RenderOnce for Divider {
+    fn render(mut self, window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
+        let tokens = &self.theme.components.divider;
+        let line = self
+            .line_color
+            .unwrap_or_else(|| resolve_hsla(&self.theme, tokens.line));
+        let label_color = resolve_hsla(&self.theme, tokens.label);
+        let requested_line_width = self.line_width.unwrap_or(tokens.line_width);
+        let requested_line_width_px = f32::from(requested_line_width);
+        let line_thickness =
+            if requested_line_width_px <= 0.0 || !requested_line_width_px.is_finite() {
+                px(0.0)
+            } else if requested_line_width_px <= 1.0 {
+                hairline_px(window)
+            } else {
+                quantized_stroke_px(window, requested_line_width_px)
+            };
+
+        match self.axis {
+            DividerAxis::Vertical => {
+                let mut line_node = div().id(self.id).w(line_thickness).flex_none().bg(line);
+                line_node.style().align_self = Some(gpui::AlignSelf::Stretch);
+                line_node
+            }
+            DividerAxis::Horizontal => {
+                if let Some(label) = self.label {
+                    let left_flex = match self.label_position {
+                        DividerLabelPosition::Start => 0.0,
+                        DividerLabelPosition::Center => 1.0,
+                        DividerLabelPosition::End => 1.0,
+                    };
+                    let right_flex = match self.label_position {
+                        DividerLabelPosition::Start => 1.0,
+                        DividerLabelPosition::Center => 1.0,
+                        DividerLabelPosition::End => 0.0,
+                    };
+
+                    let left_line = if left_flex == 0.0 {
+                        div().w(tokens.edge_span).h(line_thickness).bg(line)
+                    } else {
+                        div().flex_1().h(line_thickness).bg(line)
+                    };
+                    let right_line = if right_flex == 0.0 {
+                        div().w(tokens.edge_span).h(line_thickness).bg(line)
+                    } else {
+                        div().flex_1().h(line_thickness).bg(line)
+                    };
+
+                    div()
+                        .id(self.id)
+                        .w_full()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(tokens.label_gap)
+                        .child(left_line)
+                        .child(
+                            div()
+                                .text_size(tokens.label_size)
+                                .text_color(label_color)
+                                .child(label),
+                        )
+                        .child(right_line)
+                } else {
+                    div().id(self.id).w_full().h(line_thickness).bg(line)
+                }
+            }
+        }
+    }
+}

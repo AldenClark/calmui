@@ -1,0 +1,30 @@
+[package]
+name = "calmui"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["PushGo Team"]
+build = "build.rs"
+
+[features]
+extend-icon = []
+i18n = ["dep:sys-locale"]
+
+[dependencies]
+gpui = { git = "https://github.com/zed-industries/zed.git", rev = "c9425f2a904d9bc5855e53fac8dd66dff7cdffda", package = "gpui" }
+rust-embed = "8.11.0"
+pulldown-cmark = "0.13.1"
+rust_decimal = "1.40.0"
+futures-timer = "3.0.3"
+sys-locale = { version = "0.3.2", optional = true }
+calmui_form_derive = { path = "crates/calmui_form_derive" }
+
+[dev-dependencies]
+futures = "0.3.32"
+trybuild = "1.0.116"
+
+[target.'cfg(target_vendor = "apple")'.dependencies]
+core-text = "=21.0.0"
+
+[build-dependencies]
+toml = "1.0.3+spec-1.1.0"

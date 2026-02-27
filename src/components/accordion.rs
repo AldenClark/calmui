@@ -1,0 +1,377 @@
+use std::rc::Rc;
+
+use gpui::InteractiveElement;
+use gpui::{
+    AnyElement, ElementId, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window,
+    div,
+};
+
+use crate::contracts::MotionAware;
+use crate::id::ComponentId;
+use crate::motion::MotionConfig;
+use crate::style::{Radius, Size, Variant};
+
+use super::Stack;
+use super::icon::Icon;
+use super::interaction_adapter::{ActivateHandler, PressAdapter, bind_press_adapter};
+use super::selection_state;
+use super::utils::{
+    InteractionStyles, apply_interaction_styles, apply_radius, interaction_style, resolve_hsla,
+};
+
+type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
+type ChangeHandler = Rc<dyn Fn(Option<SharedString>, &mut Window, &mut gpui::App)>;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AccordionItemMeta {
+    pub value: SharedString,
+    pub label: Option<SharedString>,
+    pub description: Option<SharedString>,
+    pub disabled: bool,
+}
+
+pub struct AccordionItem {
+    meta: AccordionItemMeta,
+    body: Option<SharedString>,
+    content: Option<SlotRenderer>,
+}
+
+impl AccordionItem {
+    pub fn new(value: impl Into<SharedString>) -> Self {
+        Self {
+            meta: AccordionItemMeta {
+                value: value.into(),
+                label: None,
+                description: None,
+                disabled: false,
+            },
+            body: None,
+            content: None,
+        }
+    }
+
+    pub fn labeled(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+        Self::new(value).label(label)
+    }
+
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.meta.label = Some(value.into());
+        self
+    }
+
+    pub fn description(mut self, value: impl Into<SharedString>) -> Self {
+        self.meta.description = Some(value.into());
+        self
+    }
+
+    pub fn body(mut self, value: impl Into<SharedString>) -> Self {
+        self.body = Some(value.into());
+        self
+    }
+
+    pub fn content(mut self, value: impl IntoElement + 'static) -> Self {
+        self.content = Some(Box::new(|| value.into_any_element()));
+        self
+    }
+}
+
+#[derive(IntoElement)]
+pub struct Accordion {
+    pub(crate) id: ComponentId,
+    items: Vec<AccordionItem>,
+    value: Option<SharedString>,
+    value_controlled: bool,
+    default_value: Option<SharedString>,
+    variant: Variant,
+    size: Size,
+    radius: Radius,
+    pub(crate) theme: crate::theme::LocalTheme,
+    motion: MotionConfig,
+    on_change: Option<ChangeHandler>,
+}
+
+impl Accordion {
+    #[track_caller]
+    pub fn new() -> Self {
+        Self {
+            id: ComponentId::default(),
+            items: Vec::new(),
+            value: None,
+            value_controlled: false,
+            default_value: None,
+            variant: Variant::Default,
+            size: Size::Md,
+            radius: Radius::Md,
+            theme: crate::theme::LocalTheme::default(),
+            motion: MotionConfig::default(),
+            on_change: None,
+        }
+    }
+
+    pub fn item(mut self, item: AccordionItem) -> Self {
+        self.items.push(item);
+        self
+    }
+
+    pub fn items(mut self, items: impl IntoIterator<Item = AccordionItem>) -> Self {
+        self.items.extend(items);
+        self
+    }
+
+    pub fn value(mut self, value: impl Into<SharedString>) -> Self {
+        self.value = Some(value.into());
+        self.value_controlled = true;
+        self
+    }
+
+    pub fn clear_value(mut self) -> Self {
+        self.value = None;
+        self.value_controlled = true;
+        self
+    }
+
+    pub fn default_value(mut self, value: impl Into<SharedString>) -> Self {
+        self.default_value = Some(value.into());
+        self
+    }
+
+    pub fn on_change(
+        mut self,
+        handler: impl Fn(Option<SharedString>, &mut Window, &mut gpui::App) + 'static,
+    ) -> Self {
+        self.on_change = Some(Rc::new(handler));
+        self
+    }
+
+    fn resolved_value(&self) -> Option<SharedString> {
+        selection_state::resolve_optional_text(
+            &self.id,
+            "value",
+            self.value_controlled,
+            self.value.as_ref().map(|value| value.to_string()),
+            self.default_value.as_ref().map(|value| value.to_string()),
+        )
+        .map(SharedString::from)
+    }
+
+    pub fn id(&self) -> &ElementId {
+        self.id.id()
+    }
+    fn variant_surface_color(&self, base: gpui::Hsla) -> gpui::Hsla {
+        match self.variant {
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.92),
+            Variant::Subtle => base.alpha(0.82),
+            Variant::Outline | Variant::Ghost => gpui::transparent_black(),
+        }
+    }
+
+    fn variant_border_color(&self, base: gpui::Hsla) -> gpui::Hsla {
+        match self.variant {
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.88),
+            Variant::Subtle => base.alpha(0.74),
+            Variant::Outline => base,
+            Variant::Ghost => base.alpha(0.55),
+        }
+    }
+}
+
+crate::impl_variant_size_radius_via_methods!(Accordion, variant, size, radius);
+
+impl MotionAware for Accordion {
+    fn motion(mut self, value: MotionConfig) -> Self {
+        self.motion = value;
+        self
+    }
+}
+
+impl RenderOnce for Accordion {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
+        let tokens = &self.theme.components.accordion;
+        let size_preset = tokens.sizes.for_size(self.size);
+        let active_value = self.resolved_value();
+        let is_controlled = self.value_controlled;
+        let item_bg = self.variant_surface_color(resolve_hsla(&self.theme, tokens.item_bg));
+        let item_border = self.variant_border_color(resolve_hsla(&self.theme, tokens.item_border));
+        let header_hover_bg = item_bg.blend(gpui::white().opacity(0.04));
+        let header_press_bg = header_hover_bg.blend(gpui::black().opacity(0.08));
+
+        let item_views = self
+            .items
+            .into_iter()
+            .enumerate()
+            .map(|(index, mut item)| {
+                let item_root_id = self.id.slot_index("item", index.to_string());
+                let header_id = self.id.slot_index("header", index.to_string());
+                let chevron_id = self.id.slot_index("chevron", index.to_string());
+                let panel_id = self.id.slot_index("panel", index.to_string());
+
+                let is_open = active_value
+                    .as_ref()
+                    .is_some_and(|current| current.as_ref() == item.meta.value.as_ref());
+
+                let mut root = Stack::vertical()
+                    .id(item_root_id)
+                    .w_full()
+                    .bg(item_bg)
+                    .border(super::utils::quantized_stroke_px(window, 1.0))
+                    .border_color(item_border);
+                root = apply_radius(&self.theme, root, self.radius);
+
+                let mut header = div()
+                    .id(header_id.clone())
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(tokens.header_gap)
+                    .cursor_pointer()
+                    .px(size_preset.header_padding_x)
+                    .py(size_preset.header_padding_y);
+                if item.meta.label.is_some() || item.meta.description.is_some() {
+                    let mut label_stack = Stack::vertical().gap(tokens.label_stack_gap);
+                    if let Some(label) = item.meta.label.clone() {
+                        label_stack = label_stack.child(
+                            div()
+                                .text_size(size_preset.label_size)
+                                .text_color(resolve_hsla(&self.theme, tokens.label))
+                                .child(label),
+                        );
+                    }
+                    if let Some(description) = item.meta.description.clone() {
+                        label_stack = label_stack.child(
+                            div()
+                                .text_size(size_preset.description_size)
+                                .text_color(resolve_hsla(&self.theme, tokens.description))
+                                .child(description),
+                        );
+                    }
+                    header = header.child(label_stack);
+                }
+                header = header.child(
+                    crate::id::IdCtx::new(chevron_id)
+                        .root(Icon::named(if is_open {
+                            "chevron-up"
+                        } else {
+                            "chevron-down"
+                        }))
+                        .size(f32::from(size_preset.chevron_size))
+                        .color(resolve_hsla(&self.theme, tokens.chevron)),
+                );
+
+                if item.meta.disabled {
+                    header = header.cursor_default().opacity(0.55);
+                } else {
+                    let activate_handler = if let Some(handler) = self.on_change.clone() {
+                        let accordion_id = self.id.to_string();
+                        let value = item.meta.value.clone();
+                        Some(Rc::new(move |window: &mut Window, cx: &mut gpui::App| {
+                            let current = selection_state::resolve_optional_text(
+                                &accordion_id,
+                                "value",
+                                false,
+                                None,
+                                None::<String>,
+                            );
+                            let next = if current.as_deref() == Some(value.as_ref()) {
+                                None
+                            } else {
+                                Some(value.to_string())
+                            };
+
+                            if selection_state::apply_optional_text(
+                                &accordion_id,
+                                "value",
+                                is_controlled,
+                                next.clone(),
+                            ) {
+                                window.refresh();
+                            }
+                            (handler)(next.map(SharedString::from), window, cx);
+                        }) as ActivateHandler)
+                    } else if !is_controlled {
+                        let accordion_id = self.id.to_string();
+                        let value = item.meta.value.clone();
+                        Some(Rc::new(move |window: &mut Window, _cx: &mut gpui::App| {
+                            let current = selection_state::resolve_optional_text(
+                                &accordion_id,
+                                "value",
+                                false,
+                                None,
+                                None::<String>,
+                            );
+                            let next = if current.as_deref() == Some(value.as_ref()) {
+                                None
+                            } else {
+                                Some(value.to_string())
+                            };
+                            if selection_state::apply_optional_text(
+                                &accordion_id,
+                                "value",
+                                false,
+                                next,
+                            ) {
+                                window.refresh();
+                            }
+                        }) as ActivateHandler)
+                    } else {
+                        None
+                    };
+
+                    if let Some(activate_handler) = activate_handler {
+                        header = apply_interaction_styles(
+                            header.cursor_pointer(),
+                            InteractionStyles::new()
+                                .hover(interaction_style(move |style| style.bg(header_hover_bg)))
+                                .active(interaction_style(move |style| style.bg(header_press_bg)))
+                                .focus(interaction_style(move |style| style.bg(header_hover_bg))),
+                        );
+                        header = bind_press_adapter(
+                            header,
+                            PressAdapter::new(header_id.clone())
+                                .on_activate(Some(activate_handler)),
+                        );
+                    } else {
+                        header = header.cursor_default();
+                    }
+                }
+
+                root = root.child(header);
+
+                if is_open {
+                    let content_color = resolve_hsla(&self.theme, tokens.content);
+                    let mut body = Stack::vertical()
+                        .id(panel_id.clone())
+                        .gap(tokens.panel_gap)
+                        .px(size_preset.panel_padding_x)
+                        .pb(size_preset.panel_padding_bottom)
+                        .pt(size_preset.panel_padding_top);
+
+                    if let Some(text) = item.body.take() {
+                        body = body.child(div().text_size(size_preset.content_size).child(text));
+                    }
+                    if let Some(content) = item.content.take() {
+                        body = body.child(content());
+                    }
+                    root = root.child(
+                        div()
+                            .text_color(content_color)
+                            .child(body.with_enter_transition((panel_id, "enter"), self.motion)),
+                    );
+                }
+
+                root
+            })
+            .collect::<Vec<_>>();
+
+        Stack::vertical()
+            .id(self.id.clone())
+            .gap(tokens.stack_gap)
+            .w_full()
+            .children(item_views)
+            .with_enter_transition(self.id.slot("enter"), self.motion)
+    }
+}
+
+crate::impl_disableable!(AccordionItem, |this, value| this.meta.disabled = value);

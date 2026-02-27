@@ -1,0 +1,358 @@
+use super::transition::TransitionExt;
+use std::{f32::consts::TAU, time::Duration};
+
+use gpui::InteractiveElement;
+use gpui::{
+    Animation, AnimationExt, AnyElement, Hsla, IntoElement, ParentElement, RenderOnce,
+    SharedString, Styled, div, px,
+};
+
+use crate::id::ComponentId;
+use crate::motion::{MotionConfig, MotionTransition, TransitionPreset};
+use crate::style::Size;
+
+use super::Stack;
+use super::utils::resolve_hsla;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LoaderVariant {
+    Dots,
+    Pulse,
+    Bar,
+    Bars,
+    Oval,
+}
+
+pub trait LoaderElement: IntoElement + Sized + 'static {
+    fn with_id(self, id: impl Into<ComponentId>) -> Self;
+    fn with_size(self, size: Size) -> Self;
+    fn color(self, color: impl Into<Hsla>) -> Self;
+}
+
+#[derive(IntoElement)]
+pub struct Loader {
+    pub(crate) id: ComponentId,
+    label: Option<SharedString>,
+    variant: LoaderVariant,
+    size: Size,
+    color: Option<Hsla>,
+    pub(crate) theme: crate::theme::LocalTheme,
+    motion: MotionConfig,
+}
+
+impl Loader {
+    #[track_caller]
+    pub fn new() -> Self {
+        Self {
+            id: ComponentId::default(),
+            label: None,
+            variant: LoaderVariant::Dots,
+            size: Size::Md,
+            color: None,
+            theme: crate::theme::LocalTheme::default(),
+            motion: MotionConfig::new().enter(
+                MotionTransition::new()
+                    .preset(TransitionPreset::Pulse)
+                    .duration_ms(850)
+                    .offset_px(0),
+            ),
+        }
+    }
+
+    pub fn label(mut self, label: impl Into<SharedString>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    pub fn variant(mut self, variant: LoaderVariant) -> Self {
+        self.variant = variant;
+        self
+    }
+
+    pub fn with_size(mut self, size: Size) -> Self {
+        self.size = size;
+        self
+    }
+
+    pub fn color(mut self, color: impl Into<Hsla>) -> Self {
+        self.color = Some(color.into());
+        self
+    }
+
+    pub fn motion(mut self, motion: MotionConfig) -> Self {
+        self.motion = motion;
+        self
+    }
+
+    fn size_preset(&self) -> crate::theme::LoaderSizePreset {
+        self.theme.components.loader.sizes.for_size(self.size)
+    }
+
+    fn resolved_loader_color(&self) -> Hsla {
+        if let Some(color) = self.color {
+            color
+        } else {
+            resolve_hsla(&self.theme, self.theme.components.loader.color)
+        }
+    }
+
+    fn resolved_label_color(&self) -> Hsla {
+        if let Some(color) = self.color {
+            color
+        } else {
+            resolve_hsla(&self.theme, self.theme.components.loader.label)
+        }
+    }
+
+    fn render_dots(self) -> AnyElement {
+        let size_preset = self.size_preset();
+        let color = self.resolved_loader_color();
+        let label_color = self.resolved_label_color();
+        let dot = f32::from(size_preset.dot_size);
+        let cell_h = dot * 1.8;
+        let baseline_top = (cell_h - dot).max(0.0);
+
+        let dots = (0..3).map(|index| {
+            let phase = index as f32 / 3.0;
+            let animation = Animation::new(Duration::from_millis(840))
+                .repeat()
+                .with_easing(gpui::ease_in_out);
+            div()
+                .id(self.id.slot_index("dot-cell", index.to_string()))
+                .w(px(dot))
+                .h(px(cell_h))
+                .relative()
+                .child(
+                    div()
+                        .id(self.id.slot_index("dot", index.to_string()))
+                        .absolute()
+                        .left_0()
+                        .top(px(baseline_top))
+                        .w(px(dot))
+                        .h(px(dot))
+                        .rounded_full()
+                        .bg(color)
+                        .with_animation(
+                            self.id.slot_index("dot-anim", index.to_string()),
+                            animation,
+                            move |this, delta| {
+                                let progress = (delta + phase).fract();
+                                let wave = ((progress * TAU).sin() + 1.0) * 0.5;
+                                let lift = dot * 0.6 * wave;
+                                let opacity = 0.3 + (0.7 * wave);
+                                this.mt(px(-lift)).opacity(opacity)
+                            },
+                        ),
+                )
+        });
+
+        let mut row = Stack::horizontal()
+            .items_center()
+            .gap(size_preset.cluster_gap)
+            .children(dots);
+        if let Some(label) = self.label {
+            row = row.gap(size_preset.label_gap).child(
+                div()
+                    .text_size(size_preset.label_size)
+                    .text_color(label_color)
+                    .child(label),
+            );
+        }
+        row.into_any_element()
+    }
+
+    fn render_pulse(self) -> AnyElement {
+        let size_preset = self.size_preset();
+        let color = self.resolved_loader_color();
+        let label_color = self.resolved_label_color();
+        let dot = f32::from(size_preset.dot_size) + 3.0;
+
+        let outer = div()
+            .id(self.id.slot("pulse-outer"))
+            .w(px(dot + 4.0))
+            .h(px(dot + 4.0))
+            .rounded_full()
+            .bg(color.alpha(0.35))
+            .with_repeating_transition(
+                self.id.slot("pulse-outer-anim"),
+                MotionTransition::new()
+                    .preset(TransitionPreset::Pulse)
+                    .duration_ms(980)
+                    .offset_px(0)
+                    .start_opacity_pct(12),
+            );
+
+        let inner = div()
+            .id(self.id.slot("pulse-inner"))
+            .absolute()
+            .left(px(2.0))
+            .top(px(2.0))
+            .w(px(dot))
+            .h(px(dot))
+            .rounded_full()
+            .bg(color)
+            .with_repeating_transition(
+                self.id.slot("pulse-inner-anim"),
+                MotionTransition::new()
+                    .preset(TransitionPreset::Pulse)
+                    .duration_ms(760)
+                    .delay_ms(140)
+                    .offset_px(0)
+                    .start_opacity_pct(20),
+            );
+
+        let mut row = Stack::horizontal().gap(size_preset.cluster_gap).child(
+            div()
+                .relative()
+                .w(px(dot + 4.0))
+                .h(px(dot + 4.0))
+                .child(outer)
+                .child(inner),
+        );
+        if let Some(label) = self.label {
+            row = row.gap(size_preset.label_gap).child(
+                div()
+                    .text_size(size_preset.label_size)
+                    .text_color(label_color)
+                    .child(label),
+            );
+        }
+        row.into_any_element()
+    }
+
+    fn render_bars(self) -> AnyElement {
+        let size_preset = self.size_preset();
+        let color = self.resolved_loader_color();
+        let label_color = self.resolved_label_color();
+        let bar_w = f32::from(size_preset.bar_width);
+        let bar_h_max = f32::from(size_preset.bar_height_max);
+        let bar_h_min = bar_h_max * 0.35;
+
+        let bars = (0..3).map(|index| {
+            let phase = index as f32 / 3.0;
+            let animation = Animation::new(Duration::from_millis(900))
+                .repeat()
+                .with_easing(gpui::ease_in_out);
+
+            div()
+                .id(self.id.slot_index("bar", index.to_string()))
+                .w(px(bar_w))
+                .h(px(bar_h_max))
+                .rounded_full()
+                .bg(color)
+                .with_animation(
+                    self.id.slot_index("bar-anim", index.to_string()),
+                    animation,
+                    move |this, delta| {
+                        let progress = (delta + phase).fract();
+                        let wave = ((progress * TAU).sin() + 1.0) * 0.5;
+                        let h = bar_h_min + ((bar_h_max - bar_h_min) * wave);
+                        let opacity = 0.35 + (0.65 * wave);
+                        this.h(px(h)).opacity(opacity)
+                    },
+                )
+        });
+
+        let mut row = Stack::horizontal()
+            .items_end()
+            .gap(size_preset.cluster_gap)
+            .children(bars);
+        if let Some(label) = self.label {
+            row = row.gap(size_preset.label_gap).child(
+                div()
+                    .text_size(size_preset.label_size)
+                    .text_color(label_color)
+                    .child(label),
+            );
+        }
+        row.into_any_element()
+    }
+
+    fn render_oval(self) -> AnyElement {
+        let size_preset = self.size_preset();
+        let color = self.resolved_loader_color();
+        let label_color = self.resolved_label_color();
+        let ring = f32::from(size_preset.ring_size);
+        let segment_size = (ring * 0.17).max(2.0);
+        let segment_count = 12usize;
+        let radius = (ring - segment_size) * 0.5;
+
+        let segments = (0..segment_count).map(|index| {
+            let angle = -std::f32::consts::FRAC_PI_2 + (index as f32 / segment_count as f32) * TAU;
+            let x = (ring * 0.5) + radius * angle.cos() - (segment_size * 0.5);
+            let y = (ring * 0.5) + radius * angle.sin() - (segment_size * 0.5);
+            let phase = index as f32 / segment_count as f32;
+            let animation = Animation::new(Duration::from_millis(920))
+                .repeat()
+                .with_easing(gpui::linear);
+
+            div()
+                .id(self.id.slot_index("oval-segment", index.to_string()))
+                .absolute()
+                .left(px(x))
+                .top(px(y))
+                .w(px(segment_size))
+                .h(px(segment_size))
+                .rounded_full()
+                .bg(color)
+                .with_animation(
+                    self.id.slot_index("oval-anim", index.to_string()),
+                    animation,
+                    move |this, delta| {
+                        let distance = (delta - phase).rem_euclid(1.0);
+                        let trail = 0.42;
+                        let intensity = if distance <= trail {
+                            1.0 - (distance / trail)
+                        } else {
+                            0.0
+                        };
+                        this.opacity(0.16 + (0.84 * intensity))
+                    },
+                )
+        });
+
+        let oval = div().relative().w(px(ring)).h(px(ring)).children(segments);
+
+        let mut row = Stack::horizontal()
+            .gap(size_preset.cluster_gap)
+            .items_center()
+            .child(oval);
+        if let Some(label) = self.label {
+            row = row.gap(size_preset.label_gap).child(
+                div()
+                    .text_size(size_preset.label_size)
+                    .text_color(label_color)
+                    .child(label),
+            );
+        }
+        row.into_any_element()
+    }
+}
+
+impl Loader {}
+
+impl RenderOnce for Loader {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
+        match self.variant {
+            LoaderVariant::Dots => self.render_dots(),
+            LoaderVariant::Pulse => self.render_pulse(),
+            LoaderVariant::Bar | LoaderVariant::Bars => self.render_bars(),
+            LoaderVariant::Oval => self.render_oval(),
+        }
+    }
+}
+
+impl LoaderElement for Loader {
+    fn with_id(self, id: impl Into<ComponentId>) -> Self {
+        crate::contracts::WithId::with_id(self, id)
+    }
+
+    fn with_size(self, size: Size) -> Self {
+        Loader::with_size(self, size)
+    }
+
+    fn color(self, color: impl Into<Hsla>) -> Self {
+        Loader::color(self, color)
+    }
+}

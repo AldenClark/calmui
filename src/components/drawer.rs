@@ -1,0 +1,278 @@
+use super::transition::TransitionExt;
+use std::rc::Rc;
+
+use gpui::InteractiveElement;
+use gpui::StatefulInteractiveElement;
+use gpui::{
+    AnyElement, ClickEvent, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window,
+    div, px,
+};
+
+use crate::contracts::MotionAware;
+use crate::id::ComponentId;
+use crate::motion::MotionConfig;
+
+use super::icon::Icon;
+use super::overlay::{Overlay, OverlayCoverage, OverlayMaterialMode};
+use super::popup_state::{self, PopupStateInput, PopupStateValue};
+use super::utils::resolve_hsla;
+
+type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
+type CloseHandler = Rc<dyn Fn(&mut Window, &mut gpui::App)>;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DrawerPlacement {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+#[derive(IntoElement)]
+pub struct Drawer {
+    pub(crate) id: ComponentId,
+    opened: Option<bool>,
+    default_opened: bool,
+    title: Option<SharedString>,
+    body: Option<SharedString>,
+    placement: DrawerPlacement,
+    size_px: f32,
+    close_button: bool,
+    close_on_click_outside: bool,
+    pub(crate) theme: crate::theme::LocalTheme,
+    motion: MotionConfig,
+    content: Option<SlotRenderer>,
+    on_close: Option<CloseHandler>,
+}
+
+impl Drawer {
+    #[track_caller]
+    pub fn new() -> Self {
+        Self {
+            id: ComponentId::default(),
+            opened: None,
+            default_opened: false,
+            title: None,
+            body: None,
+            placement: DrawerPlacement::Right,
+            size_px: 360.0,
+            close_button: true,
+            close_on_click_outside: true,
+            theme: crate::theme::LocalTheme::default(),
+            motion: MotionConfig::default(),
+            content: None,
+            on_close: None,
+        }
+    }
+
+    pub fn titled(title: impl Into<SharedString>) -> Self {
+        Self::new().title(title)
+    }
+
+    pub fn title(mut self, value: impl Into<SharedString>) -> Self {
+        self.title = Some(value.into());
+        self
+    }
+    pub fn default_opened(mut self, value: bool) -> Self {
+        self.default_opened = value;
+        self
+    }
+
+    pub fn body(mut self, value: impl Into<SharedString>) -> Self {
+        self.body = Some(value.into());
+        self
+    }
+
+    pub fn placement(mut self, value: DrawerPlacement) -> Self {
+        self.placement = value;
+        self
+    }
+
+    pub fn size(mut self, value: f32) -> Self {
+        self.size_px = value.max(160.0);
+        self
+    }
+
+    pub fn close_button(mut self, value: bool) -> Self {
+        self.close_button = value;
+        self
+    }
+
+    pub fn close_on_click_outside(mut self, value: bool) -> Self {
+        self.close_on_click_outside = value;
+        self
+    }
+
+    pub fn content(mut self, content: impl IntoElement + 'static) -> Self {
+        self.content = Some(Box::new(|| content.into_any_element()));
+        self
+    }
+
+    pub fn on_close(mut self, handler: impl Fn(&mut Window, &mut gpui::App) + 'static) -> Self {
+        self.on_close = Some(Rc::new(handler));
+        self
+    }
+
+    fn resolved_opened(&self) -> bool {
+        PopupStateValue::resolve(PopupStateInput {
+            id: &self.id,
+            opened: self.opened,
+            default_opened: self.default_opened,
+            disabled: false,
+        })
+        .opened
+    }
+}
+
+impl Drawer {}
+
+impl MotionAware for Drawer {
+    fn motion(mut self, value: MotionConfig) -> Self {
+        self.motion = value;
+        self
+    }
+}
+
+impl RenderOnce for Drawer {
+    fn render(mut self, window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
+        let opened = self.resolved_opened();
+        if !opened {
+            return div().id(self.id);
+        }
+
+        let is_controlled = self.opened.is_some();
+        let tokens = &self.theme.components.drawer;
+        let close_on_click_outside = self.close_on_click_outside;
+        let outside_on_close = self.on_close.clone();
+        let drawer_id_for_overlay = self.id.clone();
+
+        let overlay = self
+            .id
+            .ctx()
+            .child("overlay", Overlay::new())
+            .coverage(OverlayCoverage::Window)
+            .material_mode(OverlayMaterialMode::TintOnly)
+            .frosted(false)
+            .color(tokens.overlay_bg)
+            .opacity(1.0)
+            .readability_boost(0.84)
+            .on_click(
+                move |_: &ClickEvent, window: &mut Window, cx: &mut gpui::App| {
+                    if close_on_click_outside {
+                        if popup_state::on_close_request(&drawer_id_for_overlay, is_controlled) {
+                            window.refresh();
+                        }
+                        if let Some(handler) = outside_on_close.as_ref() {
+                            (handler)(window, cx);
+                        }
+                    }
+                },
+            );
+
+        let mut close_action = div().id(self.id.slot("close"));
+        if self.close_button {
+            let on_close = self.on_close.clone();
+            let close_id = self.id.clone();
+            let close_fg = resolve_hsla(&self.theme, tokens.title);
+            close_action = div()
+                .id(self.id.slot("close"))
+                .w(tokens.close_size)
+                .h(tokens.close_size)
+                .rounded_full()
+                .border(super::utils::quantized_stroke_px(window, 1.0))
+                .border_color(resolve_hsla(&self.theme, self.theme.semantic.border_subtle))
+                .flex()
+                .items_center()
+                .justify_center()
+                .cursor_pointer()
+                .text_color(close_fg)
+                .hover(|style| style.opacity(0.82))
+                .child(
+                    self.id
+                        .ctx()
+                        .child("close-icon", Icon::named("x"))
+                        .size(f32::from(tokens.close_icon_size))
+                        .color(close_fg),
+                )
+                .on_click(move |_, window, cx| {
+                    if popup_state::on_close_request(&close_id, is_controlled) {
+                        window.refresh();
+                    }
+                    if let Some(handler) = on_close.as_ref() {
+                        (handler)(window, cx);
+                    }
+                });
+        }
+
+        let mut body = div();
+        if let Some(text) = self.body.clone() {
+            body = div()
+                .text_size(tokens.body_size)
+                .text_color(resolve_hsla(&self.theme, tokens.body))
+                .child(text);
+        }
+
+        let mut panel = div()
+            .id(self.id.slot("panel"))
+            .flex()
+            .flex_col()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
+            .border_color(resolve_hsla(&self.theme, tokens.panel_border))
+            .bg(resolve_hsla(&self.theme, tokens.panel_bg))
+            .rounded(tokens.panel_radius)
+            .p(tokens.panel_padding);
+
+        if self.title.is_some() || self.close_button {
+            let mut header = div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .mb(tokens.header_margin_bottom);
+            if let Some(title) = self.title.clone() {
+                header = header.child(
+                    div()
+                        .text_size(tokens.title_size)
+                        .font_weight(tokens.title_weight)
+                        .text_color(resolve_hsla(&self.theme, tokens.title))
+                        .child(title),
+                );
+            } else {
+                header = header.child(div().flex_1());
+            }
+            panel = panel.child(header.child(close_action));
+        }
+
+        panel = panel.child(body);
+
+        if let Some(content) = self.content.take() {
+            panel = panel.child(content());
+        }
+
+        panel = match self.placement {
+            DrawerPlacement::Left | DrawerPlacement::Right => panel.w(px(self.size_px)).h_full(),
+            DrawerPlacement::Top | DrawerPlacement::Bottom => panel.h(px(self.size_px)).w_full(),
+        };
+
+        let panel = panel.with_enter_transition(self.id.slot("panel-enter"), self.motion);
+
+        let host = match self.placement {
+            DrawerPlacement::Left => div().absolute().top_0().left_0().h_full().child(panel),
+            DrawerPlacement::Right => div().absolute().top_0().right_0().h_full().child(panel),
+            DrawerPlacement::Top => div().absolute().top_0().left_0().w_full().child(panel),
+            DrawerPlacement::Bottom => div().absolute().bottom_0().left_0().w_full().child(panel),
+        };
+
+        div()
+            .id(self.id)
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full()
+            .child(overlay)
+            .child(host)
+    }
+}
+
+crate::impl_openable!(Drawer, |this, value| this.opened = Some(value));
+crate::impl_placeable!(Drawer, DrawerPlacement);

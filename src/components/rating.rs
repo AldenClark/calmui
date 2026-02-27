@@ -1,0 +1,405 @@
+use std::rc::Rc;
+
+use gpui::InteractiveElement;
+use gpui::StatefulInteractiveElement;
+use gpui::{ClickEvent, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div};
+
+use crate::contracts::{FieldLike, MotionAware};
+use crate::id::ComponentId;
+use crate::motion::MotionConfig;
+use crate::style::{FieldLayout, Radius, Size, Variant};
+
+use super::Stack;
+use super::control;
+use super::icon::Icon;
+use super::utils::resolve_hsla;
+
+type ChangeHandler = Rc<dyn Fn(f32, &mut Window, &mut gpui::App)>;
+
+#[derive(IntoElement)]
+pub struct Rating {
+    pub(crate) id: ComponentId,
+    value: Option<f32>,
+    value_controlled: bool,
+    default_value: f32,
+    max: usize,
+    allow_half: bool,
+    clearable: bool,
+    label: Option<SharedString>,
+    description: Option<SharedString>,
+    error: Option<SharedString>,
+    required: bool,
+    layout: FieldLayout,
+    disabled: bool,
+    read_only: bool,
+    size: Size,
+    radius: Radius,
+    variant: Variant,
+    pub(crate) theme: crate::theme::LocalTheme,
+    motion: MotionConfig,
+    on_change: Option<ChangeHandler>,
+}
+
+impl Rating {
+    #[track_caller]
+    pub fn new() -> Self {
+        Self {
+            id: ComponentId::default(),
+            value: None,
+            value_controlled: false,
+            default_value: 0.0,
+            max: 5,
+            allow_half: true,
+            clearable: false,
+            label: None,
+            description: None,
+            error: None,
+            required: false,
+            layout: FieldLayout::Vertical,
+            disabled: false,
+            read_only: false,
+            size: Size::Md,
+            radius: Radius::Sm,
+            variant: Variant::Filled,
+            theme: crate::theme::LocalTheme::default(),
+            motion: MotionConfig::default(),
+            on_change: None,
+        }
+    }
+
+    pub fn value(mut self, value: f32) -> Self {
+        self.value = Some(value);
+        self.value_controlled = true;
+        self
+    }
+
+    pub fn default_value(mut self, value: f32) -> Self {
+        self.default_value = value;
+        self
+    }
+
+    pub fn max(mut self, value: usize) -> Self {
+        self.max = value.max(1);
+        self
+    }
+
+    pub fn allow_half(mut self, value: bool) -> Self {
+        self.allow_half = value;
+        self
+    }
+
+    pub fn clearable(mut self, value: bool) -> Self {
+        self.clearable = value;
+        self
+    }
+
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
+    }
+
+    pub fn description(mut self, value: impl Into<SharedString>) -> Self {
+        self.description = Some(value.into());
+        self
+    }
+
+    pub fn error(mut self, value: impl Into<SharedString>) -> Self {
+        self.error = Some(value.into());
+        self
+    }
+
+    pub fn required(mut self, value: bool) -> Self {
+        self.required = value;
+        self
+    }
+
+    pub fn layout(mut self, value: FieldLayout) -> Self {
+        self.layout = value;
+        self
+    }
+    pub fn read_only(mut self, value: bool) -> Self {
+        self.read_only = value;
+        self
+    }
+
+    pub fn on_change(
+        mut self,
+        handler: impl Fn(f32, &mut Window, &mut gpui::App) + 'static,
+    ) -> Self {
+        self.on_change = Some(Rc::new(handler));
+        self
+    }
+
+    fn resolved_value(&self) -> f32 {
+        let max = self.max as f32;
+        let controlled = self
+            .value_controlled
+            .then_some(self.value.unwrap_or(self.default_value).clamp(0.0, max));
+        let default = self.default_value.clamp(0.0, max);
+        control::f32_state(&self.id, "value", controlled, default).clamp(0.0, max)
+    }
+
+    fn active_color(&self) -> gpui::Hsla {
+        let base = resolve_hsla(&self.theme, self.theme.components.rating.active);
+        match self.variant {
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.78),
+            Variant::Subtle => base.alpha(0.62),
+            Variant::Outline => base.alpha(0.88),
+            Variant::Ghost => base.alpha(0.55),
+        }
+    }
+
+    fn inactive_color(&self) -> gpui::Hsla {
+        let base = resolve_hsla(&self.theme, self.theme.components.rating.inactive);
+        match self.variant {
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.74),
+            Variant::Subtle => base.alpha(0.58),
+            Variant::Outline => base.alpha(0.68),
+            Variant::Ghost => base.alpha(0.45),
+        }
+    }
+}
+
+impl Rating {}
+
+crate::impl_variant_size_radius_via_methods!(Rating, variant, size, radius);
+
+impl MotionAware for Rating {
+    fn motion(mut self, value: MotionConfig) -> Self {
+        self.motion = value;
+        self
+    }
+}
+
+impl RenderOnce for Rating {
+    fn render(mut self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
+        let tokens = &self.theme.components.rating;
+        let size_preset = tokens.sizes.for_size(self.size);
+        let value = self.resolved_value();
+        let icon_size = f32::from(size_preset.icon_size);
+        let active = self.active_color();
+        let inactive = self.inactive_color();
+
+        let stars = (1..=self.max)
+            .map(|index| {
+                let index_value = index as f32;
+                let is_full = value >= index_value;
+                let is_half =
+                    self.allow_half && value >= (index_value - 0.5) && value < index_value;
+
+                let icon = self
+                    .id
+                    .ctx()
+                    .child_index(
+                        "star",
+                        index.to_string(),
+                        if is_full {
+                            Icon::named("star-filled")
+                        } else if is_half {
+                            Icon::named("star-half")
+                        } else {
+                            Icon::named("star")
+                        },
+                    )
+                    .size(icon_size)
+                    .color(if is_full || is_half { active } else { inactive });
+
+                let mut cell = div()
+                    .id(self.id.slot_index("cell", index.to_string()))
+                    .relative()
+                    .child(icon)
+                    .text_color(if is_full || is_half { active } else { inactive });
+
+                if self.disabled || self.read_only {
+                    cell = cell.opacity(0.6).cursor_default();
+                } else {
+                    let id = self.id.clone();
+                    let clearable = self.clearable;
+                    let current = value;
+                    let value_controlled = self.value_controlled;
+                    let on_change = self.on_change.clone();
+                    if self.allow_half {
+                        let id_for_left = id.clone();
+                        let id_for_right = id.clone();
+                        let on_change_left = on_change.clone();
+                        let on_change_right = on_change.clone();
+                        let left_target = (index_value - 0.5).max(0.0);
+                        let right_target = index_value;
+                        let left_value = if clearable && (current - left_target).abs() < 0.001 {
+                            0.0
+                        } else {
+                            left_target
+                        };
+                        let right_value = if clearable && (current - right_target).abs() < 0.001 {
+                            0.0
+                        } else {
+                            right_target
+                        };
+
+                        cell = cell
+                            .cursor_pointer()
+                            .child(
+                                div()
+                                    .id(self.id.slot_index("cell-left", index.to_string()))
+                                    .absolute()
+                                    .top_0()
+                                    .left_0()
+                                    .w(gpui::px(icon_size * 0.5))
+                                    .h(gpui::px(icon_size))
+                                    .cursor_pointer()
+                                    .on_click(move |_: &ClickEvent, window, cx| {
+                                        if !value_controlled {
+                                            control::set_text_state(
+                                                &id_for_left,
+                                                "value",
+                                                left_value.to_string(),
+                                            );
+                                            window.refresh();
+                                        }
+                                        if let Some(handler) = on_change_left.as_ref() {
+                                            (handler)(left_value, window, cx);
+                                        }
+                                    }),
+                            )
+                            .child(
+                                div()
+                                    .id(self.id.slot_index("cell-right", index.to_string()))
+                                    .absolute()
+                                    .top_0()
+                                    .right_0()
+                                    .w(gpui::px(icon_size * 0.5))
+                                    .h(gpui::px(icon_size))
+                                    .cursor_pointer()
+                                    .on_click(move |_: &ClickEvent, window, cx| {
+                                        if !value_controlled {
+                                            control::set_text_state(
+                                                &id_for_right,
+                                                "value",
+                                                right_value.to_string(),
+                                            );
+                                            window.refresh();
+                                        }
+                                        if let Some(handler) = on_change_right.as_ref() {
+                                            (handler)(right_value, window, cx);
+                                        }
+                                    }),
+                            );
+                    } else {
+                        let next_value = if clearable && (current - index_value).abs() < 0.001 {
+                            0.0
+                        } else {
+                            index_value
+                        };
+                        cell = cell
+                            .cursor_pointer()
+                            .on_click(move |_: &ClickEvent, window, cx| {
+                                if !value_controlled {
+                                    control::set_text_state(&id, "value", next_value.to_string());
+                                    window.refresh();
+                                }
+                                if let Some(handler) = on_change.as_ref() {
+                                    (handler)(next_value, window, cx);
+                                }
+                            });
+                    }
+                }
+
+                cell
+            })
+            .collect::<Vec<_>>();
+
+        let stars_row = Stack::horizontal()
+            .id(self.id.clone())
+            .items_center()
+            .gap(size_preset.gap)
+            .children(stars);
+
+        let label_text = self.label.map(|label| {
+            if self.required {
+                SharedString::from(format!("{label} *"))
+            } else {
+                label
+            }
+        });
+
+        let has_meta = label_text.is_some() || self.description.is_some() || self.error.is_some();
+        if !has_meta {
+            return stars_row
+                .with_enter_transition(self.id.slot("enter"), self.motion)
+                .into_any_element();
+        }
+
+        let mut meta = Stack::vertical().gap(tokens.sizes.for_size(self.size).gap);
+        if let Some(label) = label_text {
+            meta = meta.child(
+                div()
+                    .text_color(resolve_hsla(&self.theme, tokens.active))
+                    .child(label),
+            );
+        }
+        if let Some(description) = self.description {
+            meta = meta.child(
+                div()
+                    .text_color(resolve_hsla(&self.theme, tokens.inactive))
+                    .child(description),
+            );
+        }
+        if let Some(error) = self.error {
+            meta = meta.child(
+                div()
+                    .text_color(resolve_hsla(&self.theme, self.theme.semantic.status_error))
+                    .child(error),
+            );
+        }
+
+        match self.layout {
+            FieldLayout::Vertical => Stack::vertical()
+                .id(self.id.clone())
+                .gap(size_preset.gap)
+                .child(meta)
+                .child(stars_row)
+                .with_enter_transition(self.id.slot("enter"), self.motion)
+                .into_any_element(),
+            FieldLayout::Horizontal => Stack::horizontal()
+                .id(self.id.clone())
+                .items_start()
+                .gap(size_preset.gap)
+                .child(meta)
+                .child(stars_row)
+                .with_enter_transition(self.id.slot("enter"), self.motion)
+                .into_any_element(),
+        }
+    }
+}
+
+crate::impl_disableable!(Rating, |this, value| this.disabled = value);
+
+impl FieldLike for Rating {
+    fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
+    }
+
+    fn description(mut self, value: impl Into<SharedString>) -> Self {
+        self.description = Some(value.into());
+        self
+    }
+
+    fn error(mut self, value: impl Into<SharedString>) -> Self {
+        self.error = Some(value.into());
+        self
+    }
+
+    fn required(mut self, value: bool) -> Self {
+        self.required = value;
+        self
+    }
+
+    fn layout(mut self, value: FieldLayout) -> Self {
+        self.layout = value;
+        self
+    }
+}

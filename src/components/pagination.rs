@@ -1,0 +1,341 @@
+use std::{collections::BTreeSet, rc::Rc};
+
+use gpui::InteractiveElement;
+use gpui::{ElementId, IntoElement, ParentElement, RenderOnce, Styled, Window, div};
+
+use crate::contracts::MotionAware;
+use crate::id::ComponentId;
+use crate::motion::MotionConfig;
+use crate::style::{Radius, Size, Variant};
+use crate::theme::PaginationSizePreset;
+
+use super::Stack;
+use super::interaction_adapter::{ActivateHandler, PressAdapter, bind_press_adapter};
+use super::selection_state;
+use super::utils::{
+    InteractionStyles, apply_interaction_styles, apply_radius, interaction_style, resolve_hsla,
+};
+
+type ChangeHandler = Rc<dyn Fn(usize, &mut Window, &mut gpui::App)>;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PaginationNode {
+    Page(usize),
+    Ellipsis,
+}
+
+#[derive(IntoElement)]
+pub struct Pagination {
+    pub(crate) id: ComponentId,
+    total: usize,
+    value: Option<usize>,
+    value_controlled: bool,
+    default_value: usize,
+    siblings: usize,
+    boundaries: usize,
+    disabled: bool,
+    variant: Variant,
+    size: Size,
+    radius: Radius,
+    pub(crate) theme: crate::theme::LocalTheme,
+    motion: MotionConfig,
+    on_change: Option<ChangeHandler>,
+}
+
+impl Pagination {
+    #[track_caller]
+    pub fn new() -> Self {
+        Self {
+            id: ComponentId::default(),
+            total: 1,
+            value: None,
+            value_controlled: false,
+            default_value: 1,
+            siblings: 1,
+            boundaries: 1,
+            disabled: false,
+            variant: Variant::Default,
+            size: Size::Md,
+            radius: Radius::Sm,
+            theme: crate::theme::LocalTheme::default(),
+            motion: MotionConfig::default(),
+            on_change: None,
+        }
+    }
+
+    pub fn total(mut self, value: usize) -> Self {
+        self.total = value.max(1);
+        self
+    }
+
+    pub fn value(mut self, value: usize) -> Self {
+        self.value = Some(value.max(1));
+        self.value_controlled = true;
+        self
+    }
+
+    pub fn default_value(mut self, value: usize) -> Self {
+        self.default_value = value.max(1);
+        self
+    }
+
+    pub fn siblings(mut self, value: usize) -> Self {
+        self.siblings = value.min(4);
+        self
+    }
+
+    pub fn boundaries(mut self, value: usize) -> Self {
+        self.boundaries = value.min(4);
+        self
+    }
+    pub fn on_change(
+        mut self,
+        handler: impl Fn(usize, &mut Window, &mut gpui::App) + 'static,
+    ) -> Self {
+        self.on_change = Some(Rc::new(handler));
+        self
+    }
+
+    fn resolved_page(&self) -> usize {
+        let total = self.total.max(1);
+        let controlled = self.value.unwrap_or(self.default_value).clamp(1, total);
+        let default = self.default_value.clamp(1, total);
+        selection_state::resolve_usize(&self.id, "page", self.value_controlled, controlled, default)
+            .clamp(1, total)
+    }
+
+    fn apply_item_size<T: Styled>(preset: PaginationSizePreset, node: T) -> T {
+        node.text_size(preset.font_size)
+            .px(preset.padding_x)
+            .py(preset.padding_y)
+            .min_w(preset.min_width)
+    }
+
+    fn active_bg(&self) -> gpui::Hsla {
+        let base = resolve_hsla(&self.theme, self.theme.components.pagination.item_active_bg);
+        match self.variant {
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.82),
+            Variant::Subtle => base.alpha(0.72),
+            Variant::Outline => base.alpha(0.9),
+            Variant::Ghost => base.alpha(0.64),
+        }
+    }
+
+    fn nodes(&self, current: usize) -> Vec<PaginationNode> {
+        let total = self.total.max(1);
+        if total <= 7 {
+            return (1..=total).map(PaginationNode::Page).collect();
+        }
+
+        let mut pages = BTreeSet::new();
+        let boundaries = self.boundaries.max(1);
+        let siblings = self.siblings;
+
+        for page in 1..=boundaries.min(total) {
+            pages.insert(page);
+        }
+
+        let start_tail = total.saturating_sub(boundaries).saturating_add(1);
+        for page in start_tail..=total {
+            pages.insert(page);
+        }
+
+        let start_middle = current.saturating_sub(siblings).max(1);
+        let end_middle = (current + siblings).min(total);
+        for page in start_middle..=end_middle {
+            pages.insert(page);
+        }
+
+        let mut nodes = Vec::new();
+        let mut previous: Option<usize> = None;
+        for page in pages {
+            if let Some(prev) = previous
+                && page > prev + 1
+            {
+                nodes.push(PaginationNode::Ellipsis);
+            }
+            nodes.push(PaginationNode::Page(page));
+            previous = Some(page);
+        }
+        nodes
+    }
+}
+
+impl Pagination {}
+
+crate::impl_variant_size_radius_via_methods!(Pagination, variant, size, radius);
+
+impl MotionAware for Pagination {
+    fn motion(mut self, value: MotionConfig) -> Self {
+        self.motion = value;
+        self
+    }
+}
+
+impl RenderOnce for Pagination {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
+        let tokens = self.theme.components.pagination.clone();
+        let theme = self.theme.clone();
+        let current = self.resolved_page();
+        let total = self.total.max(1);
+        let nodes = self.nodes(current);
+        let active_bg = self.active_bg();
+        let on_change = self.on_change.clone();
+        let controlled = self.value_controlled;
+        let pagination_id = self.id.clone();
+        let pagination_size_preset = tokens.sizes.for_size(self.size);
+
+        let make_item = |id_suffix: ElementId, label: String, target: usize, disabled: bool| {
+            let adapter_id = pagination_id.slot_index("action", format!("{label}-{target}"));
+            let mut item = div()
+                .id(id_suffix)
+                .border(super::utils::quantized_stroke_px(window, 1.0))
+                .border_color(resolve_hsla(&theme, tokens.item_border))
+                .bg(resolve_hsla(&theme, tokens.item_bg))
+                .text_color(if disabled {
+                    resolve_hsla(&theme, tokens.item_disabled_fg)
+                } else {
+                    resolve_hsla(&theme, tokens.item_fg)
+                })
+                .cursor_pointer()
+                .child(label);
+
+            item = Self::apply_item_size(pagination_size_preset, item);
+            item = apply_radius(&self.theme, item, self.radius).text_center();
+
+            if disabled || self.disabled {
+                item = item.cursor_default().opacity(0.6);
+            } else {
+                let id = pagination_id.clone();
+                let on_change = on_change.clone();
+                let hover_bg = resolve_hsla(&theme, tokens.item_hover_bg);
+                let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
+                let focus_ring = resolve_hsla(&theme, theme.semantic.focus_ring);
+                let activate_handler: ActivateHandler = Rc::new(move |window, cx| {
+                    if selection_state::apply_usize(&id, "page", controlled, target) {
+                        window.refresh();
+                    }
+                    if let Some(handler) = on_change.as_ref() {
+                        (handler)(target, window, cx);
+                    }
+                });
+                item = apply_interaction_styles(
+                    item.cursor_pointer(),
+                    InteractionStyles::new()
+                        .hover(interaction_style(move |style| style.bg(hover_bg)))
+                        .active(interaction_style(move |style| style.bg(press_bg)))
+                        .focus(interaction_style(move |style| {
+                            style.border_color(focus_ring)
+                        })),
+                );
+                item = bind_press_adapter(
+                    item,
+                    PressAdapter::new(adapter_id.clone()).on_activate(Some(activate_handler)),
+                );
+            }
+
+            item
+        };
+
+        let prev_disabled = current <= 1 || self.disabled;
+        let next_disabled = current >= total || self.disabled;
+
+        let mut children = vec![make_item(
+            self.id.slot("prev"),
+            "Prev".to_string(),
+            current.saturating_sub(1).max(1),
+            prev_disabled,
+        )];
+
+        for (index, node) in nodes.into_iter().enumerate() {
+            match node {
+                PaginationNode::Page(page) => {
+                    let page_id = self.id.slot_index("page", index.to_string());
+                    let is_active = page == current;
+                    let mut page_item = div()
+                        .id(page_id.clone())
+                        .border(super::utils::quantized_stroke_px(window, 1.0))
+                        .border_color(resolve_hsla(&theme, tokens.item_border))
+                        .bg(if is_active {
+                            active_bg
+                        } else {
+                            resolve_hsla(&theme, tokens.item_bg)
+                        })
+                        .text_color(if is_active {
+                            resolve_hsla(&theme, tokens.item_active_fg)
+                        } else if self.disabled {
+                            resolve_hsla(&theme, tokens.item_disabled_fg)
+                        } else {
+                            resolve_hsla(&theme, tokens.item_fg)
+                        })
+                        .cursor_pointer()
+                        .child(page.to_string());
+
+                    page_item = Self::apply_item_size(pagination_size_preset, page_item);
+                    page_item = apply_radius(&self.theme, page_item, self.radius).text_center();
+
+                    if self.disabled {
+                        page_item = page_item.cursor_default().opacity(0.6);
+                    } else if is_active {
+                        page_item = page_item.cursor_default();
+                    } else {
+                        let id = self.id.clone();
+                        let on_change = on_change.clone();
+                        let hover_bg = resolve_hsla(&theme, tokens.item_hover_bg);
+                        let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
+                        let focus_ring = resolve_hsla(&theme, theme.semantic.focus_ring);
+                        let activate_handler: ActivateHandler = Rc::new(move |window, cx| {
+                            if selection_state::apply_usize(&id, "page", controlled, page) {
+                                window.refresh();
+                            }
+                            if let Some(handler) = on_change.as_ref() {
+                                (handler)(page, window, cx);
+                            }
+                        });
+                        page_item = apply_interaction_styles(
+                            page_item.cursor_pointer(),
+                            InteractionStyles::new()
+                                .hover(interaction_style(move |style| style.bg(hover_bg)))
+                                .active(interaction_style(move |style| style.bg(press_bg)))
+                                .focus(interaction_style(move |style| {
+                                    style.border_color(focus_ring)
+                                })),
+                        );
+                        page_item = bind_press_adapter(
+                            page_item,
+                            PressAdapter::new(page_id.clone()).on_activate(Some(activate_handler)),
+                        );
+                    }
+
+                    children.push(page_item);
+                }
+                PaginationNode::Ellipsis => {
+                    let mut dots = div()
+                        .id(self.id.slot_index("dots", index.to_string()))
+                        .text_color(resolve_hsla(&theme, tokens.dots_fg))
+                        .child("...");
+                    dots = Self::apply_item_size(pagination_size_preset, dots);
+                    children.push(dots);
+                }
+            }
+        }
+
+        children.push(make_item(
+            self.id.slot("next"),
+            "Next".to_string(),
+            (current + 1).min(total),
+            next_disabled,
+        ));
+
+        Stack::horizontal()
+            .id(self.id.clone())
+            .items_center()
+            .gap(tokens.root_gap)
+            .children(children)
+            .with_enter_transition(self.id.slot("enter"), self.motion)
+    }
+}
+
+crate::impl_disableable!(Pagination, |this, value| this.disabled = value);

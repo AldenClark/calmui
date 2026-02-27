@@ -1,0 +1,318 @@
+use std::rc::Rc;
+
+use gpui::InteractiveElement;
+use gpui::{AnyElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div};
+
+use crate::contracts::MotionAware;
+use crate::id::ComponentId;
+use crate::motion::MotionConfig;
+use crate::style::{Radius, Size, Variant};
+
+use super::Stack;
+use super::interaction_adapter::{ActivateHandler, PressAdapter, bind_press_adapter};
+use super::selection_state;
+use super::utils::{
+    InteractionStyles, apply_interaction_styles, apply_radius, interaction_style, resolve_hsla,
+};
+
+type ChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut gpui::App)>;
+type SlotRenderer = Box<dyn FnOnce() -> AnyElement>;
+
+pub struct TabItem {
+    pub value: SharedString,
+    pub label: Option<SharedString>,
+    pub disabled: bool,
+    panel: Option<SlotRenderer>,
+}
+
+impl TabItem {
+    pub fn new(value: impl Into<SharedString>) -> Self {
+        Self {
+            value: value.into(),
+            label: None,
+            disabled: false,
+            panel: None,
+        }
+    }
+
+    pub fn labeled(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+        Self::new(value).label(label)
+    }
+
+    pub fn label(mut self, value: impl Into<SharedString>) -> Self {
+        self.label = Some(value.into());
+        self
+    }
+    pub fn panel(mut self, content: impl IntoElement + 'static) -> Self {
+        self.panel = Some(Box::new(|| content.into_any_element()));
+        self
+    }
+}
+
+#[derive(IntoElement)]
+pub struct Tabs {
+    pub(crate) id: ComponentId,
+    items: Vec<TabItem>,
+    value: Option<SharedString>,
+    value_controlled: bool,
+    default_value: Option<SharedString>,
+    variant: Variant,
+    size: Size,
+    radius: Radius,
+    pub(crate) theme: crate::theme::LocalTheme,
+    motion: MotionConfig,
+    on_change: Option<ChangeHandler>,
+}
+
+impl Tabs {
+    #[track_caller]
+    pub fn new() -> Self {
+        Self {
+            id: ComponentId::default(),
+            items: Vec::new(),
+            value: None,
+            value_controlled: false,
+            default_value: None,
+            variant: Variant::Default,
+            size: Size::Md,
+            radius: Radius::Md,
+            theme: crate::theme::LocalTheme::default(),
+            motion: MotionConfig::default(),
+            on_change: None,
+        }
+    }
+
+    pub fn item(mut self, item: TabItem) -> Self {
+        self.items.push(item);
+        self
+    }
+
+    pub fn items(mut self, items: impl IntoIterator<Item = TabItem>) -> Self {
+        self.items.extend(items);
+        self
+    }
+
+    pub fn value(mut self, value: impl Into<SharedString>) -> Self {
+        self.value = Some(value.into());
+        self.value_controlled = true;
+        self
+    }
+
+    pub fn clear_value(mut self) -> Self {
+        self.value = None;
+        self.value_controlled = true;
+        self
+    }
+
+    pub fn default_value(mut self, value: impl Into<SharedString>) -> Self {
+        self.default_value = Some(value.into());
+        self
+    }
+
+    pub fn on_change(
+        mut self,
+        handler: impl Fn(SharedString, &mut Window, &mut gpui::App) + 'static,
+    ) -> Self {
+        self.on_change = Some(Rc::new(handler));
+        self
+    }
+
+    fn resolved_value(&self) -> Option<SharedString> {
+        let default = self
+            .default_value
+            .clone()
+            .or_else(|| self.items.first().map(|item| item.value.clone()));
+
+        selection_state::resolve_optional_text(
+            &self.id,
+            "value",
+            self.value_controlled,
+            self.value.as_ref().map(|value| value.to_string()),
+            default.map(|value| value.to_string()),
+        )
+        .map(SharedString::from)
+    }
+
+    fn apply_tab_size<T: Styled>(preset: crate::theme::TabsSizePreset, node: T) -> T {
+        node.text_size(preset.font_size)
+            .line_height(preset.line_height)
+            .px(preset.padding_x)
+            .py(preset.padding_y)
+    }
+
+    fn active_bg(&self) -> gpui::Hsla {
+        let token = &self.theme.components.tabs.tab_active_bg;
+        let base = resolve_hsla(&self.theme, token);
+        match self.variant {
+            Variant::Filled | Variant::Default => base,
+            Variant::Light => base.alpha(0.8),
+            Variant::Subtle => base.alpha(0.72),
+            Variant::Outline => base.alpha(0.9),
+            Variant::Ghost => base.alpha(0.64),
+        }
+    }
+}
+
+impl Tabs {}
+
+crate::impl_variant_size_radius_via_methods!(Tabs, variant, size, radius);
+
+impl MotionAware for Tabs {
+    fn motion(mut self, value: MotionConfig) -> Self {
+        self.motion = value;
+        self
+    }
+}
+
+impl RenderOnce for Tabs {
+    fn render(mut self, window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        self.theme.sync_from_provider(_cx);
+        let tokens = self.theme.components.tabs.clone();
+        let tab_size_preset = tokens.sizes.for_size(self.size);
+        let selected = self.resolved_value();
+        let theme = self.theme.clone();
+        let on_change = self.on_change.clone();
+        let controlled = self.value_controlled;
+        let control_id = self.id.clone();
+        let active_bg = self.active_bg();
+        let motion = self.motion;
+        let panel_fallback_fg = resolve_hsla(&self.theme, self.theme.semantic.text_muted);
+        let transparent = resolve_hsla(&theme, gpui::transparent_black());
+
+        let mut selected_panel: Option<AnyElement> = None;
+        let mut first_panel: Option<AnyElement> = None;
+        let mut triggers: Vec<AnyElement> = Vec::new();
+
+        for (index, mut item) in self.items.into_iter().enumerate() {
+            let tab_id = self.id.slot_index("tab", index.to_string());
+            let is_active = selected
+                .as_ref()
+                .is_some_and(|value| value.as_ref() == item.value.as_ref());
+
+            if let Some(panel) = item.panel.take() {
+                if is_active {
+                    selected_panel = Some(panel());
+                } else if first_panel.is_none() {
+                    first_panel = Some(panel());
+                }
+            }
+
+            let mut trigger = div()
+                .id(tab_id.clone())
+                .min_w_0()
+                .cursor_pointer()
+                .border(super::utils::quantized_stroke_px(window, 1.0))
+                .border_color(if is_active {
+                    resolve_hsla(&theme, tokens.list_border)
+                } else {
+                    transparent
+                })
+                .text_color(if item.disabled {
+                    resolve_hsla(&theme, tokens.tab_disabled_fg)
+                } else if is_active {
+                    resolve_hsla(&theme, tokens.tab_active_fg)
+                } else {
+                    resolve_hsla(&theme, tokens.tab_fg)
+                })
+                .bg(if is_active {
+                    active_bg
+                } else {
+                    resolve_hsla(&theme, gpui::transparent_black())
+                });
+            if let Some(label) = item.label.clone() {
+                trigger = trigger.child(label);
+            }
+
+            trigger = Self::apply_tab_size(tab_size_preset, trigger);
+            trigger = apply_radius(&self.theme, trigger, self.radius);
+            if is_active {
+                trigger = trigger.shadow_sm();
+            }
+
+            if !item.disabled {
+                let on_change = on_change.clone();
+                let value = item.value.clone();
+                let id = control_id.clone();
+                let hover_bg = resolve_hsla(&theme, tokens.tab_hover_bg);
+                let press_bg = hover_bg.blend(gpui::black().opacity(0.08));
+                let focus_bg = if is_active {
+                    active_bg.blend(gpui::white().opacity(0.04))
+                } else {
+                    hover_bg
+                };
+                let focus_ring = resolve_hsla(&theme, theme.semantic.focus_ring);
+                let activate_handler: ActivateHandler = Rc::new(move |window, cx| {
+                    if selection_state::apply_optional_text(
+                        &id,
+                        "value",
+                        controlled,
+                        Some(value.to_string()),
+                    ) {
+                        window.refresh();
+                    }
+                    if let Some(handler) = on_change.as_ref() {
+                        (handler)(value.clone(), window, cx);
+                    }
+                });
+
+                let mut interaction_styles =
+                    InteractionStyles::new().focus(interaction_style(move |style| {
+                        style.bg(focus_bg).border_color(focus_ring)
+                    }));
+                if !is_active {
+                    interaction_styles = interaction_styles
+                        .hover(interaction_style(move |style| style.bg(hover_bg)))
+                        .active(interaction_style(move |style| style.bg(press_bg)));
+                }
+
+                trigger = apply_interaction_styles(trigger.cursor_pointer(), interaction_styles);
+                trigger = bind_press_adapter(
+                    trigger,
+                    PressAdapter::new(tab_id.clone()).on_activate(Some(activate_handler)),
+                );
+            } else {
+                trigger = trigger.opacity(0.55).cursor_default();
+            }
+
+            triggers.push(trigger.into_any_element());
+        }
+
+        let panel_content = selected_panel.or(first_panel);
+
+        let mut list = Stack::horizontal()
+            .id(self.id.slot("list"))
+            .w_full()
+            .gap(tokens.list_gap)
+            .p(tokens.list_padding)
+            .border(super::utils::quantized_stroke_px(window, 1.0))
+            .bg(resolve_hsla(&theme, tokens.list_bg))
+            .border_color(resolve_hsla(&theme, tokens.list_border))
+            .children(triggers);
+        list = apply_radius(&self.theme, list, self.radius);
+
+        let mut panel = div()
+            .id(self.id.slot("panel"))
+            .w_full()
+            .border(super::utils::quantized_stroke_px(window, 1.0))
+            .border_color(resolve_hsla(&theme, tokens.panel_border))
+            .bg(resolve_hsla(&theme, tokens.panel_bg))
+            .text_color(resolve_hsla(&theme, tokens.panel_fg))
+            .p(tokens.panel_padding);
+        if let Some(content) = panel_content {
+            panel = panel.child(content);
+        } else {
+            panel = panel.text_color(panel_fallback_fg).child("No panel");
+        }
+        panel = apply_radius(&self.theme, panel, self.radius);
+
+        Stack::vertical()
+            .id(self.id.clone())
+            .w_full()
+            .gap(tokens.root_gap)
+            .child(list)
+            .child(panel)
+            .with_enter_transition(self.id.slot("enter"), motion)
+    }
+}
+
+crate::impl_disableable!(TabItem, |this, value| this.disabled = value);
