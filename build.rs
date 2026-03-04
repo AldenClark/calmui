@@ -94,20 +94,25 @@ fn handle_i18n_build_issue(path: &Path, strict: bool, issue: I18nBuildIssue) {
 
 fn resolve_catalog_path(out_dir: &Path) -> Result<PathBuf, I18nBuildIssue> {
     if let Some(explicit_path) = env::var_os(I18N_TOML_ENV) {
-        let candidate = PathBuf::from(explicit_path);
-        if candidate.exists() {
-            return Ok(candidate);
+        let candidates = explicit_catalog_path_candidates(&PathBuf::from(explicit_path), out_dir);
+        if let Some(existing) = candidates.iter().find(|candidate| candidate.exists()) {
+            return Ok(existing.to_path_buf());
         }
-        println!("cargo:rerun-if-changed={}", candidate.display());
+        for candidate in &candidates {
+            println!("cargo:rerun-if-changed={}", candidate.display());
+        }
         return Err(I18nBuildIssue::warning(format!(
-            "explicit path from {I18N_TOML_ENV} not found: {}",
-            candidate.display()
+            "explicit path from {I18N_TOML_ENV} not found (tried: {})",
+            format_path_list(&candidates)
         )));
     }
 
     let (app_root, has_explicit_root) = if let Some(explicit_root) = env::var_os(I18N_APP_ROOT_ENV)
     {
-        (PathBuf::from(explicit_root), true)
+        (
+            resolve_explicit_app_root(PathBuf::from(explicit_root), out_dir),
+            true,
+        )
     } else {
         (
             infer_app_root_from_out_dir(out_dir).ok_or_else(|| {
@@ -137,6 +142,48 @@ fn resolve_catalog_path(out_dir: &Path) -> Result<PathBuf, I18nBuildIssue> {
         "translation file not found at inferred path {}",
         primary.display()
     )))
+}
+
+fn explicit_catalog_path_candidates(raw_path: &Path, out_dir: &Path) -> Vec<PathBuf> {
+    let mut candidates = vec![raw_path.to_path_buf()];
+    if !raw_path.is_absolute() {
+        if let Some(app_root) = resolve_app_root_hint(out_dir) {
+            let joined = app_root.join(raw_path);
+            if !candidates.iter().any(|path| path == &joined) {
+                candidates.push(joined);
+            }
+        }
+    }
+    candidates
+}
+
+fn resolve_explicit_app_root(raw_root: PathBuf, out_dir: &Path) -> PathBuf {
+    if raw_root.is_absolute() || raw_root.exists() {
+        return raw_root;
+    }
+    if let Some(inferred) = infer_app_root_from_out_dir(out_dir) {
+        return inferred.join(raw_root);
+    }
+    raw_root
+}
+
+fn resolve_app_root_hint(out_dir: &Path) -> Option<PathBuf> {
+    if let Some(explicit_root) = env::var_os(I18N_APP_ROOT_ENV) {
+        Some(resolve_explicit_app_root(
+            PathBuf::from(explicit_root),
+            out_dir,
+        ))
+    } else {
+        infer_app_root_from_out_dir(out_dir)
+    }
+}
+
+fn format_path_list(paths: &[PathBuf]) -> String {
+    paths
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn infer_app_root_from_out_dir(out_dir: &Path) -> Option<PathBuf> {
@@ -195,12 +242,9 @@ struct Catalog {
 }
 
 fn parse_catalog(content: &str, path: &Path) -> Result<Catalog, String> {
-    let root = content
-        .parse::<Value>()
+    let root_table = content
+        .parse::<Table>()
         .map_err(|err| format!("failed to parse {} as TOML: {err}", path.to_string_lossy()))?;
-    let root_table = root
-        .as_table()
-        .ok_or_else(|| format!("{} must contain a top-level table", path.to_string_lossy()))?;
 
     let default_locale = root_table
         .get("default_locale")
